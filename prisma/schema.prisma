@@ -37,7 +37,6 @@ model Users {
 
   userInvestments UserInvestment[] // Lista de investimentos que o usuário possui (relacionamento um-para-muitos)
   investorProfile InvestorProfile? // Relacionamento um-para-um com InvestorProfile
-  notifications   Notification[] // Relacionamento um-para-um com InvestorProfile
 
   createdAt     DateTime      @default(now()) // Data e hora de criação do usuário
   updatedAt     DateTime      @updatedAt // Data e hora da última atualização do usuário
@@ -189,7 +188,6 @@ model UserInvestment {
 
 model Notification {
   id           String   @id @default(uuid()) @map("_id")
-  userId       String // ID do usuário que receberá a notificação
   investmentId String // ID do investimento relacionado à notificação
   title        String // Título da notificação (ex: "Atualização da obra X")
   message      String // Mensagem da notificação (ex: "O status da obra X foi atualizado para 'Em construção'")
@@ -197,7 +195,6 @@ model Notification {
   createdAt    DateTime @default(now())
 
   investment Investment @relation(fields: [investmentId], references: [id]) // Relacionamento com Investment
-  user       Users      @relation(fields: [userId], references: [id])
 
   @@map("notifications")
 }

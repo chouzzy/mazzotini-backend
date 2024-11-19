@@ -1,7 +1,7 @@
 import { ValidationError } from "yup";
 import { validationResponse } from "../../../../../types";
-import { CreateNotificationsRequestProps } from "./createNotificationsController";
 import { createNotificationsSchema } from "./CreateNotificationsSchema";
+import { CreateNotificationsRequestProps } from "./CreateNotificationsController";
 
 
 

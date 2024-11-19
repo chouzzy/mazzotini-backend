@@ -11,9 +11,9 @@ class CreateNotificationsUseCase {
 
     async execute(notificationsData: CreateNotificationsRequestProps): Promise<Notification> {
         
-        const createdUsers = await this.NotificationsRepository.createNotifications(notificationsData)
+        const createdNotifications = await this.NotificationsRepository.createNotifications(notificationsData)
         
-        return createdUsers
+        return createdNotifications
     }
     
 }
