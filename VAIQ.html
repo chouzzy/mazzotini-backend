@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <title>Sign In with Auth0</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+</head>
+<style>
+    body,
+    html {
+        height: 100%;
+        background-color: #F6F6F6;
+    }
+
+
+    .login-container {
+        display: flex;
+        flex-direction: row;
+        height: 100%;
+        max-width: 1366px;
+        align-items: center;
+        justify-content: center;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .login-container-holder-black-card {
+        display: inline-flex;
+        width: 100%;
+        height: 100vh;
+        padding: 120px 0px;
+
+        justify-content: space-between;
+        align-items: center;
+
+        background-color: black;
+        color: #E2E8F0;
+        font-family: Arial;
+        font-size: 16px;
+        font-style: normal;
+        font-weight: 300;
+        line-height: normal;
+    }
+
+    .login-container-holder {
+        display: inline-flex;
+        width: 100%;
+        height: 100vh;
+        justify-content: center;
+        align-items: center;
+        background-color: #F6F6F6
+    }
+
+    .login-box {
+        min-width: 500px;
+        max-width: 500px;
+        margin-left: auto;
+        margin-right: auto;
+        padding: 32px;
+        background-color: #f9f9f9;
+        box-shadow: 0px 5px 5px #ccc;
+        border-radius: 5px;
+        border-top: 1px solid #e9e9e9;
+    }
+
+    .login-header {
+        text-align: center;
+        padding: 16px 0px
+    }
+
+    .login-header img {
+        width: 75px;
+    }
+
+    .bemVindo {
+        font-family: 'Arial';
+        font-size: 28px;
+        /* Tamanho da fonte */
+        font-weight: 600;
+        /* Peso da fonte (semibold) */
+    }
+
+    .InsiraPortal {
+        color: #71717A;
+        font-family: 'Arial';
+        font-size: 16px;
+        font-style: normal;
+        font-weight: 400;
+        line-height: normal;
+        letter-spacing: -0.32px;
+    }
+
+    .inputC2DI {
+        border-radius: 6px;
+        border: 1px solid #CBD5E1;
+        background: #FFF;
+        height: 40px;
+        padding: 16px
+    }
+
+    .labelC2DI {
+        font-weight: 300
+    }
+
+    .entrarComEmailButton {
+        border-radius: 6px;
+        background-color: #0F172A;
+        padding: 12px;
+        letter-spacing: 1px
+    }
+
+    .psignUpLink {
+        display: inline-flex;
+        color: var(--black, #000);
+        font-family: Arial;
+        font-size: 12;
+        font-style: normal;
+        font-weight: 400;
+        line-height: normal;
+        letter-spacing: -0.32px;
+        border-bottom: 1px solid #000;
+        text-decoration: none;
+    }
+
+    .psignUpLink:hover {
+        text-decoration: none;
+        color: red;
+        cursor: pointer;
+        transition: 300ms
+    }
+
+    .esqueciSenhaECriarContaContainer {
+        display: flex;
+        padding: 12px 4px;
+        width: 100%;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center
+    }
+
+    .socialMediaContainer {
+        display: flex;
+        padding: 12px 4px;
+        width: 100%;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: end;
+        gap: 24px
+    }
+
+    .divDivider {
+        display: inline-flex;
+        background-color: #71717A77;
+        width: 100%;
+        height: 1px
+    }
+
+    .ouEntreCom {
+        min-width: 150px;
+        text-align: center;
+        color: #71717Abb
+    }
+
+    .logoImgSocialIcon {
+        max-width: 40px;
+        max-height: 40px;
+    }
+
+    .socialButtonDiv {
+        display: flex;
+        padding: 28px;
+        align-items: center;
+        gap: 28px;
+        border-radius: 6px;
+        border: 1px solid var(--slate-200, #E2E8F0);
+        background: var(--white, #FFF);
+        align-items:center;
+        justify-content:center
+    }
+
+    .borderContainer {
+        border: 1px solid #000000
+    }
+
+    #error-message {
+        display: none;
+        white-space: break-spaces;
+    }
+</style>
+
+<body>
+    <div class="login-container">
+
+        <!-- <div class="login-container-holder-black-card">
+            <div>
+                logo
+            </div>
+            <div>
+                O mercado imobiliário molda cidades, transforma vidas e possibilita sonhos se tornarem realidade,
+                promovendo crescimento econômico e social.
+            </div>
+        </div> -->
+
+        <div class="login-container-holder">
+            <div class="col-xs-12 col-sm-4 col-sm-offset-4 login-box">
+                <div class="login-header">
+                    <!-- <img src="https://www.natashamacedopsicologia.com.br/assets/c2di/logo_c2di.png" /> -->
+                    <h3 class="bemVindo" id="titleBemVindo"> Bem vindo de volta!</h3>
+                    <p class="InsiraPortal" id="subTitleBemVindo"> Insira seu e-mail e senha para entrar no portal </p>
+                </div>
+                <div id="error-message" class="alert alert-danger"></div>
+                <form onsubmit="return false;" method="post">
+                    <div class="form-group">
+                        <label for="name" class="labelC2DI" >Email</label>
+                        <input type="email" class="form-control inputC2DI" id="email" placeholder="nome@exemplo.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="name" class="labelC2DI">Password</label>
+                        <input type="password" class="form-control inputC2DI" id="password" placeholder="*********">
+                    </div>
+                    <div class="captcha-container form-group"></div>
+                    <button type="submit" id="btn-login" class="btn btn-primary btn-block entrarComEmailButton">
+                        Entrar com e-mail
+                    </button>
+                    <div class="esqueciSenhaECriarContaContainer">
+                        <span class="psignUpLink" href="no-javascript1.html">
+                            <a href="no-javascript1.html" class="psignUpLink"
+                                id="link-reset">Esqueci minha senha</a>
+                        </span>
+                        <span id="btn-signup" class="psignUpLink">
+                            <a class="psignUpLink" id="link-reset">Criar uma conta</a>
+                        </span>
+                    </div>
+                    <div class="esqueciSenhaECriarContaContainer">
+                        <div class="divDivider"></div>
+                        <div class="ouEntreCom">
+                            OU ENTRE COM
+                        </div>
+                        <div class="divDivider"></div>
+                    </div>
+                    <hr>
+                    <div class="socialMediaContainer">
+                        <button type="button" id="btn-google" class="btn btn-default btn-block socialButtonDiv">
+                            <image
+                                src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1024px-Google_%22G%22_logo.svg.png"
+                                class="logoImgSocialIcon" />
+                        </button>
+                        <button type="button" id="btn-facebook" class="btn btn-default btn-block socialButtonDiv">
+                            <image src="https://upload.wikimedia.org/wikipedia/commons/b/b9/2023_Facebook_icon.svg"
+                                class="logoImgSocialIcon" />
+                        </button>
+                        <button type="button" id="btn-apple" class="btn btn-default btn-block socialButtonDiv">
+                            <image src="https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg"
+                                class="logoImgSocialIcon" />
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!--[if IE 8]>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/ie8/0.2.5/ie8.js"></script>
+  <![endif]-->
+
+    <!--[if lte IE 9]>
+  <script src="https://cdn.auth0.com/js/polyfills/1.0/base64.min.js"></script>
+  <script src="https://cdn.auth0.com/js/polyfills/1.0/es5-shim.min.js"></script>
+  <![endif]-->
+
+    <script src="https://cdn.auth0.com/js/auth0/9.26/auth0.min.js"></script>
+    <script src="https://cdn.auth0.com/js/polyfills/1.0/object-assign.min.js"></script>
+    <script>
+        window.addEventListener('load', function () {
+
+            var config = JSON.parse(
+                decodeURIComponent(escape(window.atob('@@config@@')))
+            );
+
+            var leeway = config.internalOptions.leeway;
+            if (leeway) {
+                var convertedLeeway = parseInt(leeway);
+
+                if (!isNaN(convertedLeeway)) {
+                    config.internalOptions.leeway = convertedLeeway;
+                }
+            }
+
+            var params = {
+                overrides: {
+                    __tenant: config.auth0Tenant,
+                    __token_issuer: config.authorizationServer.issuer
+                },
+                domain: config.auth0Domain,
+                clientID: config.clientID,
+                redirectUri: config.callbackURL,
+                responseType: 'code',
+                scope: config.internalOptions.scope,
+                _csrf: config.internalOptions._csrf,
+                state: config.internalOptions.state,
+                _intstate: config.internalOptions._intstate
+            };
+
+            var triggerCaptcha = null;
+            var webAuth = new auth0.WebAuth(params);
+            var databaseConnection = 'Username-Password-Authentication';
+            var captcha = webAuth.renderCaptcha(
+                document.querySelector('.captcha-container'),
+                null,
+                (error, payload) => {
+                    if (payload) {
+                        triggerCaptcha = payload.triggerCaptcha;
+                    }
+                }
+            );
+
+            function login(e) {
+                e.preventDefault();
+                var button = this;
+                var email = document.getElementById('email').value;
+                if (!email) {
+                    displayError2("Digite o seu E-mail");
+                    return
+                }
+                var password = document.getElementById('password').value;
+                if (!password) {
+                    displayError2("Digite sua senha");
+                    return
+                }
+                var request = () => {
+
+                    webAuth.login({
+                        realm: databaseConnection,
+                        username: email,
+                        password: password,
+                        captcha: captcha.getValue()
+                    }, function (err) {
+                        
+                        if (err) displayError(err);
+                        button.disabled = false;
+                    });
+                };
+                if (triggerCaptcha) {
+                    triggerCaptcha(request);
+                } else {
+                    request();
+                }
+            }
+
+            function signup() {
+                var button = this;
+                var email = document.getElementById('email').value;
+                if (!email) {
+                    displayError2("E-mail obrigatório");
+                    return
+                }
+                var password = document.getElementById('password').value;
+                if (!password) {
+                    displayError2("A senha é obrigatória");
+                    return
+                }
+                button.disabled = true;
+                var request = () => {
+                    webAuth.redirect.signupAndLogin({
+                        connection: databaseConnection,
+                        email: email,
+                        password: password,
+                        captcha: captcha.getValue()
+                    }, function (err) {
+                        if (err) displayError(err);
+                        button.disabled = false;
+                    });
+                };
+                if (triggerCaptcha) {
+                    triggerCaptcha(request);
+                } else {
+                    request();
+                }
+            }
+
+            function loginWithGoogle() {
+                webAuth.authorize({
+                    connection: 'google-oauth2'
+                }, function (err) {
+                    if (err) displayError(err);
+                });
+            }
+            function loginWithApple() {
+                webAuth.authorize({
+                    connection: 'apple'
+                }, function (err) {
+                    if (err) displayError(err);
+                });
+            }
+            function loginWithFacebook() {
+                webAuth.authorize({
+                    connection: 'facebook'
+                }, function (err) {
+                    if (err) displayError(err);
+                });
+            }
+
+            function displayError(err) {
+                captcha.reload();
+                var errorMessage = document.getElementById('error-message');
+
+                errorMessage.innerText = "teste"
+
+                if (err.policy == 'Invalid sign up' || err.description == 'Invalid sign up') {
+
+                    errorMessage.innerText = 'Usuário ou senha já existem';
+                    errorMessage.style.display = 'block';
+
+                } else if (err.policy == 'String (password) is too short (0 chars), minimum 1' || err.description == 'String (password) is too short (0 chars), minimum 1') {
+
+                    errorMessage.innerText = 'Digite uma senha válida';
+                    errorMessage.style.display = 'block';
+                } else if (err.policy == 'Wrong email or password.' || err.description == 'Wrong email or password.') {
+
+                    errorMessage.innerText = 'E-mail ou senha inválidos.';
+                    errorMessage.style.display = 'block';
+                } else {
+
+                    errorMessage.innerText = err.policy || err.description;
+                    errorMessage.style.display = 'block';
+                }
+            }
+
+            function displayError2(text) {
+                captcha.reload();
+                var errorMessage = document.getElementById('error-message');
+                errorMessage.innerText = text;
+                errorMessage.style.display = 'block';
+            }
+
+            function displayMailSent(text) {
+                captcha.reload();
+                var titleBemVindo = document.getElementById('titleBemVindo');
+                titleBemVindo.innerText = text;
+                titleBemVindo.style.display = 'block';
+            }
+            function displayMailSentSubtitle(text) {
+                captcha.reload();
+                var subTitleBemVindo = document.getElementById('subTitleBemVindo');
+                subTitleBemVindo.innerText = text;
+                subTitleBemVindo.style.display = 'block';
+            }
+
+            function resetPassword(e) {
+                e.preventDefault();
+                var email = document.getElementById('email').value;
+                if (!email) {
+                    displayError2("Digite o seu e-mail.");
+                    return;
+                }
+                webAuth.changePassword({
+                    connection: databaseConnection,
+                    email: email
+                }, function (err, resp) {
+                    if (err) {
+                        console.log(err.message);
+                        alert(err.message);
+                    } else {
+                        console.log(resp);
+                        displayMailSent("E-mail de recuperação enviado!")
+                        displayMailSentSubtitle("Siga os passos de recuperação enviados no seu e-mail")
+                    }
+                });
+            }
+
+            document.getElementById('btn-login').addEventListener('click', login);
+            document.getElementById('btn-facebook').addEventListener('click', loginWithFacebook);
+            document.getElementById('btn-apple').addEventListener('click', loginWithApple);
+            document.getElementById('btn-google').addEventListener('click', loginWithGoogle);
+            document.getElementById('btn-signup').addEventListener('click', signup);
+            document.getElementById('link-reset').addEventListener('click', resetPassword);
+        });
+    </script>
+</body>
+
+</html>

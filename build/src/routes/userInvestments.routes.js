@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.userInvestmentsRoutes = void 0;
+const express_1 = require("express");
+const ListUserInvestmentsController_1 = require("../modules/investments/useCases/UserInvestment/listUserInvestments/ListUserInvestmentsController");
+const CreateUserInvestmentController_1 = require("../modules/investments/useCases/UserInvestment/createUserInvestment/CreateUserInvestmentController");
+const userInvestmentsRoutes = (0, express_1.Router)();
+exports.userInvestmentsRoutes = userInvestmentsRoutes;
+const listUserInvestmentController = new ListUserInvestmentsController_1.ListUserInvestmentController();
+userInvestmentsRoutes.get('/', listUserInvestmentController.handle);
+const createUserInvestmentController = new CreateUserInvestmentController_1.CreateUserInvestmentController();
+userInvestmentsRoutes.post('/create', createUserInvestmentController.handle);

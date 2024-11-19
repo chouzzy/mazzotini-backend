@@ -1,0 +1,61 @@
+[
+  {
+    "name": "João da Silva",
+    "email": "joao.silva@example.com",
+    "phoneNumber": "(11) 99999-8888",
+    "gender": "Masculino",
+    "profession": "Engenheiro",
+    "birth": "1990-05-10",
+    "cpf": "12345678901",
+    "username": "joao.silva",
+    "address": {
+      "street": "Rua das Flores",
+      "number": "123",
+      "complement": "Apto 42",
+      "district": "Jardim Primavera",
+      "city": "São Paulo",
+      "state": "SP",
+      "zipCode": "01234-567"
+    },
+    "investorProfileName": "João Investidor",
+    "investorProfileDescription": "Buscando investimentos de longo prazo.",
+    "role": "INVESTOR"
+  },
+
+
+  {
+    "name": "Maria Oliveira",
+    "email": "maria.oliveira@example.com",
+    "phoneNumber": "(21) 98765-4321",
+    "gender": "Feminino",
+    "profession": "Arquiteta",
+    "birth": "1985-12-20",
+    "cpf": "98765432109",
+    "username": "maria.arq",
+    "address": {
+      "street": "Avenida Paulista",
+      "number": "1000",
+      "district": "Bela Vista",
+      "city": "São Paulo",
+      "state": "SP",
+      "zipCode": "01310-000"
+    },
+    "investorProfileName": "Perfil Conservador",
+    "investorProfileDescription": "Buscando investimentos de baixo risco e longo prazo.",
+    "role": "PROJECT_MANAGER"
+  },
+
+
+  {
+    "name": "Pedro Souza",
+    "email": "pedro.souza@example.com",
+    "phoneNumber": "(31) 91234-5678",
+    "gender": "Masculino",
+    "profession": "Advogado",
+    "birth": "1995-08-15",
+    "cpf": "87654321098",
+    "username": "pedro.adv",
+    "address": null,
+    "role": "ADMINISTRATOR"
+  }
+]

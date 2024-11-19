@@ -1,0 +1,3 @@
+apis:
+  docs/openApi.yaml:
+    alias: minha-api
