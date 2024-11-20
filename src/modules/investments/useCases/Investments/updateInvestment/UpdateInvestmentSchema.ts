@@ -39,7 +39,7 @@ const updateInvestmentSchema = yup.object({
     .array()
     .of(
       yup.object().shape({
-        url: yup.string().url(),
+        url: yup.string(),
         description: yup.string(), // Removido o optional()
       }),
     ),

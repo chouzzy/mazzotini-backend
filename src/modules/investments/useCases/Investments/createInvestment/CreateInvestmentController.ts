@@ -30,7 +30,7 @@ interface CreateInvestmentRequestProps {
     investmentDate: InvestmentEntity["investmentDate"];
     predictedCost: InvestmentEntity["predictedCost"];
     realizedCost: InvestmentEntity["realizedCost"];
-    projectManagerID:InvestmentEntity["projectManagerID"]
+    projectManagerID: InvestmentEntity["projectManagerID"]
 
 }
 
@@ -41,7 +41,7 @@ class CreateInvestmentsController {
 
             const investmentData: CreateInvestmentRequestProps = req.body
 
-            const { partners, documents } = investmentData
+            const { partners, documents, images } = investmentData
 
             if (partners) {
                 partners.map((partner) => {
@@ -52,6 +52,12 @@ class CreateInvestmentsController {
             if (documents) {
                 documents.map((doc) => {
                     doc.id = uuidv4()
+                })
+            }
+
+            if (images) {
+                images.map((img) => {
+                    img.id = uuidv4()
                 })
             }
 

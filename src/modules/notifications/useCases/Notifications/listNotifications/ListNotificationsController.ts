@@ -27,9 +27,6 @@ class ListNotificationsController {
                 throw Error('page must be a string')
             }
 
-            console.log(req.query)
-
-
             await checkParams(id)
 
             /// instanciação da classe do caso de uso

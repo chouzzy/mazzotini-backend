@@ -40,12 +40,16 @@ class UpdateInvestmentsController {
 
             const { id } = req.params
 
+            
+
             // if (typeof(id) != 'string') {
             //     throw Error("O id deve ser uma string")
             // }
 
             const investmentData: UpdateInvestmentRequestProps = req.body
-            const { partners, documents } = investmentData
+            console.log('investmentDataaaaaaaaaaaaaa')
+            console.log(investmentData)
+            const { partners, documents, images } = investmentData
 
             if (partners) {
                 partners.map((partner) => {
@@ -56,6 +60,12 @@ class UpdateInvestmentsController {
             if (documents) {
                 documents.map((doc) => {
                     doc.id = uuidv4()
+                })
+            }
+
+            if (images) {
+                images.map((img) => {
+                    img.id = uuidv4()
                 })
             }
 

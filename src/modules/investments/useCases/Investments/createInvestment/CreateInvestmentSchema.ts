@@ -46,7 +46,8 @@ const createInvestmentSchema = yup.object({
     .array()
     .of(
       yup.object().shape({
-        url: yup.string().url().required("A URL da imagem é obrigatória."),
+        label: yup.string().oneOf(["DESTAQUES", "GERAL", "PLANTAS", "EXTERNO", "INTERNO", "PANORAMICAS"]).required('Label obrigatória'),
+        url: yup.string().required("A URL da imagem é obrigatória."),
         description: yup.string().optional(),
       }),
     )

@@ -116,10 +116,10 @@ model Investment {
   notifications   Notification[]
   userInvestments UserInvestment[] // tabela que relaciona investimento com usuario
 
-  projectManagerID  String //ID Do criador do projeto
+  projectManagerID String //ID Do criador do projeto
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("investments")
 }
@@ -163,8 +163,19 @@ type Document {
 }
 
 type Image {
+  id          String
+  label       ImageLabel
   url         String
   description String?
+}
+
+enum ImageLabel {
+  DESTAQUES
+  GERAL
+  PLANTAS
+  EXTERNO
+  INTERNO
+  PANORAMICAS
 }
 
 type Partners {
