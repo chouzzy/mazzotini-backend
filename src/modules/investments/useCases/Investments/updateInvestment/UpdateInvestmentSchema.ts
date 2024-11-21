@@ -11,13 +11,13 @@ const updateInvestmentSchema = yup.object({
       "COMERCIAL_GERAL",
       "MISTO",
     ]),
-  totalUnits: yup.number().integer().positive(), // Número inteiro positivo
-  numberOfFloors: yup.number().integer().positive(), // Número inteiro positivo
-  unitsPerFloor: yup.number().integer().positive(), // Número inteiro positivo
+  totalUnits: yup.string(), // Número inteiro positivo
+  numberOfFloors: yup.string(), // Número inteiro positivo
+  unitsPerFloor: yup.string(), // Número inteiro positivo
   floorPlanTypes: yup.array().of(yup.string()).min(1),
-  launchDate: yup.date(),
-  constructionStartDate: yup.date(),
-  expectedDeliveryDate: yup.date(),
+  launchDate: yup.string(),
+  constructionStartDate: yup.string(),
+  expectedDeliveryDate: yup.string(),
   address: yup.object().shape({
     street: yup.string(),
     number: yup.string(),
@@ -32,7 +32,7 @@ const updateInvestmentSchema = yup.object({
     .of(
       yup.object().shape({
         title: yup.string(),
-        url: yup.string().url(),
+        url: yup.string(),
       }),
     ),
   images: yup
@@ -43,7 +43,7 @@ const updateInvestmentSchema = yup.object({
         description: yup.string(), // Removido o optional()
       }),
     ),
-  investmentValue: yup.number().positive(), // Número positivo
+  investmentValue: yup.string(), // Número positivo
   companyName: yup.string(),
 
 partners: yup.array().of(
@@ -55,9 +55,9 @@ partners: yup.array().of(
   })
 ).nullable(),
 
-  finishDate: yup.date().nullable(),
+  finishDate: yup.string().nullable(),
   buildingStatus: yup.string(),
-  investmentDate: yup.date(),
+  investmentDate: yup.string(),
   predictedCost: yup.object().shape({
     foundation: yup.string(),
     structure: yup.string(),
@@ -70,6 +70,7 @@ partners: yup.array().of(
     implantation: yup.string(),
     workmanship: yup.string(),
   }),
+  active: yup.boolean().nullable()
 }).noUnknown(true, "Campos desconhecidos no corpo da requisição.").strict();
 
 export { updateInvestmentSchema };

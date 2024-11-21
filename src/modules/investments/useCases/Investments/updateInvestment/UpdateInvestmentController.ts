@@ -40,15 +40,8 @@ class UpdateInvestmentsController {
 
             const { id } = req.params
 
-            
-
-            // if (typeof(id) != 'string') {
-            //     throw Error("O id deve ser uma string")
-            // }
-
+            console.log(req.body)
             const investmentData: UpdateInvestmentRequestProps = req.body
-            console.log('investmentDataaaaaaaaaaaaaa')
-            console.log(investmentData)
             const { partners, documents, images } = investmentData
 
             if (partners) {
@@ -83,6 +76,7 @@ class UpdateInvestmentsController {
 
         } catch (error) {
 
+            console.log(error)
             if (error instanceof Prisma.PrismaClientValidationError) {
                 console.log(error)
                 return res.status(401).json({
@@ -93,7 +87,6 @@ class UpdateInvestmentsController {
                 })
 
             } else {
-                console.log(error)
                 return res.status(401).json({ error: { name: 'UpdateInvestmentsController error: C2DI API', message: String(error) } })
             }
         }

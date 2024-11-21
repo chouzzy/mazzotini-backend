@@ -118,6 +118,8 @@ model Investment {
 
   projectManagerID String //ID Do criador do projeto
 
+  active Boolean @default(true) //Status do projeto (arquivado ou ativo)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -13,16 +13,16 @@ async function createPrismaInvestment(investmentData: CreateInvestmentRequestPro
         investmentData.launchDate = new Date(investmentData.launchDate)
         investmentData.constructionStartDate = new Date(investmentData.constructionStartDate)
         investmentData.expectedDeliveryDate = new Date(investmentData.expectedDeliveryDate)
-        
+
         if (investmentData.finishDate) {
 
             investmentData.finishDate = new Date(investmentData.finishDate)
         } else {
             investmentData.finishDate = new Date('2030-12-12')
-            
+
         }
 
-        const {investmentDate} = investmentData
+        const { investmentDate } = investmentData
 
         if (investmentDate) {
             investmentData.investmentDate = new Date(investmentDate)
@@ -116,7 +116,7 @@ async function filterPrismaInvestment(listInvestmentData: ListInvestmentProps) {
             { title },
             { investmentValue },
             { companyName },
-            {projectManagerID},
+            { projectManagerID },
             {
                 expectedDeliveryDate: {
                     gte: expectedDeliveryDateInitial ? expectedDeliveryDateInitialISO : undefined,
@@ -141,7 +141,7 @@ async function filterPrismaInvestment(listInvestmentData: ListInvestmentProps) {
             },
             skip: (page - 1) * pageRange,
             take: pageRange,
-            orderBy:[
+            orderBy: [
                 {
                     title: 'asc'
                 }
@@ -167,6 +167,12 @@ async function updatePrismaInvestment(investmentData: UpdateInvestmentRequestPro
         if (!investmentExists) {
             throw Error("O empreendimento informado não existe.")
         }
+
+        const { launchDate, constructionStartDate, expectedDeliveryDate } = investmentData
+        // Modelagem de datas
+        if (launchDate) { investmentData.launchDate = new Date(launchDate) }
+        if (constructionStartDate) { investmentData.constructionStartDate = new Date(constructionStartDate) }
+        if (expectedDeliveryDate) { investmentData.expectedDeliveryDate = new Date(expectedDeliveryDate) }
 
         const updatedInvestment = await prisma.investment.update({
             where: { id },
@@ -201,6 +207,101 @@ async function deletePrismaInvestment(id: InvestmentEntity["id"]) {
     }
 }
 
+async function deletePrismaInvestmentImage(investmentID: InvestmentEntity["id"], id: InvestmentEntity["images"][0]["id"]) {
+
+    try {
+
+        const investmentExists = await prisma.investment.findFirst({
+            where: { id: investmentID }
+        })
+
+        if (!investmentExists) {
+            throw Error("O empreendimento informado não existe.")
+        }
+
+        const updatedInvestment = await prisma.investment.update({
+            where: { id: investmentID },
+            data: {
+                images: {
+                    deleteMany: {
+                        where: { id: id },
+                    },
+                },
+            },
+        });
+
+        return updatedInvestment.images
+
+    } catch (error) {
+        throw error
+    }
+}
+
+async function deletePrismaInvestmentDocument(investmentID: InvestmentEntity["id"], id: InvestmentEntity["documents"][0]["id"]) {
+
+    try {
+
+        const investmentExists = await prisma.investment.findFirst({
+            where: { id: investmentID }
+        })
+
+        if (!investmentExists) {
+            throw Error("O empreendimento informado não existe.")
+        }
+
+        const updatedInvestment = await prisma.investment.update({
+            where: { id: investmentID },
+            data: {
+                documents: {
+                    deleteMany: {
+                        where: { id: id },
+                    },
+                },
+            },
+        });
+
+        console.log(updatedInvestment.documents)
+
+        return updatedInvestment.documents
+
+    } catch (error) {
+        throw error
+    }
+}
+
+
+async function deletePrismaInvestmentPartner(investmentID: InvestmentEntity["id"], id: InvestmentEntity["partners"][0]["id"]) {
+
+    try {
+
+        const investmentExists = await prisma.investment.findFirst({
+            where: { id: investmentID }
+        })
+
+        if (!investmentExists) {
+            throw Error("O empreendimento informado não existe.")
+        }
+
+        const updatedInvestment = await prisma.investment.update({
+            where: { id: investmentID },
+            data: {
+                partners: {
+                    deleteMany: {
+                        where: { id: id },
+                    },
+                },
+            },
+        });
+
+        console.log(updatedInvestment.partners)
+
+        return updatedInvestment.partners
+
+    } catch (error) {
+        throw error
+    }
+}
+
 
 async function validatePageParams(listInvestmentData: ListInvestmentRequestProps) {
 
@@ -227,4 +328,4 @@ async function validatePageParams(listInvestmentData: ListInvestmentRequestProps
     }
 }
 
-export { createPrismaInvestment, filterPrismaInvestment, updatePrismaInvestment, deletePrismaInvestment, filterPrismaInvestmentByID, validatePageParams }
+export { createPrismaInvestment, filterPrismaInvestment, updatePrismaInvestment, deletePrismaInvestment, filterPrismaInvestmentByID, deletePrismaInvestmentImage, validatePageParams, deletePrismaInvestmentDocument, deletePrismaInvestmentPartner }

@@ -4,6 +4,9 @@ import { CreateInvestmentsController } from "../modules/investments/useCases/Inv
 import { UpdateInvestmentsController } from "../modules/investments/useCases/Investments/updateInvestment/UpdateInvestmentController"
 import { DeleteInvestmentsController } from "../modules/investments/useCases/Investments/deleteInvestment/DeleteInvestmentController"
 import { GetInvestmentByIDController } from "../modules/investments/useCases/Investments/getInvestmentByID/GetInvestmentByIDController"
+import { DeleteInvestmentImageController } from "../modules/investments/useCases/Investments/deleteInvestmentImage/DeleteInvestmentImageController"
+import { DeleteInvestmentDocumentController } from "../modules/investments/useCases/Investments/deleteInvestmentDocument/DeleteInvestmentDocumentController"
+import { DeleteInvestmentPartnerController } from "../modules/investments/useCases/Investments/deleteInvestmentPartner/DeleteInvestmentPartnerController"
 
 const investmentsRoutes = Router()
 
@@ -21,6 +24,15 @@ investmentsRoutes.put('/update/:id', updateInvestmentsController.handle)
 
 const deleteInvestmentsController = new DeleteInvestmentsController()
 investmentsRoutes.delete('/delete/:id', deleteInvestmentsController.handle)
+
+const deleteInvestmentImageController = new DeleteInvestmentImageController()
+investmentsRoutes.put('/delete/image', deleteInvestmentImageController.handle)
+
+const deleteInvestmentDocumentController = new DeleteInvestmentDocumentController()
+investmentsRoutes.put('/delete/document', deleteInvestmentDocumentController.handle)
+
+const deleteInvestmentPartnerController = new DeleteInvestmentPartnerController()
+investmentsRoutes.put('/delete/partner', deleteInvestmentPartnerController.handle)
 
 // Criar rota documents e images
 

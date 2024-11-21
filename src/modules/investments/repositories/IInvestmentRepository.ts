@@ -19,6 +19,12 @@ interface IInvestmentRepository {
     
     deleteInvestment(id:InvestmentEntity["id"]): Promise<Investment>
 
+    deleteInvestmentImage(investmentID:InvestmentEntity["id"] , id: InvestmentEntity["images"][0]["id"]): Promise<Investment["images"]>
+
+    deleteInvestmentDocument(investmentID:InvestmentEntity["id"] , id: InvestmentEntity["documents"][0]["id"]): Promise<Investment["documents"]>
+
+    deleteInvestmentPartner(investmentID:InvestmentEntity["id"] , id: InvestmentEntity["partners"][0]["id"]): Promise<Investment["partners"]>
+
 }
 
 export { IInvestmentRepository }
