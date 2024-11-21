@@ -17,7 +17,7 @@ interface CheckedFilterUsersRequestProps {
 
 interface IUsersRepository {
 
-    findUserByEmail(email: UsersEntity["email"]): Promise<Users>
+    findUserByEmail(email: UsersEntity["email"]): Promise<Users|null>
 
     findUserByID(id: UsersEntity["id"]): Promise<Users>
 

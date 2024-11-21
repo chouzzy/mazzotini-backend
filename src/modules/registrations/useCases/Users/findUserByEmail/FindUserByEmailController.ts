@@ -14,10 +14,10 @@ class FindUserByEmailController {
             const query = req.query
 
             console.log('Token aceito!')
-
+            const { email } = query
             await checkQuery(query)
 
-            const { email } = query
+
 
             if (typeof (email) != 'string') {
                 throw Error("Formato do e-mail inválido")

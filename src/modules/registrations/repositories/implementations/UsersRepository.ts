@@ -34,16 +34,13 @@ class UsersRepository implements IUsersRepository {
             throw error
         }
     } 
-    async findUserByEmail(email: UsersEntity["email"]): Promise<Users> {
+    async findUserByEmail(email: UsersEntity["email"]): Promise<Users|null> {
         try {
 
             const uniqueUser = await prisma.users.findUnique({
                 where: { email: email }
             })
 
-            if (!uniqueUser) {
-                throw Error("Usuário não encontrado.")
-            }
             return uniqueUser
             
         } catch (error) {

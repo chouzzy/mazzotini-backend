@@ -8,7 +8,7 @@ class FindUserByEmailUseCase {
     constructor(
         private usersRepository: IUsersRepository) { }
 
-    async execute(email:UsersEntity["email"]): Promise<Users> {
+    async execute(email:UsersEntity["email"]): Promise<Users|null> {
 
         try {
            

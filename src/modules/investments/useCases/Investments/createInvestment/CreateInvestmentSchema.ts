@@ -39,7 +39,7 @@ const createInvestmentSchema = yup.object({
     .of(
       yup.object().shape({
         title: yup.string(),
-        url: yup.string().url()
+        url: yup.string()
       }),
     ),
   images: yup
