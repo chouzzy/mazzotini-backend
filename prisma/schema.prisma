@@ -108,6 +108,7 @@ model Investment {
   partners        Partners[] // fornecedores principais
   finishDate      DateTime? // data de entrega
   buildingStatus  String // status da construção -- vai abrir em uma nova tabela
+  buildingProgress  BuildingProgress // status da construção -- vai abrir em uma nova tabela
   investmentDate  DateTime? // data da compra do investidor
 
   predictedCost PredictedCost // custo previsto - gerente de projeto vai cadastrar custo total e custos macro
@@ -145,6 +146,15 @@ type PredictedCost {
   structure    String
   implantation String
   workmanship  String
+}
+
+type BuildingProgress {
+  acabamento  Int  @default(0)
+  alvenaria   Int  @default(0)
+  estrutura   Int  @default(0)
+  fundacao    Int  @default(0)
+  instalacoes Int  @default(0)
+  pintura     Int  @default(0)
 }
 
 type Address {

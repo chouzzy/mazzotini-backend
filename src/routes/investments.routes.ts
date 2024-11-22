@@ -34,8 +34,6 @@ investmentsRoutes.put('/delete/document', deleteInvestmentDocumentController.han
 const deleteInvestmentPartnerController = new DeleteInvestmentPartnerController()
 investmentsRoutes.put('/delete/partner', deleteInvestmentPartnerController.handle)
 
-// Criar rota documents e images
-
 
 
 

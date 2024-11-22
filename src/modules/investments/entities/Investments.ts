@@ -24,6 +24,7 @@ class InvestmentEntity {
   predictedCost!: Investment["predictedCost"];
   realizedCost!: Investment["realizedCost"];
   projectManagerID!: Investment["projectManagerID"]
+  buildingProgress!: Investment["buildingProgress"]
   createdAt!: Investment["createdAt"];
   updatedAt?: Investment["updatedAt"];
 }
