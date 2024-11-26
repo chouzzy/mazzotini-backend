@@ -103,13 +103,13 @@ model Investment {
   documents             Document[] // documentos da obra (armazenar como JSON)
   images                Image[] // imagens da obra (armazenar como JSON)
 
-  investmentValue String // valor do investimento     
-  companyName     String //nome da construtora
-  partners        Partners[] // fornecedores principais
-  finishDate      DateTime? // data de entrega
-  buildingStatus  String // status da construção -- vai abrir em uma nova tabela
-  buildingProgress  BuildingProgress // status da construção -- vai abrir em uma nova tabela
-  investmentDate  DateTime? // data da compra do investidor
+  investmentValue  String // valor do investimento     
+  companyName      String //nome da construtora
+  partners         Partners[] // fornecedores principais
+  finishDate       DateTime? // data de entrega
+  buildingStatus   String // status da construção -- vai abrir em uma nova tabela
+  buildingProgress BuildingProgress // status da construção -- vai abrir em uma nova tabela
+  investmentDate   DateTime? // data da compra do investidor
 
   predictedCost PredictedCost // custo previsto - gerente de projeto vai cadastrar custo total e custos macro
   realizedCost  RealizedCost? // custo realizado - custo total, itens macro (mesmos itens do buildingStatus)
@@ -135,26 +135,26 @@ enum ProjectType {
 }
 
 type RealizedCost {
-  foundation   String
-  structure    String
-  implantation String
-  workmanship  String
+  foundation   Int @default(0)
+  structure    Int @default(0)
+  implantation Int @default(0)
+  workmanship  Int @default(0)
 }
 
 type PredictedCost {
-  foundation   String
-  structure    String
-  implantation String
-  workmanship  String
+  foundation   Int @default(0)
+  structure    Int @default(0)
+  implantation Int @default(0)
+  workmanship  Int @default(0)
 }
 
 type BuildingProgress {
-  acabamento  Int  @default(0)
-  alvenaria   Int  @default(0)
-  estrutura   Int  @default(0)
-  fundacao    Int  @default(0)
-  instalacoes Int  @default(0)
-  pintura     Int  @default(0)
+  acabamento  Int @default(0)
+  alvenaria   Int @default(0)
+  estrutura   Int @default(0)
+  fundacao    Int @default(0)
+  instalacoes Int @default(0)
+  pintura     Int @default(0)
 }
 
 type Address {

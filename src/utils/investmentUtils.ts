@@ -80,6 +80,7 @@ async function filterPrismaInvestment(listInvestmentData: ListInvestmentProps) {
             expectedDeliveryDateFinal,
             city,
             projectManagerID,
+            active,
             page,
             pageRange
         } = listInvestmentData
@@ -93,7 +94,8 @@ async function filterPrismaInvestment(listInvestmentData: ListInvestmentProps) {
             !expectedDeliveryDateInitial &&
             !expectedDeliveryDateFinal &&
             !city &&
-            !projectManagerID
+            !projectManagerID &&
+            !active
         ) {
 
             const filteredInvestment = await prisma.investment.findMany({
@@ -117,6 +119,7 @@ async function filterPrismaInvestment(listInvestmentData: ListInvestmentProps) {
             { investmentValue },
             { companyName },
             { projectManagerID },
+            { active },
             {
                 expectedDeliveryDate: {
                     gte: expectedDeliveryDateInitial ? expectedDeliveryDateInitialISO : undefined,

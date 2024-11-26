@@ -30,6 +30,7 @@ interface UpdateInvestmentRequestProps {
     investmentDate?: InvestmentEntity["investmentDate"];
     predictedCost?: InvestmentEntity["predictedCost"];
     realizedCost?: InvestmentEntity["realizedCost"];
+    buildingProgress?: InvestmentEntity["buildingProgress"];
 
 }
 

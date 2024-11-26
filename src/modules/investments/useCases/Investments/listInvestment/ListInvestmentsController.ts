@@ -13,6 +13,7 @@ interface ListInvestmentRequestProps {
     expectedDeliveryDateFinal?: InvestmentEntity["expectedDeliveryDate"];
     city?: InvestmentEntity["address"]["city"];
     projectManagerID?: InvestmentEntity["projectManagerID"];
+    active?: string|boolean;
     page?: string;
     pageRange?: string;
 }
@@ -23,6 +24,12 @@ class ListInvestmentsController {
         try {
             const listInvestmentData: ListInvestmentRequestProps = req.query
 
+            console.log(listInvestmentData)
+            
+            if (listInvestmentData.active === 'true') {listInvestmentData.active = true}
+            if (listInvestmentData.active === 'false') {listInvestmentData.active = false}
+            
+            console.log(listInvestmentData)
             const { investmentValue } = listInvestmentData
 
             if (investmentValue) {

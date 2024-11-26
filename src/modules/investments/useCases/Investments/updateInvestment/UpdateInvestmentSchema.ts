@@ -59,18 +59,26 @@ partners: yup.array().of(
   buildingStatus: yup.string(),
   investmentDate: yup.string(),
   predictedCost: yup.object().shape({
-    foundation: yup.string(),
-    structure: yup.string(),
-    implantation: yup.string(),
-    workmanship: yup.string(),
+    foundation: yup.number(),
+    structure: yup.number(),
+    implantation: yup.number(),
+    workmanship: yup.number(),
   }),
   realizedCost: yup.object().shape({
-    foundation: yup.string(),
-    structure: yup.string(),
-    implantation: yup.string(),
-    workmanship: yup.string(),
+    foundation: yup.number(),
+    structure: yup.number(),
+    implantation: yup.number(),
+    workmanship: yup.number(),
   }),
-  active: yup.boolean().nullable()
+  active: yup.boolean().nullable(),
+  buildingProgress: yup.object().shape({
+    acabamento: yup.number().required("O acabamento é obrigatório"),
+    alvenaria: yup.number().required("O alvenaria é obrigatório"),
+    estrutura: yup.number().required("O estrutura é obrigatório"),
+    fundacao: yup.number().required("O fundacao é obrigatório"),
+    instalacoes: yup.number().required("O instalacoes é obrigatório"),
+    pintura: yup.number().required("O pintura é obrigatório"),
+  }).nullable(),
 }).noUnknown(true, "Campos desconhecidos no corpo da requisição.").strict();
 
 export { updateInvestmentSchema };

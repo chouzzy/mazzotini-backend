@@ -16,6 +16,7 @@ interface ListInvestmentProps {
     expectedDeliveryDateFinal?: InvestmentEntity["expectedDeliveryDate"];
     city?: InvestmentEntity["address"]["city"];
     projectManagerID?:InvestmentEntity["projectManagerID"];
+    active?:InvestmentEntity["active"]|string;
     page: number,
     pageRange: number
 }
@@ -33,7 +34,8 @@ class ListInvestmentUseCase {
             expectedDeliveryDateInitial,
             expectedDeliveryDateFinal,
             city,
-            projectManagerID
+            projectManagerID,
+            active
         } = listInvestmentData
 
 
@@ -44,7 +46,8 @@ class ListInvestmentUseCase {
             expectedDeliveryDateInitial,
             expectedDeliveryDateFinal,
             city,
-            projectManagerID
+            projectManagerID,
+            active
         }
 
         const { page, pageRange } = await validatePageParams(listInvestmentData)

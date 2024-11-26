@@ -58,16 +58,16 @@ const createInvestmentSchema = yup.object({
   buildingStatus: yup.string().required("O status da construção é obrigatório."),
   investmentDate: yup.string(),
   predictedCost: yup.object().shape({
-    foundation: yup.string().required("O custo previsto da fundação é obrigatório."),
-    structure: yup.string().required("O custo previsto da estrutura é obrigatório."),
-    implantation: yup.string().required("O custo previsto da implantação é obrigatório."),
-    workmanship: yup.string().required("O custo previsto da mão de obra é obrigatório."),
+    foundation: yup.number().required("O custo previsto da fundação é obrigatório."),
+    structure: yup.number().required("O custo previsto da estrutura é obrigatório."),
+    implantation: yup.number().required("O custo previsto da implantação é obrigatório."),
+    workmanship: yup.number().required("O custo previsto da mão de obra é obrigatório."),
   }).required("O custo previsto é obrigatório"),
   realizedCost: yup.object().shape({
-    foundation: yup.string().required("O custo realizado da fundação é obrigatório."),
-    structure: yup.string().required("O custo realizado da estrutura é obrigatório."),
-    implantation: yup.string().required("O custo realizado da implantação é obrigatório."),
-    workmanship: yup.string().required("O custo realizado da mão de obra é obrigatório."),
+    foundation: yup.number().required("O custo realizado da fundação é obrigatório."),
+    structure: yup.number().required("O custo realizado da estrutura é obrigatório."),
+    implantation: yup.number().required("O custo realizado da implantação é obrigatório."),
+    workmanship: yup.number().required("O custo realizado da mão de obra é obrigatório."),
   }).nullable(),
   projectManagerID: yup.string().required("O ID do Gerente de projeto é obrigatório")
 
