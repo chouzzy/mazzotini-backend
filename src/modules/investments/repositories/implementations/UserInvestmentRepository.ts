@@ -1,6 +1,7 @@
+import { Investment, Users, UserInvestment } from "@prisma/client";
 import { prisma } from "../../../../prisma";
 import { validationResponse } from "../../../../types";
-import { createPrismaUserInvestment, filterPrismaUserInvestment } from "../../../../utils/userInvestmentUtils";
+import { createPrismaUserInvestment, filterPrismaInvestmentsByInvestmentID, filterPrismaInvestmentsByUserID, filterPrismaUserInvestment } from "../../../../utils/userInvestmentUtils";
 import { UserInvestmentEntity } from "../../entities/UserInvestment";
 import { CreateUserInvestmentRequestProps } from "../../useCases/UserInvestment/createUserInvestment/CreateUserInvestmentController";
 import { ListUserInvestmentRequestProps } from "../../useCases/UserInvestment/listUserInvestments/ListUserInvestmentsController";
@@ -16,14 +17,35 @@ class UserInvestmentRepository implements IUserInvestmentRepository {
         this.userInvestment = [];
     }
 
-    async filterUserInvestment(listUserInvestmentData: ListUserInvestmentFormatted): Promise<validationResponse> {
+    async filterUserInvestment(listUserInvestmentData: ListUserInvestmentFormatted): Promise<Investment[] | Users[] | UserInvestment[] | undefined> {
 
-        const filteredUserInvestment = await filterPrismaUserInvestment(listUserInvestmentData)
-        return {
-            isValid: true,
-            statusCode: 202,
-            successMessage: 'Filtered investment.',
-            userInvestmentList:filteredUserInvestment
+        try {
+
+            const { userID, investmentID } = listUserInvestmentData
+
+            if (userID && !investmentID) {
+
+                const filteredInvestmentsByUserID = await filterPrismaInvestmentsByUserID(listUserInvestmentData)
+
+                return filteredInvestmentsByUserID
+            }
+
+            if (!userID && investmentID) {
+
+                const filteredUsersByInvestmentIDs = await filterPrismaInvestmentsByInvestmentID(listUserInvestmentData)
+
+                return filteredUsersByInvestmentIDs
+            }
+            if (!userID && !investmentID) {
+
+                const allUserInvestments = await filterPrismaUserInvestment(listUserInvestmentData)
+
+                return allUserInvestments
+            }
+
+
+        } catch (error) {
+            throw error
         }
     }
 

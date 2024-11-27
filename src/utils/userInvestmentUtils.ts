@@ -8,7 +8,7 @@ async function createPrismaUserInvestment(userInvestmentData: CreateUserInvestme
 
     try {
 
-        const { userID, investmentID } = userInvestmentData
+        const { userID, investmentID, investedValue } = userInvestmentData
 
         const userInvestment = await prisma.userInvestment.create({
             data: {
@@ -21,7 +21,8 @@ async function createPrismaUserInvestment(userInvestmentData: CreateUserInvestme
                     connect: {
                         id: investmentID
                     }
-                }
+                },
+                investedValue: investedValue
             }
         })
 
@@ -67,6 +68,74 @@ async function filterPrismaUserInvestment(listUserInvestmentData: ListUserInvest
     }
 }
 
+async function filterPrismaInvestmentsByUserID(listUserInvestmentData: ListUserInvestmentFormatted) {
+
+    try {
+
+        const { userID, page, pageRange } = listUserInvestmentData
+
+        // PEGA A LISTA DE INVESTIMENTOS DESSE USUARIO
+        const userInvestmentList = await prisma.userInvestment.findMany({
+            where: { userID: userID },
+            skip: (page - 1) * pageRange,
+            take: pageRange,
+        })
+
+        // LISTA OS IDS DO INVESTIMENTO
+        const investmentIDs = userInvestmentList.map((userInvestment) => { return userInvestment.investmentID })
+
+        // FILTRA TODOS OS INVESTIMENTOS QUE POSSUEM OS IDS ENCONTRADOS
+        const investments = await prisma.investment.findMany({
+            where: {
+                id: {
+                    in: investmentIDs, // Filtra os investimentos com base na lista de IDs
+                },
+            },
+        });
+
+        return investments
+
+
+
+
+    } catch (error) {
+        throw error
+    }
+}
+
+async function filterPrismaInvestmentsByInvestmentID(listUserInvestmentData: ListUserInvestmentFormatted) {
+
+    try {
+
+        const { investmentID, page, pageRange } = listUserInvestmentData
+
+        // PEGA A LISTA DE INVESTIMENTOS DESSE USUARIO
+        const userInvestmentList = await prisma.userInvestment.findMany({
+            where: { investmentID: investmentID },
+            skip: (page - 1) * pageRange,
+            take: pageRange,
+        })
+
+        // LISTA OS IDS DO INVESTIMENTO
+        const userIDs = userInvestmentList.map((userInvestment) => { return userInvestment.userID })
+
+        // FILTRA TODOS OS INVESTIMENTOS QUE POSSUEM OS IDS ENCONTRADOS
+        const users = await prisma.users.findMany({
+            where: {
+                id: {
+                    in: userIDs, // Filtra os investimentos com base na lista de IDs
+                },
+            },
+        });
+
+        return users
+
+    } catch (error) {
+        throw error
+    }
+}
+
+
 async function validatePageParams(listUserInvestmentData: ListUserInvestmentRequestProps) {
 
     try {
@@ -92,4 +161,4 @@ async function validatePageParams(listUserInvestmentData: ListUserInvestmentRequ
     }
 }
 
-export { createPrismaUserInvestment, filterPrismaUserInvestment, validatePageParams }
+export { createPrismaUserInvestment, filterPrismaUserInvestment, filterPrismaInvestmentsByUserID, filterPrismaInvestmentsByInvestmentID, validatePageParams }

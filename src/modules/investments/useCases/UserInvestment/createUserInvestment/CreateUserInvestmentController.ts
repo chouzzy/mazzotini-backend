@@ -8,6 +8,7 @@ import { CreateUserInvestmentUseCase } from "./CreateUserInvestmentUseCase"
 interface CreateUserInvestmentRequestProps {
     userID: UserInvestmentEntity["userID"],
     investmentID: UserInvestmentEntity["investmentID"]
+    investedValue: UserInvestmentEntity["investedValue"]
 }
 
 class CreateUserInvestmentController {

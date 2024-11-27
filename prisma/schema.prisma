@@ -198,13 +198,15 @@ type Partners {
 }
 
 model UserInvestment {
-  id           String     @id @default(uuid()) @map("_id")
-  user         Users      @relation(fields: [userID], references: [id])
-  userID       String
-  investment   Investment @relation(fields: [investmentID], references: [id])
-  investmentID String
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id               String     @id @default(uuid()) @map("_id")
+  user             Users      @relation(fields: [userID], references: [id])
+  userID           String
+  investment       Investment @relation(fields: [investmentID], references: [id])
+  investmentID     String
+  investedValue    Int // Valor investido pelo usuário
+  dataInvestimento DateTime   @default(now())
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
   @@map("userInvestments")
 }

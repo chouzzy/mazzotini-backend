@@ -3,6 +3,7 @@ import { UserInvestmentEntity } from "../../../entities/UserInvestment";
 import { UserInvestmentRepository } from "../../../repositories/implementations/UserInvestmentRepository";
 import { checkQuery } from "./ListUserInvestmentsCheck";
 import { ListUserInvestmentUseCase } from "./ListUserInvestmentsUseCase";
+import { Prisma } from "@prisma/client";
 
 interface ListUserInvestmentRequestProps {
 
@@ -15,24 +16,46 @@ interface ListUserInvestmentRequestProps {
 class ListUserInvestmentController {
     async handle(req: Request, res: Response): Promise<Response> {
 
-        const listUserInvestmentData: ListUserInvestmentRequestProps = req.query
+        try {
 
 
-        const bodyValidation = await checkQuery(listUserInvestmentData)
+            const listUserInvestmentData: ListUserInvestmentRequestProps = req.query
 
-        if (bodyValidation.isValid === false) {
-            return res.status(401).json({ errorMessage: bodyValidation.errorMessage })
+            const bodyValidation = await checkQuery(listUserInvestmentData)
+
+            if (bodyValidation.isValid === false) {
+                return res.status(401).json({ errorMessage: bodyValidation.errorMessage })
+            }
+
+            // Instanciando o useCase no repositório com as funções
+            const userInvestmentRepository = new UserInvestmentRepository()
+
+            const listUsersUseCase = new ListUserInvestmentUseCase(userInvestmentRepository);
+
+            const response = await listUsersUseCase.execute(listUserInvestmentData)
+
+            return res.status(200).json({
+                successMessage: "Investimentos listados com sucesso!",
+                list: response
+            })
+
+        } catch (error) {
+
+            if (error instanceof Prisma.PrismaClientValidationError) {
+
+                console.log(error)
+                return res.status(401).json({
+                    error: {
+                        name: error.name,
+                        message: error.message,
+                    }
+                })
+
+            } else {
+                console.log(error)
+                return res.status(401).json({ error: { name: 'ListUserInvestmentController error: C2DI API', message: String(error) } })
+            }
         }
-
-
-        // Instanciando o useCase no repositório com as funções
-        const userInvestmentRepository = new UserInvestmentRepository()
-
-        const listUsersUseCase = new ListUserInvestmentUseCase(userInvestmentRepository);
-
-        const response = await listUsersUseCase.execute(listUserInvestmentData)
-
-        return res.status(response.statusCode).json(response)
 
     }
 }

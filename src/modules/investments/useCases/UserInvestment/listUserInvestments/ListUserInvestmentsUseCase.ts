@@ -3,6 +3,7 @@ import { ListUserInvestmentRequestProps } from "./ListUserInvestmentsController"
 import { validationResponse } from "../../../../../types"
 import { validatePageParams } from "../../../../../utils/userInvestmentUtils"
 import { UserInvestmentEntity } from "../../../entities/UserInvestment"
+import { Investment, UserInvestment, Users } from "@prisma/client"
 //////
 
 interface ListUserInvestmentFormatted {
@@ -16,7 +17,7 @@ class ListUserInvestmentUseCase {
     constructor(
         private userInvestmentRepository: IUserInvestmentRepository) { }
 
-    async execute(listUserInvestmentData: ListUserInvestmentRequestProps): Promise<validationResponse> {
+    async execute(listUserInvestmentData: ListUserInvestmentRequestProps): Promise<Investment[] | Users[] | UserInvestment[] | undefined> {
 
         try {
 
@@ -32,16 +33,12 @@ class ListUserInvestmentUseCase {
                 pageRange
             }
 
-            const users = await this.userInvestmentRepository.filterUserInvestment(listUserInvestmentFormatted)
+            const response = await this.userInvestmentRepository.filterUserInvestment(listUserInvestmentFormatted)
 
-            return users
+            return response
 
         } catch (error) {
-            return {
-                isValid: false,
-                statusCode: 402,
-                errorMessage: String(error)
-            }
+            throw error
         }
     }
 }

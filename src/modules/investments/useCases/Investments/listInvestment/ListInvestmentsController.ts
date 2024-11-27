@@ -29,7 +29,6 @@ class ListInvestmentsController {
             if (listInvestmentData.active === 'true') {listInvestmentData.active = true}
             if (listInvestmentData.active === 'false') {listInvestmentData.active = false}
             
-            console.log(listInvestmentData)
             const { investmentValue } = listInvestmentData
 
             if (investmentValue) {
