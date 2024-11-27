@@ -9,6 +9,7 @@ class UserInvestmentEntity {
   investmentID!: UserInvestment["investmentID"]
   
   investedValue!: UserInvestment["investedValue"]
+  valorCorrente!: UserInvestment["valorCorrente"]
 
   createdAt!: UserInvestment["createdAt"]
   updatedAt!: UserInvestment["updatedAt"]

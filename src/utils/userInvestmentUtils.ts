@@ -8,7 +8,7 @@ async function createPrismaUserInvestment(userInvestmentData: CreateUserInvestme
 
     try {
 
-        const { userID, investmentID, investedValue } = userInvestmentData
+        const { userID, investmentID, investedValue, valorCorrente } = userInvestmentData
 
         const userInvestment = await prisma.userInvestment.create({
             data: {
@@ -22,7 +22,8 @@ async function createPrismaUserInvestment(userInvestmentData: CreateUserInvestme
                         id: investmentID
                     }
                 },
-                investedValue: investedValue
+                investedValue: investedValue,
+                valorCorrente: valorCorrente
             }
         })
 

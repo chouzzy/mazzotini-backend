@@ -32,6 +32,9 @@ interface CreateInvestmentRequestProps {
     realizedCost: InvestmentEntity["realizedCost"];
     projectManagerID: InvestmentEntity["projectManagerID"]
     buildingProgress: InvestmentEntity["buildingProgress"]
+    valorOriginal?: InvestmentEntity["valorOriginal"]
+    valorCorrente?: InvestmentEntity["valorCorrente"]
+    historicoDeValorizacao?: InvestmentEntity["historicoDeValorizacao"]
 
 }
 

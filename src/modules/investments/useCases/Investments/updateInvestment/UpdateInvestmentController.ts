@@ -31,6 +31,9 @@ interface UpdateInvestmentRequestProps {
     predictedCost?: InvestmentEntity["predictedCost"];
     realizedCost?: InvestmentEntity["realizedCost"];
     buildingProgress?: InvestmentEntity["buildingProgress"];
+    valorOriginal?: InvestmentEntity["valorOriginal"]
+    valorCorrente?: InvestmentEntity["valorCorrente"]
+    historicoDeValorizacao?: InvestmentEntity["historicoDeValorizacao"]
 
 }
 

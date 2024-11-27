@@ -26,6 +26,11 @@ class InvestmentEntity {
   projectManagerID!: Investment["projectManagerID"]
   buildingProgress!: Investment["buildingProgress"]
   active!: Investment["active"]
+
+  valorOriginal!: Investment["valorOriginal"]
+  valorCorrente!: Investment["valorCorrente"]
+  historicoDeValorizacao!: Investment["historicoDeValorizacao"]
+
   createdAt!: Investment["createdAt"];
   updatedAt?: Investment["updatedAt"];
 }

@@ -9,6 +9,7 @@ interface CreateUserInvestmentRequestProps {
     userID: UserInvestmentEntity["userID"],
     investmentID: UserInvestmentEntity["investmentID"]
     investedValue: UserInvestmentEntity["investedValue"]
+    valorCorrente: UserInvestmentEntity["valorCorrente"]
 }
 
 class CreateUserInvestmentController {

@@ -103,7 +103,12 @@ model Investment {
   documents             Document[] // documentos da obra (armazenar como JSON)
   images                Image[] // imagens da obra (armazenar como JSON)
 
-  investmentValue  String // valor do investimento     
+  investmentValue String // valor do investimento    
+
+  valorOriginal          Int @default(1) // Valor do imóvel no momento do lançamento
+  valorCorrente          Int @default(1) // Valor atual do imóvel
+  historicoDeValorizacao HistoricoDeValorizacao[] // Array de objetos com o histórico de valorização
+
   companyName      String //nome da construtora
   partners         Partners[] // fornecedores principais
   finishDate       DateTime? // data de entrega
@@ -197,6 +202,11 @@ type Partners {
   activity String
 }
 
+type HistoricoDeValorizacao {
+  value Int      @default(1)
+  date  DateTime @default(now())
+}
+
 model UserInvestment {
   id               String     @id @default(uuid()) @map("_id")
   user             Users      @relation(fields: [userID], references: [id])
@@ -204,6 +214,7 @@ model UserInvestment {
   investment       Investment @relation(fields: [investmentID], references: [id])
   investmentID     String
   investedValue    Int // Valor investido pelo usuário
+  valorCorrente    Int // Valor investido pelo usuário
   dataInvestimento DateTime   @default(now())
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
