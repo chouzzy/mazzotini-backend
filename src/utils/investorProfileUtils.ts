@@ -95,6 +95,7 @@ async function calcularPesoInvestimentosAtuais(possuiOutros: boolean, quaisOutro
     let peso = 0;
 
     if (possuiOutros) {
+        peso = 2
         switch (quaisOutros) {
             case 'Ações':
                 peso += 3;

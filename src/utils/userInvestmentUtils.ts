@@ -1,3 +1,4 @@
+import { UserInvestmentEntity } from "../modules/investments/entities/UserInvestment";
 import { CreateUserInvestmentRequestProps } from "../modules/investments/useCases/UserInvestment/createUserInvestment/CreateUserInvestmentController";
 import { ListUserInvestmentRequestProps } from "../modules/investments/useCases/UserInvestment/listUserInvestments/ListUserInvestmentsController";
 import { ListUserInvestmentFormatted } from "../modules/investments/useCases/UserInvestment/listUserInvestments/ListUserInvestmentsUseCase";
@@ -8,7 +9,7 @@ async function createPrismaUserInvestment(userInvestmentData: CreateUserInvestme
 
     try {
 
-        const { userID, investmentID, investedValue, valorCorrente } = userInvestmentData
+        const { userID, investmentID, investedValue, valorCorrente, dataInvestimento, documents } = userInvestmentData
 
         const userInvestment = await prisma.userInvestment.create({
             data: {
@@ -23,7 +24,10 @@ async function createPrismaUserInvestment(userInvestmentData: CreateUserInvestme
                     }
                 },
                 investedValue: investedValue,
-                valorCorrente: valorCorrente
+                valorCorrente: valorCorrente,
+                documents: documents,
+                dataInvestimento: dataInvestimento,
+
             }
         })
 
@@ -136,6 +140,39 @@ async function filterPrismaInvestmentsByInvestmentID(listUserInvestmentData: Lis
     }
 }
 
+async function filterPrismaUserInvestmentsByInvestmentID(listUserInvestmentData: ListUserInvestmentFormatted) {
+
+    try {
+
+        const { investmentID, page, pageRange } = listUserInvestmentData
+
+        // PEGA A LISTA DE INVESTIMENTOS NESSE PROJETO
+        const userInvestmentList = await prisma.userInvestment.findMany({
+            where: { investmentID: investmentID },
+            skip: (page - 1) * pageRange,
+            take: pageRange,
+        })
+
+        return userInvestmentList
+
+    } catch (error) {
+        throw error
+    }
+}
+
+
+async function deletePrismaUserInvestments(id: UserInvestmentEntity["id"]) {
+
+    try {
+        const userInvestmentDeleted = await prisma.userInvestment.delete({ where: { id: id } })
+
+        return userInvestmentDeleted
+
+    } catch (error) {
+        throw error
+    }
+}
+
 
 async function validatePageParams(listUserInvestmentData: ListUserInvestmentRequestProps) {
 
@@ -162,4 +199,4 @@ async function validatePageParams(listUserInvestmentData: ListUserInvestmentRequ
     }
 }
 
-export { createPrismaUserInvestment, filterPrismaUserInvestment, filterPrismaInvestmentsByUserID, filterPrismaInvestmentsByInvestmentID, validatePageParams }
+export { createPrismaUserInvestment, filterPrismaUserInvestment, filterPrismaInvestmentsByUserID, filterPrismaInvestmentsByInvestmentID, filterPrismaUserInvestmentsByInvestmentID, deletePrismaUserInvestments, validatePageParams }

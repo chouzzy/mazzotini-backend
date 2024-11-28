@@ -3,6 +3,7 @@ import { UserInvestmentRepository } from "../../../repositories/implementations/
 import { UserInvestmentEntity } from "../../../entities/UserInvestment"
 import { checkBody } from "./CreateUserInvestmentCheck"
 import { CreateUserInvestmentUseCase } from "./CreateUserInvestmentUseCase"
+import { v4 as uuidv4 } from 'uuid';
 
 
 interface CreateUserInvestmentRequestProps {
@@ -10,6 +11,8 @@ interface CreateUserInvestmentRequestProps {
     investmentID: UserInvestmentEntity["investmentID"]
     investedValue: UserInvestmentEntity["investedValue"]
     valorCorrente: UserInvestmentEntity["valorCorrente"]
+    documents?: UserInvestmentEntity["documents"]
+    dataInvestimento?: UserInvestmentEntity["dataInvestimento"]
 }
 
 class CreateUserInvestmentController {
@@ -17,6 +20,13 @@ class CreateUserInvestmentController {
 
 
         const userInvestmentData: CreateUserInvestmentRequestProps = req.body
+        const {documents} = userInvestmentData
+
+        if (documents) {
+            documents.map((doc) => {
+                doc.id = uuidv4()
+            })
+        }
 
         const bodyValidation = await checkBody(userInvestmentData)
 

@@ -214,7 +214,8 @@ model UserInvestment {
   investment       Investment @relation(fields: [investmentID], references: [id])
   investmentID     String
   investedValue    Int // Valor investido pelo usuário
-  valorCorrente    Int // Valor investido pelo usuário
+  valorCorrente    Int // Valor do empreendimento quando investido pelo usuário
+  documents    Document[] // Valor do empreendimento quando investido pelo usuário
   dataInvestimento DateTime   @default(now())
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt

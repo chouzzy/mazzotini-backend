@@ -9,6 +9,7 @@ interface usersResumed {
   name: UsersEntity["name"],
   email: UsersEntity["email"]
   role: UsersEntity["role"]
+  investorProfileName?: UsersEntity["investorProfileName"]
 }
 interface userCreated {
   id: UsersEntity["id"],

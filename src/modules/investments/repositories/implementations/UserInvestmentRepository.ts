@@ -1,7 +1,7 @@
 import { Investment, Users, UserInvestment } from "@prisma/client";
 import { prisma } from "../../../../prisma";
 import { validationResponse } from "../../../../types";
-import { createPrismaUserInvestment, filterPrismaInvestmentsByInvestmentID, filterPrismaInvestmentsByUserID, filterPrismaUserInvestment } from "../../../../utils/userInvestmentUtils";
+import { createPrismaUserInvestment, deletePrismaUserInvestments, filterPrismaInvestmentsByInvestmentID, filterPrismaInvestmentsByUserID, filterPrismaUserInvestment, filterPrismaUserInvestmentsByInvestmentID } from "../../../../utils/userInvestmentUtils";
 import { UserInvestmentEntity } from "../../entities/UserInvestment";
 import { CreateUserInvestmentRequestProps } from "../../useCases/UserInvestment/createUserInvestment/CreateUserInvestmentController";
 import { ListUserInvestmentRequestProps } from "../../useCases/UserInvestment/listUserInvestments/ListUserInvestmentsController";
@@ -49,6 +49,27 @@ class UserInvestmentRepository implements IUserInvestmentRepository {
         }
     }
 
+
+    async filterUserInvestmentByInvestmentID(listUserInvestmentData: ListUserInvestmentFormatted): Promise<UserInvestment[]> {
+
+        try {
+
+            const { userID, investmentID } = listUserInvestmentData
+
+            if (!investmentID) {
+                throw Error("ID do investimento inválido")
+            }
+
+            const filteredUsersByInvestmentIDs = await filterPrismaUserInvestmentsByInvestmentID(listUserInvestmentData)
+
+            return filteredUsersByInvestmentIDs
+
+
+        } catch (error) {
+            throw error
+        }
+    }
+
     async createUserInvestment(userInvestmentData: CreateUserInvestmentRequestProps): Promise<validationResponse> {
 
         const userInvestment = await createPrismaUserInvestment(userInvestmentData)
@@ -59,6 +80,14 @@ class UserInvestmentRepository implements IUserInvestmentRepository {
             successMessage: 'Created investment.',
             userInvestment: userInvestment
         }
+    }
+
+
+    async deleteUserInvestment(id:UserInvestmentEntity["id"]): Promise<UserInvestment> {
+
+        const userInvestmentDeleted = await deletePrismaUserInvestments(id)
+
+        return userInvestmentDeleted
     }
 }
 
