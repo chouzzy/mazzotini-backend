@@ -142,7 +142,8 @@ function filterResumedPrismaUser(listUserFormatted) {
                     id: true,
                     name: true,
                     email: true,
-                    role: true
+                    role: true,
+                    investorProfileName: true
                 },
                 skip: (page - 1) * pageRange,
                 take: pageRange,

@@ -42,9 +42,6 @@ class UsersRepository {
                 const uniqueUser = yield prisma_1.prisma.users.findUnique({
                     where: { email: email }
                 });
-                if (!uniqueUser) {
-                    throw Error("Usuário não encontrado.");
-                }
                 return uniqueUser;
             }
             catch (error) {

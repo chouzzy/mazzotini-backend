@@ -19,6 +19,13 @@ class ListInvestmentsController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const listInvestmentData = req.query;
+                console.log(listInvestmentData);
+                if (listInvestmentData.active === 'true') {
+                    listInvestmentData.active = true;
+                }
+                if (listInvestmentData.active === 'false') {
+                    listInvestmentData.active = false;
+                }
                 yield (0, ListInvestmentsCheck_1.checkQuery)(listInvestmentData);
                 // Instanciando o useCase no repositório com as funções
                 const investmentRepository = new InvestmentRepository_1.InvestmentRepository();

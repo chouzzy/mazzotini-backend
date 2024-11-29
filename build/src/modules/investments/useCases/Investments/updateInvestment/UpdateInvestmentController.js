@@ -20,11 +20,9 @@ class UpdateInvestmentsController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { id } = req.params;
-                // if (typeof(id) != 'string') {
-                //     throw Error("O id deve ser uma string")
-                // }
+                console.log(req.body);
                 const investmentData = req.body;
-                const { partners, documents } = investmentData;
+                const { partners, documents, images } = investmentData;
                 if (partners) {
                     partners.map((partner) => {
                         partner.id = (0, uuid_1.v4)();
@@ -33,6 +31,11 @@ class UpdateInvestmentsController {
                 if (documents) {
                     documents.map((doc) => {
                         doc.id = (0, uuid_1.v4)();
+                    });
+                }
+                if (images) {
+                    images.map((img) => {
+                        img.id = (0, uuid_1.v4)();
                     });
                 }
                 yield (0, UpdateInvestmentCheck_1.checkBody)(investmentData);
@@ -46,6 +49,7 @@ class UpdateInvestmentsController {
                 });
             }
             catch (error) {
+                console.log(error);
                 if (error instanceof client_1.Prisma.PrismaClientValidationError) {
                     console.log(error);
                     return res.status(401).json({
@@ -56,7 +60,6 @@ class UpdateInvestmentsController {
                     });
                 }
                 else {
-                    console.log(error);
                     return res.status(401).json({ error: { name: 'UpdateInvestmentsController error: C2DI API', message: String(error) } });
                 }
             }

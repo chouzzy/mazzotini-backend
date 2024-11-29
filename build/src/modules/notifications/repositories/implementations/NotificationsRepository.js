@@ -23,5 +23,27 @@ class NotificationsRepository {
             }
         });
     }
+    listNotifications(id, page, pageRange) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const response = yield (0, notificationsUtils_1.listPrismaNotifications)(id, page, pageRange);
+                return response;
+            }
+            catch (error) {
+                throw error;
+            }
+        });
+    }
+    readNotification(id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const notifications = yield (0, notificationsUtils_1.readPrismaNotifications)(id);
+                return notifications;
+            }
+            catch (error) {
+                throw error;
+            }
+        });
+    }
 }
 exports.NotificationsRepository = NotificationsRepository;

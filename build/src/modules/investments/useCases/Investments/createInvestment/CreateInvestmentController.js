@@ -20,7 +20,7 @@ class CreateInvestmentsController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const investmentData = req.body;
-                const { partners, documents } = investmentData;
+                const { partners, documents, images } = investmentData;
                 if (partners) {
                     partners.map((partner) => {
                         partner.id = (0, uuid_1.v4)();
@@ -29,6 +29,11 @@ class CreateInvestmentsController {
                 if (documents) {
                     documents.map((doc) => {
                         doc.id = (0, uuid_1.v4)();
+                    });
+                }
+                if (images) {
+                    images.map((img) => {
+                        img.id = (0, uuid_1.v4)();
                     });
                 }
                 yield (0, CreateInvestmentCheck_1.checkBody)(investmentData);

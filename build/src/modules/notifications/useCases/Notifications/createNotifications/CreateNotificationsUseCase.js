@@ -16,8 +16,8 @@ class CreateNotificationsUseCase {
     }
     execute(notificationsData) {
         return __awaiter(this, void 0, void 0, function* () {
-            const createdUsers = yield this.NotificationsRepository.createNotifications(notificationsData);
-            return createdUsers;
+            const createdNotifications = yield this.NotificationsRepository.createNotifications(notificationsData);
+            return createdNotifications;
         });
     }
 }

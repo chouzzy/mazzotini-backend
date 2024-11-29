@@ -18,7 +18,7 @@ usersRoutes.get('/', auth0Check_1.checkJwtFromCookie, listUsersController.handle
 const findUserByIDController = new FindUserByIDController_1.FindUserByIDController();
 usersRoutes.get('/findByID/:id', auth0Check_1.checkJwtFromCookie, findUserByIDController.handle);
 const findUserByEmailController = new FindUserByEmailController_1.FindUserByEmailController();
-usersRoutes.get('/findUnique', auth0Check_1.checkJwtFromCookie, findUserByEmailController.handle);
+usersRoutes.get('/findUnique', findUserByEmailController.handle);
 const createUsersController = new CreateUsersController_1.CreateUsersController();
 usersRoutes.post('/create', auth0Check_1.checkJwtFromCookie, createUsersController.handle);
 const updateUsersController = new UpdateUsersController_1.UpdateUsersController();

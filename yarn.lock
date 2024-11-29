@@ -462,6 +462,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/formidable@npm:^3.4.5":
+  version: 3.4.5
+  resolution: "@types/formidable@npm:3.4.5"
+  dependencies:
+    "@types/node": "*"
+  checksum: 27384c8459e44f5e167922927bd31fcd1259555062faacaa490b52f8896a0a5614918ee4ec6ec9123c1418ac127908270c1182a2441d49681b37dc34737c3646
+  languageName: node
+  linkType: hard
+
 "@types/http-errors@npm:*":
   version: 2.0.4
   resolution: "@types/http-errors@npm:2.0.4"
@@ -1052,6 +1061,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"asap@npm:^2.0.0":
+  version: 2.0.6
+  resolution: "asap@npm:2.0.6"
+  checksum: b296c92c4b969e973260e47523207cd5769abd27c245a68c26dc7a0fe8053c55bb04360237cb51cab1df52be939da77150ace99ad331fb7fb13b3423ed73ff3d
+  languageName: node
+  linkType: hard
+
 "astral-regex@npm:^2.0.0":
   version: 2.0.0
   resolution: "astral-regex@npm:2.0.0"
@@ -1286,6 +1302,7 @@ __metadata:
     "@types/crypto-js": ^4.1.2
     "@types/csv-parse": ^1.2.2
     "@types/express": 4.17.14
+    "@types/formidable": ^3.4.5
     "@types/jsonwebtoken": ^8.5.9
     "@types/multer": ^1.4.7
     "@types/swagger-jsdoc": ^6.0.4
@@ -1312,6 +1329,7 @@ __metadata:
     express: ^4.18.2
     express-async-errors: ^3.1.1
     express-oauth2-jwt-bearer: ^1.6.0
+    formidable: ^3.5.2
     import: ^0.0.6
     jsonwebtoken: ^8.5.1
     multer: ^1.4.5-lts.1
@@ -1819,6 +1837,16 @@ __metadata:
   version: 1.2.0
   resolution: "destroy@npm:1.2.0"
   checksum: 0acb300b7478a08b92d810ab229d5afe0d2f4399272045ab22affa0d99dbaf12637659411530a6fcd597a9bdac718fc94373a61a95b4651bbc7b83684a565e38
+  languageName: node
+  linkType: hard
+
+"dezalgo@npm:^1.0.4":
+  version: 1.0.4
+  resolution: "dezalgo@npm:1.0.4"
+  dependencies:
+    asap: ^2.0.0
+    wrappy: 1
+  checksum: 895389c6aead740d2ab5da4d3466d20fa30f738010a4d3f4dcccc9fc645ca31c9d10b7e1804ae489b1eb02c7986f9f1f34ba132d409b043082a86d9a4e745624
   languageName: node
   linkType: hard
 
@@ -2629,6 +2657,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"formidable@npm:^3.5.2":
+  version: 3.5.2
+  resolution: "formidable@npm:3.5.2"
+  dependencies:
+    dezalgo: ^1.0.4
+    hexoid: ^2.0.0
+    once: ^1.4.0
+  checksum: 7c7972e8a15d45e6d2315a54d77f0900e5c610aff9b5730de326e2b34630604e1eff6c9d666e5504fba4c8818ccaed682d76a4fdb718b160c6afa2c250bf6a76
+  languageName: node
+  linkType: hard
+
 "forwarded@npm:0.2.0":
   version: 0.2.0
   resolution: "forwarded@npm:0.2.0"
@@ -2972,6 +3011,13 @@ __metadata:
   dependencies:
     function-bind: ^1.1.2
   checksum: e8516f776a15149ca6c6ed2ae3110c417a00b62260e222590e54aa367cbcd6ed99122020b37b7fbdf05748df57b265e70095d7bf35a47660587619b15ffb93db
+  languageName: node
+  linkType: hard
+
+"hexoid@npm:^2.0.0":
+  version: 2.0.0
+  resolution: "hexoid@npm:2.0.0"
+  checksum: 69a92b2bcd7c81c16557de017c59511643e3cb1f0d6e9e9b705859b798bfd059088e4d3cc85e9fe0a9e431007430f15393303c3e74320b5c4c28cb64fc7d8bb4
   languageName: node
   linkType: hard
 

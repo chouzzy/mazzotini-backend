@@ -7,7 +7,6 @@ import { Prisma } from "@prisma/client";
 
 interface ListInvestmentRequestProps {
     title?: InvestmentEntity["title"];
-    investmentValue?: InvestmentEntity["investmentValue"];
     companyName?: InvestmentEntity["companyName"];
     expectedDeliveryDateInitial?: InvestmentEntity["expectedDeliveryDate"];
     expectedDeliveryDateFinal?: InvestmentEntity["expectedDeliveryDate"];
@@ -29,16 +28,6 @@ class ListInvestmentsController {
             if (listInvestmentData.active === 'true') {listInvestmentData.active = true}
             if (listInvestmentData.active === 'false') {listInvestmentData.active = false}
             
-            const { investmentValue } = listInvestmentData
-
-            if (investmentValue) {
-
-                listInvestmentData.investmentValue = Number(listInvestmentData.investmentValue)
-
-                if (typeof (listInvestmentData.investmentValue) == 'number') {
-                    throw Error('investmentValue deve ser number')
-                }
-            }
 
             await checkQuery(listInvestmentData)
 

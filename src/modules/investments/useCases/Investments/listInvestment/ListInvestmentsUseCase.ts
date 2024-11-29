@@ -29,7 +29,6 @@ class ListInvestmentUseCase {
 
         const {
             title,
-            investmentValue,
             companyName,
             expectedDeliveryDateInitial,
             expectedDeliveryDateFinal,
@@ -41,7 +40,6 @@ class ListInvestmentUseCase {
 
         const data = {
             title,
-            investmentValue,
             companyName,
             expectedDeliveryDateInitial,
             expectedDeliveryDateFinal,

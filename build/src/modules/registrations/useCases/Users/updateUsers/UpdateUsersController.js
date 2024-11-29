@@ -23,7 +23,7 @@ class UpdateUsersController {
                 if (typeof (id) != 'string') {
                     return res.status(401).json({ Error: "ID inválido" });
                 }
-                usersData.birth = new Date(usersData.birth);
+                // usersData.birth = new Date(usersData.birth)
                 yield (0, UpdateUsersCheck_1.checkBody)(usersData, id);
                 const userRepository = new UsersRepository_1.UsersRepository();
                 const updateUsersUseCase = new UpdateUsersUseCase_1.UpdateUsersUseCase(userRepository);

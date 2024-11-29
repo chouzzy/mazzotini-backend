@@ -6,6 +6,8 @@ import bodyParser from 'body-parser';
 import swaggerUi from 'swagger-ui-express';
 import cors from 'cors';
 import specs from '../swagger';
+import { ProjectProgressInvestmentPartnerController } from './modules/investments/useCases/Investments/investmentProgressImport/InvestmentProgressImportController';
+import formidable from 'formidable';
 var cookieParser = require('cookie-parser')
 
 
@@ -17,13 +19,24 @@ app.use(cors({
     credentials: true, // Permita o envio de credenciais (cookies, headers de autorização)
 }));
 
-app.use(express.json())
+const projectProgressInvestmentPartnerController = new ProjectProgressInvestmentPartnerController();
 
-app.use(bodyParser.json({ type: 'application/json' }))
+app.post('/investments/progress/import', projectProgressInvestmentPartnerController.handle);
+// app.post('/investments/progress/import', (req, res, next) => {
+//     const form = formidable({});
 
-app.use(cookieParser());
+//     form.parse(req, (err, fields, files) => {
+//       if (err) {
+//         next(err);
+//         return;
+//       }
+//       res.json({ fields, files });
+//     });
+//   });
 
-app.use(router)
+app.use(express.json()); // Define o body parser para JSON após a rota de upload
+
+app.use(router);
 
 
 

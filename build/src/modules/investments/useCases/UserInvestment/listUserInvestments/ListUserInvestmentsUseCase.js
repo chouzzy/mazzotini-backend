@@ -26,15 +26,11 @@ class ListUserInvestmentUseCase {
                     page,
                     pageRange
                 };
-                const users = yield this.userInvestmentRepository.filterUserInvestment(listUserInvestmentFormatted);
-                return users;
+                const response = yield this.userInvestmentRepository.filterUserInvestment(listUserInvestmentFormatted);
+                return response;
             }
             catch (error) {
-                return {
-                    isValid: false,
-                    statusCode: 402,
-                    errorMessage: String(error)
-                };
+                throw error;
             }
         });
     }

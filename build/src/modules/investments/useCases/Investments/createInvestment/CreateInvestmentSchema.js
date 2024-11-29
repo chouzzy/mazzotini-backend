@@ -32,9 +32,9 @@ const createInvestmentSchema = yup.object({
         .mixed()
         .oneOf(["RESIDENCIAL_MULTIFAMILIAR", "RESIDENCIAL_VERTICAL", "COMERCIAL_GERAL", "MISTO"])
         .required("O tipo do projeto é obrigatório."),
-    totalUnits: yup.number().integer().required("O total de unidades é obrigatório."),
-    numberOfFloors: yup.number().integer().required("O número de pavimentos é obrigatório."),
-    unitsPerFloor: yup.number().integer().required("O número de unidades por pavimento é obrigatório."),
+    totalUnits: yup.string().required("O total de unidades é obrigatório."),
+    numberOfFloors: yup.string().required("O número de pavimentos é obrigatório."),
+    unitsPerFloor: yup.string().required("O número de unidades por pavimento é obrigatório."),
     floorPlanTypes: yup.array().of(yup.string()).min(1, "Deve haver pelo menos uma tipologia de planta").required("As tipologias das plantas são obrigatórias."),
     launchDate: yup.string().required("A data de lançamento é obrigatória."),
     constructionStartDate: yup.string().required("A data de início da obra é obrigatória."),
@@ -58,31 +58,33 @@ const createInvestmentSchema = yup.object({
         .array()
         .of(yup.object().shape({
         title: yup.string(),
-        url: yup.string().url()
+        url: yup.string()
     })),
     images: yup
         .array()
         .of(yup.object().shape({
-        url: yup.string().url().required("A URL da imagem é obrigatória."),
+        label: yup.string().oneOf(["DESTAQUES", "GERAL", "PLANTAS", "EXTERNO", "INTERNO", "PANORAMICAS"]).required('Label obrigatória'),
+        url: yup.string().required("A URL da imagem é obrigatória."),
         description: yup.string().optional(),
     }))
         .required("As imagens são obrigatórias."),
-    investmentValue: yup.number().required("O valor do investimento é obrigatório."),
+    investmentValue: yup.string().required("O valor do investimento é obrigatório."),
     companyName: yup.string().required("O nome da empresa é obrigatório."),
     finishDate: yup.string().nullable(),
     buildingStatus: yup.string().required("O status da construção é obrigatório."),
-    investmentDate: yup.string().required("A data do investimento é obrigatória."),
+    investmentDate: yup.string(),
     predictedCost: yup.object().shape({
-        foundation: yup.string().required("O custo previsto da fundação é obrigatório."),
-        structure: yup.string().required("O custo previsto da estrutura é obrigatório."),
-        implantation: yup.string().required("O custo previsto da implantação é obrigatório."),
-        workmanship: yup.string().required("O custo previsto da mão de obra é obrigatório."),
+        foundation: yup.number().required("O custo previsto da fundação é obrigatório."),
+        structure: yup.number().required("O custo previsto da estrutura é obrigatório."),
+        implantation: yup.number().required("O custo previsto da implantação é obrigatório."),
+        workmanship: yup.number().required("O custo previsto da mão de obra é obrigatório."),
     }).required("O custo previsto é obrigatório"),
     realizedCost: yup.object().shape({
-        foundation: yup.string().required("O custo realizado da fundação é obrigatório."),
-        structure: yup.string().required("O custo realizado da estrutura é obrigatório."),
-        implantation: yup.string().required("O custo realizado da implantação é obrigatório."),
-        workmanship: yup.string().required("O custo realizado da mão de obra é obrigatório."),
-    }).required("O custo realizado é obrigatório"),
+        foundation: yup.number().required("O custo realizado da fundação é obrigatório."),
+        structure: yup.number().required("O custo realizado da estrutura é obrigatório."),
+        implantation: yup.number().required("O custo realizado da implantação é obrigatório."),
+        workmanship: yup.number().required("O custo realizado da mão de obra é obrigatório."),
+    }).nullable(),
+    projectManagerID: yup.string().required("O ID do Gerente de projeto é obrigatório")
 }).noUnknown(true, "Campos desconhecidos no corpo da requisição.").strict();
 exports.createInvestmentSchema = createInvestmentSchema;

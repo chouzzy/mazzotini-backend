@@ -17,13 +17,39 @@ class UserInvestmentRepository {
     }
     filterUserInvestment(listUserInvestmentData) {
         return __awaiter(this, void 0, void 0, function* () {
-            const filteredUserInvestment = yield (0, userInvestmentUtils_1.filterPrismaUserInvestment)(listUserInvestmentData);
-            return {
-                isValid: true,
-                statusCode: 202,
-                successMessage: 'Filtered investment.',
-                userInvestmentList: filteredUserInvestment
-            };
+            try {
+                const { userID, investmentID } = listUserInvestmentData;
+                if (userID && !investmentID) {
+                    const filteredInvestmentsByUserID = yield (0, userInvestmentUtils_1.filterPrismaInvestmentsByUserID)(listUserInvestmentData);
+                    return filteredInvestmentsByUserID;
+                }
+                if (!userID && investmentID) {
+                    const filteredUsersByInvestmentIDs = yield (0, userInvestmentUtils_1.filterPrismaInvestmentsByInvestmentID)(listUserInvestmentData);
+                    return filteredUsersByInvestmentIDs;
+                }
+                if (!userID && !investmentID) {
+                    const allUserInvestments = yield (0, userInvestmentUtils_1.filterPrismaUserInvestment)(listUserInvestmentData);
+                    return allUserInvestments;
+                }
+            }
+            catch (error) {
+                throw error;
+            }
+        });
+    }
+    filterUserInvestmentByInvestmentID(listUserInvestmentData) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { userID, investmentID } = listUserInvestmentData;
+                if (!investmentID) {
+                    throw Error("ID do investimento inválido");
+                }
+                const filteredUsersByInvestmentIDs = yield (0, userInvestmentUtils_1.filterPrismaUserInvestmentsByInvestmentID)(listUserInvestmentData);
+                return filteredUsersByInvestmentIDs;
+            }
+            catch (error) {
+                throw error;
+            }
         });
     }
     createUserInvestment(userInvestmentData) {
@@ -35,6 +61,12 @@ class UserInvestmentRepository {
                 successMessage: 'Created investment.',
                 userInvestment: userInvestment
             };
+        });
+    }
+    deleteUserInvestment(id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const userInvestmentDeleted = yield (0, userInvestmentUtils_1.deletePrismaUserInvestments)(id);
+            return userInvestmentDeleted;
         });
     }
 }

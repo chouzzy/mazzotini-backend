@@ -7,6 +7,7 @@ import { GetInvestmentByIDController } from "../modules/investments/useCases/Inv
 import { DeleteInvestmentImageController } from "../modules/investments/useCases/Investments/deleteInvestmentImage/DeleteInvestmentImageController"
 import { DeleteInvestmentDocumentController } from "../modules/investments/useCases/Investments/deleteInvestmentDocument/DeleteInvestmentDocumentController"
 import { DeleteInvestmentPartnerController } from "../modules/investments/useCases/Investments/deleteInvestmentPartner/DeleteInvestmentPartnerController"
+import { ProjectProgressInvestmentPartnerController } from "../modules/investments/useCases/Investments/investmentProgressImport/InvestmentProgressImportController"
 
 const investmentsRoutes = Router()
 
@@ -34,7 +35,8 @@ investmentsRoutes.put('/delete/document', deleteInvestmentDocumentController.han
 const deleteInvestmentPartnerController = new DeleteInvestmentPartnerController()
 investmentsRoutes.put('/delete/partner', deleteInvestmentPartnerController.handle)
 
-
+// const projectProgressInvestmentPartnerController = new ProjectProgressInvestmentPartnerController()
+// investmentsRoutes.post('/progress/import', projectProgressInvestmentPartnerController.handle)
 
 
 export { investmentsRoutes }

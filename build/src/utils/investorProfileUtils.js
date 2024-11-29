@@ -120,6 +120,7 @@ function calcularPesoInvestimentosAtuais(possuiOutros, quaisOutros) {
     return __awaiter(this, void 0, void 0, function* () {
         let peso = 0;
         if (possuiOutros) {
+            peso = 2;
             switch (quaisOutros) {
                 case 'Ações':
                     peso += 3;

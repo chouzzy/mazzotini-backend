@@ -7,6 +7,9 @@ const CreateInvestmentController_1 = require("../modules/investments/useCases/In
 const UpdateInvestmentController_1 = require("../modules/investments/useCases/Investments/updateInvestment/UpdateInvestmentController");
 const DeleteInvestmentController_1 = require("../modules/investments/useCases/Investments/deleteInvestment/DeleteInvestmentController");
 const GetInvestmentByIDController_1 = require("../modules/investments/useCases/Investments/getInvestmentByID/GetInvestmentByIDController");
+const DeleteInvestmentImageController_1 = require("../modules/investments/useCases/Investments/deleteInvestmentImage/DeleteInvestmentImageController");
+const DeleteInvestmentDocumentController_1 = require("../modules/investments/useCases/Investments/deleteInvestmentDocument/DeleteInvestmentDocumentController");
+const DeleteInvestmentPartnerController_1 = require("../modules/investments/useCases/Investments/deleteInvestmentPartner/DeleteInvestmentPartnerController");
 const investmentsRoutes = (0, express_1.Router)();
 exports.investmentsRoutes = investmentsRoutes;
 const listInvestmentsController = new ListInvestmentsController_1.ListInvestmentsController();
@@ -19,3 +22,9 @@ const updateInvestmentsController = new UpdateInvestmentController_1.UpdateInves
 investmentsRoutes.put('/update/:id', updateInvestmentsController.handle);
 const deleteInvestmentsController = new DeleteInvestmentController_1.DeleteInvestmentsController();
 investmentsRoutes.delete('/delete/:id', deleteInvestmentsController.handle);
+const deleteInvestmentImageController = new DeleteInvestmentImageController_1.DeleteInvestmentImageController();
+investmentsRoutes.put('/delete/image', deleteInvestmentImageController.handle);
+const deleteInvestmentDocumentController = new DeleteInvestmentDocumentController_1.DeleteInvestmentDocumentController();
+investmentsRoutes.put('/delete/document', deleteInvestmentDocumentController.handle);
+const deleteInvestmentPartnerController = new DeleteInvestmentPartnerController_1.DeleteInvestmentPartnerController();
+investmentsRoutes.put('/delete/partner', deleteInvestmentPartnerController.handle);

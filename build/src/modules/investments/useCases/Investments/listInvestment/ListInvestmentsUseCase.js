@@ -17,14 +17,15 @@ class ListInvestmentUseCase {
     }
     execute(listInvestmentData) {
         return __awaiter(this, void 0, void 0, function* () {
-            const { title, investmentValue, companyName, expectedDeliveryDateInitial, expectedDeliveryDateFinal, city } = listInvestmentData;
+            const { title, companyName, expectedDeliveryDateInitial, expectedDeliveryDateFinal, city, projectManagerID, active } = listInvestmentData;
             const data = {
                 title,
-                investmentValue,
                 companyName,
                 expectedDeliveryDateInitial,
                 expectedDeliveryDateFinal,
-                city
+                city,
+                projectManagerID,
+                active
             };
             const { page, pageRange } = yield (0, investmentUtils_1.validatePageParams)(listInvestmentData);
             const listInvestmentFormatted = Object.assign(Object.assign({}, data), { page,

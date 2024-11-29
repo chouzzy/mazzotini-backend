@@ -20,8 +20,8 @@ class FindUserByEmailController {
             try {
                 const query = req.query;
                 console.log('Token aceito!');
-                yield (0, FindUserByEmailCheck_1.checkQuery)(query);
                 const { email } = query;
+                yield (0, FindUserByEmailCheck_1.checkQuery)(query);
                 if (typeof (email) != 'string') {
                     throw Error("Formato do e-mail inválido");
                 }

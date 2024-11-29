@@ -3,7 +3,7 @@ import { Notification } from "@prisma/client";
 
 class NotificationEntity {
   id!: Notification["id"];
-  userId!: Notification["userId"];
+  // userId!: Notification[""];
   investmentId!: Notification["investmentId"];
   title!: Notification["title"];
   message!: Notification["message"];

@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.validatePageParams = exports.filterPrismaInvestmentByID = exports.deletePrismaInvestment = exports.updatePrismaInvestment = exports.filterPrismaInvestment = exports.createPrismaInvestment = void 0;
+exports.deletePrismaInvestmentPartner = exports.deletePrismaInvestmentDocument = exports.validatePageParams = exports.deletePrismaInvestmentImage = exports.filterPrismaInvestmentByID = exports.deletePrismaInvestment = exports.updatePrismaInvestment = exports.filterPrismaInvestment = exports.createPrismaInvestment = void 0;
 const prisma_1 = require("../prisma");
 function createPrismaInvestment(investmentData) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -23,13 +23,18 @@ function createPrismaInvestment(investmentData) {
             else {
                 investmentData.finishDate = new Date('2030-12-12');
             }
-            investmentData.investmentDate = new Date(investmentData.investmentDate);
+            const { investmentDate } = investmentData;
+            if (investmentDate) {
+                investmentData.investmentDate = new Date(investmentDate);
+            }
             const titleExists = yield prisma_1.prisma.investment.findFirst({
                 where: { title: investmentData.title }
             });
             if (titleExists) {
                 throw Error("Título já existente.");
             }
+            console.log('investmentData');
+            console.log(investmentData);
             const createdInvestment = yield prisma_1.prisma.investment.create({
                 data: investmentData
             });
@@ -44,7 +49,6 @@ exports.createPrismaInvestment = createPrismaInvestment;
 function filterPrismaInvestmentByID(id) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            console.log(id);
             // Query com todos os dados
             const investment = yield prisma_1.prisma.investment.findUnique({
                 where: { id }
@@ -52,7 +56,6 @@ function filterPrismaInvestmentByID(id) {
             return investment;
         }
         catch (error) {
-            console.log(error);
             throw error;
         }
     });
@@ -61,14 +64,16 @@ exports.filterPrismaInvestmentByID = filterPrismaInvestmentByID;
 function filterPrismaInvestment(listInvestmentData) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const { title, investmentValue, companyName, expectedDeliveryDateInitial, expectedDeliveryDateFinal, city, page, pageRange } = listInvestmentData;
+            const { title, investmentValue, companyName, expectedDeliveryDateInitial, expectedDeliveryDateFinal, city, projectManagerID, active, page, pageRange } = listInvestmentData;
             // Sem filtros, só paginação
             if (!title &&
                 !investmentValue &&
                 !companyName &&
                 !expectedDeliveryDateInitial &&
                 !expectedDeliveryDateFinal &&
-                !city) {
+                !city &&
+                !projectManagerID &&
+                !active) {
                 const filteredInvestment = yield prisma_1.prisma.investment.findMany({
                     skip: (page - 1) * pageRange,
                     take: pageRange,
@@ -89,6 +94,8 @@ function filterPrismaInvestment(listInvestmentData) {
                 { title },
                 { investmentValue },
                 { companyName },
+                { projectManagerID },
+                { active },
                 {
                     expectedDeliveryDate: {
                         gte: expectedDeliveryDateInitial ? expectedDeliveryDateInitialISO : undefined,
@@ -111,6 +118,11 @@ function filterPrismaInvestment(listInvestmentData) {
                 },
                 skip: (page - 1) * pageRange,
                 take: pageRange,
+                orderBy: [
+                    {
+                        title: 'asc'
+                    }
+                ]
             });
             return filteredInvestment;
         }
@@ -128,6 +140,17 @@ function updatePrismaInvestment(investmentData, id) {
             });
             if (!investmentExists) {
                 throw Error("O empreendimento informado não existe.");
+            }
+            const { launchDate, constructionStartDate, expectedDeliveryDate } = investmentData;
+            // Modelagem de datas
+            if (launchDate) {
+                investmentData.launchDate = new Date(launchDate);
+            }
+            if (constructionStartDate) {
+                investmentData.constructionStartDate = new Date(constructionStartDate);
+            }
+            if (expectedDeliveryDate) {
+                investmentData.expectedDeliveryDate = new Date(expectedDeliveryDate);
             }
             const updatedInvestment = yield prisma_1.prisma.investment.update({
                 where: { id },
@@ -159,6 +182,89 @@ function deletePrismaInvestment(id) {
     });
 }
 exports.deletePrismaInvestment = deletePrismaInvestment;
+function deletePrismaInvestmentImage(investmentID, id) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const investmentExists = yield prisma_1.prisma.investment.findFirst({
+                where: { id: investmentID }
+            });
+            if (!investmentExists) {
+                throw Error("O empreendimento informado não existe.");
+            }
+            const updatedInvestment = yield prisma_1.prisma.investment.update({
+                where: { id: investmentID },
+                data: {
+                    images: {
+                        deleteMany: {
+                            where: { id: id },
+                        },
+                    },
+                },
+            });
+            return updatedInvestment.images;
+        }
+        catch (error) {
+            throw error;
+        }
+    });
+}
+exports.deletePrismaInvestmentImage = deletePrismaInvestmentImage;
+function deletePrismaInvestmentDocument(investmentID, id) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const investmentExists = yield prisma_1.prisma.investment.findFirst({
+                where: { id: investmentID }
+            });
+            if (!investmentExists) {
+                throw Error("O empreendimento informado não existe.");
+            }
+            const updatedInvestment = yield prisma_1.prisma.investment.update({
+                where: { id: investmentID },
+                data: {
+                    documents: {
+                        deleteMany: {
+                            where: { id: id },
+                        },
+                    },
+                },
+            });
+            console.log(updatedInvestment.documents);
+            return updatedInvestment.documents;
+        }
+        catch (error) {
+            throw error;
+        }
+    });
+}
+exports.deletePrismaInvestmentDocument = deletePrismaInvestmentDocument;
+function deletePrismaInvestmentPartner(investmentID, id) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const investmentExists = yield prisma_1.prisma.investment.findFirst({
+                where: { id: investmentID }
+            });
+            if (!investmentExists) {
+                throw Error("O empreendimento informado não existe.");
+            }
+            const updatedInvestment = yield prisma_1.prisma.investment.update({
+                where: { id: investmentID },
+                data: {
+                    partners: {
+                        deleteMany: {
+                            where: { id: id },
+                        },
+                    },
+                },
+            });
+            console.log(updatedInvestment.partners);
+            return updatedInvestment.partners;
+        }
+        catch (error) {
+            throw error;
+        }
+    });
+}
+exports.deletePrismaInvestmentPartner = deletePrismaInvestmentPartner;
 function validatePageParams(listInvestmentData) {
     return __awaiter(this, void 0, void 0, function* () {
         try {

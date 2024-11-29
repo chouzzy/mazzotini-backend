@@ -32,6 +32,7 @@ const yup_password_1 = __importDefault(require("yup-password"));
 (0, yup_password_1.default)(yup);
 const createUserInvestmentSchema = yup.object({
     userID: yup.string().required("O userID é obrigatório"),
-    investmentID: yup.string().required("O investmentID é obrigatório")
+    investmentID: yup.string().required("O investmentID é obrigatório"),
+    investedValue: yup.number().required("O valor investido é obrigatório")
 });
 exports.createUserInvestmentSchema = createUserInvestmentSchema;

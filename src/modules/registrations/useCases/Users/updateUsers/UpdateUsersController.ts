@@ -32,7 +32,7 @@ class UpdateUsersController {
                 return res.status(401).json({ Error: "ID inválido" })
             }
 
-            usersData.birth = new Date(usersData.birth)
+            // usersData.birth = new Date(usersData.birth)
 
             await checkBody(usersData, id)
             

@@ -67,5 +67,38 @@ class InvestmentRepository {
             }
         });
     }
+    deleteInvestmentImage(investmentID, id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const deletedInvestment = yield (0, investmentUtils_1.deletePrismaInvestmentImage)(investmentID, id);
+                return deletedInvestment;
+            }
+            catch (error) {
+                throw error;
+            }
+        });
+    }
+    deleteInvestmentDocument(investmentID, id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const deletedInvestment = yield (0, investmentUtils_1.deletePrismaInvestmentDocument)(investmentID, id);
+                return deletedInvestment;
+            }
+            catch (error) {
+                throw error;
+            }
+        });
+    }
+    deleteInvestmentPartner(investmentID, id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const deletedInvestment = yield (0, investmentUtils_1.deletePrismaInvestmentPartner)(investmentID, id);
+                return deletedInvestment;
+            }
+            catch (error) {
+                throw error;
+            }
+        });
+    }
 }
 exports.InvestmentRepository = InvestmentRepository;
