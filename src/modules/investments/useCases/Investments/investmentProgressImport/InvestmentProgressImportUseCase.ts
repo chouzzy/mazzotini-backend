@@ -1,21 +1,21 @@
-// import { Investment } from "@prisma/client"
-// import { validationResponse } from "../../../../../types"
-// import { IInvestmentRepository } from "../../../repositories/IInvestmentRepository"
-// import { CreateInvestmentRequestProps } from "./InvestmentProgressImport"
+import { Investment } from "@prisma/client"
+import { validationResponse } from "../../../../../types"
+import { IInvestmentRepository } from "../../../repositories/IInvestmentRepository"
+import { Worksheet } from "exceljs"
 
 
 
-// class CreateInvestmentUseCase {
-//     constructor(
-//         private InvestmentRepository: IInvestmentRepository) {}
+class InvestmentProgressImportUseCase {
+    constructor(
+        private InvestmentRepository: IInvestmentRepository) {}
 
-//     async execute(investmentData: CreateInvestmentRequestProps): Promise<Investment> {
+    async execute(worksheet:Worksheet, id:Investment["id"]): Promise<Investment> {
         
-//         const createdUsers = await this.InvestmentRepository.createInvestment(investmentData)
+        const createdUsers = await this.InvestmentRepository.importInvestmentProgress(worksheet, id)
         
-//         return createdUsers
-//     }
+        return createdUsers
+    }
     
-// }
+}
 
-// export {CreateInvestmentUseCase}
+export {InvestmentProgressImportUseCase}

@@ -30,6 +30,8 @@ class InvestmentEntity {
   valorOriginal!: Investment["valorOriginal"]
   valorCorrente!: Investment["valorCorrente"]
   historicoDeValorizacao!: Investment["historicoDeValorizacao"]
+  financialTotalProgress!: Investment["financialTotalProgress"]
+  buildingTotalProgress!: Investment["buildingTotalProgress"]
 
   createdAt!: Investment["createdAt"];
   updatedAt?: Investment["updatedAt"];

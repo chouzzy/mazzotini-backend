@@ -13,7 +13,7 @@ const listNotificationsController = new ListNotificationsController()
 notificationsRoutes.get('/list/:id', checkJwtFromCookie, listNotificationsController.handle)
 
 const readNotificationsController = new ReadNotificationsController()
-notificationsRoutes.put('/update/:id',  readNotificationsController.handle)
+notificationsRoutes.put('/update/:id', checkJwtFromCookie, readNotificationsController.handle)
 
 
 export { notificationsRoutes }

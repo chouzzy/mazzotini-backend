@@ -21,21 +21,10 @@ app.use(cors({
 
 const projectProgressInvestmentPartnerController = new ProjectProgressInvestmentPartnerController();
 
-app.post('/investments/progress/import', projectProgressInvestmentPartnerController.handle);
-// app.post('/investments/progress/import', (req, res, next) => {
-//     const form = formidable({});
-
-//     form.parse(req, (err, fields, files) => {
-//       if (err) {
-//         next(err);
-//         return;
-//       }
-//       res.json({ fields, files });
-//     });
-//   });
+app.post('/investments/progress/import/:id', projectProgressInvestmentPartnerController.handle);
 
 app.use(express.json()); // Define o body parser para JSON após a rota de upload
-
+app.use(cookieParser());
 app.use(router);
 
 

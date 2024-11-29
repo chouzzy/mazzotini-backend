@@ -1,9 +1,11 @@
+import { Worksheet } from "exceljs";
 import { InvestmentEntity } from "../modules/investments/entities/Investments";
 import { CreateInvestmentRequestProps } from "../modules/investments/useCases/Investments/createInvestment/CreateInvestmentController";
 import { ListInvestmentRequestProps } from "../modules/investments/useCases/Investments/listInvestment/ListInvestmentsController";
 import { ListInvestmentProps } from "../modules/investments/useCases/Investments/listInvestment/ListInvestmentsUseCase";
 import { UpdateInvestmentRequestProps } from "../modules/investments/useCases/Investments/updateInvestment/UpdateInvestmentController";
 import { prisma } from "../prisma";
+import { Investment } from "@prisma/client";
 
 
 async function createPrismaInvestment(investmentData: CreateInvestmentRequestProps) {
@@ -305,6 +307,61 @@ async function deletePrismaInvestmentPartner(investmentID: InvestmentEntity["id"
     }
 }
 
+async function importPrismaInvestmentProgress(worksheet: Worksheet, id: Investment["id"]) {
+
+    try {
+
+        const investmentExists = await prisma.investment.findFirst({
+            where: { id: id }
+        })
+
+        if (!investmentExists) {
+            throw Error("O empreendimento informado não existe.")
+        }
+
+
+        const financialTotalProgress: Investment["financialTotalProgress"] = [];
+        const buildingTotalProgress: Investment["buildingTotalProgress"] = [];
+
+        // Começa da segunda linha, pois a primeira linha é o cabeçalho
+        for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
+            const row = worksheet.getRow(rowNumber);
+            // Extrai os dados da linha
+            const data = row.getCell(1).value as Date; // Se o valor for null ou undefined, define como string vazia
+            const financeiroPrevisto = Math.round(parseFloat(parseFloat(row.getCell(2).text).toFixed(2))); 
+            const financeiroRealizado = Math.round(parseFloat(parseFloat(row.getCell(3).text).toFixed(2))); 
+            const obraPrevisto = parseFloat(parseFloat(row.getCell(4).text.replace('%', '')).toFixed(2)); 
+            const obraRealizado = parseFloat(parseFloat(row.getCell(5).text.replace('%', '')).toFixed(2));
+
+            // Adiciona os dados aos arrays
+            financialTotalProgress.push({
+                data: data,
+                previsto: financeiroPrevisto,
+                realizado: financeiroRealizado,
+            });
+
+            buildingTotalProgress.push({
+                data: data,
+                previsto: obraPrevisto,
+                realizado: obraRealizado,
+            });
+        }
+
+        const updatedInvestment = await prisma.investment.update({
+            where:{id:id},
+            data: {
+                financialTotalProgress: financialTotalProgress,
+                buildingTotalProgress: buildingTotalProgress
+            }
+        })
+
+        return (updatedInvestment)
+
+    } catch (error) {
+        throw error
+    }
+}
+
 
 async function validatePageParams(listInvestmentData: ListInvestmentRequestProps) {
 
@@ -331,4 +388,4 @@ async function validatePageParams(listInvestmentData: ListInvestmentRequestProps
     }
 }
 
-export { createPrismaInvestment, filterPrismaInvestment, updatePrismaInvestment, deletePrismaInvestment, filterPrismaInvestmentByID, deletePrismaInvestmentImage, validatePageParams, deletePrismaInvestmentDocument, deletePrismaInvestmentPartner }
+export { createPrismaInvestment, filterPrismaInvestment, updatePrismaInvestment, deletePrismaInvestment, filterPrismaInvestmentByID, deletePrismaInvestmentImage, validatePageParams, deletePrismaInvestmentDocument, deletePrismaInvestmentPartner, importPrismaInvestmentProgress }

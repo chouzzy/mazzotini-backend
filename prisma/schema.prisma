@@ -105,8 +105,8 @@ model Investment {
 
   investmentValue String // valor do investimento    
 
-  valorOriginal          Int @default(1) // Valor do imóvel no momento do lançamento
-  valorCorrente          Int @default(1) // Valor atual do imóvel
+  valorOriginal          Int                      @default(1) // Valor do imóvel no momento do lançamento
+  valorCorrente          Int                      @default(1) // Valor atual do imóvel
   historicoDeValorizacao HistoricoDeValorizacao[] // Array de objetos com o histórico de valorização
 
   companyName      String //nome da construtora
@@ -118,6 +118,9 @@ model Investment {
 
   predictedCost PredictedCost // custo previsto - gerente de projeto vai cadastrar custo total e custos macro
   realizedCost  RealizedCost? // custo realizado - custo total, itens macro (mesmos itens do buildingStatus)
+
+  financialTotalProgress FinancialTotalProgress[]
+  buildingTotalProgress  BuildingTotalProgress[]
 
   notifications   Notification[]
   userInvestments UserInvestment[] // tabela que relaciona investimento com usuario
@@ -160,6 +163,18 @@ type BuildingProgress {
   fundacao    Int @default(0)
   instalacoes Int @default(0)
   pintura     Int @default(0)
+}
+
+type FinancialTotalProgress {
+  data      DateTime @default(now())
+  previsto  Float    @default(0)
+  realizado Float    @default(0)
+}
+
+type BuildingTotalProgress {
+  data      DateTime @default(now())
+  previsto  Float    @default(0)
+  realizado Float    @default(0)
 }
 
 type Address {
@@ -215,7 +230,7 @@ model UserInvestment {
   investmentID     String
   investedValue    Int // Valor investido pelo usuário
   valorCorrente    Int // Valor do empreendimento quando investido pelo usuário
-  documents    Document[] // Valor do empreendimento quando investido pelo usuário
+  documents        Document[] // Valor do empreendimento quando investido pelo usuário
   dataInvestimento DateTime   @default(now())
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt

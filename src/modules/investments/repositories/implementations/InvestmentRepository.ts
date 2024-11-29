@@ -1,12 +1,13 @@
 import { Investment, Prisma } from "@prisma/client"
 import { validationResponse } from "../../../../types"
-import { createPrismaInvestment, deletePrismaInvestment, deletePrismaInvestmentDocument, deletePrismaInvestmentImage, deletePrismaInvestmentPartner, filterPrismaInvestment, filterPrismaInvestmentByID, updatePrismaInvestment } from "../../../../utils/investmentUtils"
+import { createPrismaInvestment, deletePrismaInvestment, deletePrismaInvestmentDocument, deletePrismaInvestmentImage, deletePrismaInvestmentPartner, filterPrismaInvestment, filterPrismaInvestmentByID, importPrismaInvestmentProgress, updatePrismaInvestment } from "../../../../utils/investmentUtils"
 import { CreateInvestmentRequestProps } from "../../useCases/Investments/createInvestment/CreateInvestmentController"
 import { ListInvestmentRequestProps } from "../../useCases/Investments/listInvestment/ListInvestmentsController"
 import { ListInvestmentProps } from "../../useCases/Investments/listInvestment/ListInvestmentsUseCase"
 import { IInvestmentRepository } from "../IInvestmentRepository"
 import { InvestmentEntity } from "../../entities/Investments"
 import { UpdateInvestmentRequestProps } from "../../useCases/Investments/updateInvestment/UpdateInvestmentController"
+import { Worksheet } from "exceljs"
 
 
 class InvestmentRepository implements IInvestmentRepository {
@@ -112,6 +113,16 @@ class InvestmentRepository implements IInvestmentRepository {
 
             return deletedInvestment
 
+        } catch (error) {
+            throw error
+        }
+    }
+
+    async importInvestmentProgress(worksheet: Worksheet, id:Investment["id"]): Promise<Investment> {
+        try {
+            const investment = importPrismaInvestmentProgress(worksheet, id)
+
+            return investment
         } catch (error) {
             throw error
         }

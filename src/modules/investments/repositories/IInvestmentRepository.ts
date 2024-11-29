@@ -5,6 +5,7 @@ import { ListInvestmentRequestProps } from "../useCases/Investments/listInvestme
 import { ListInvestmentProps } from "../useCases/Investments/listInvestment/ListInvestmentsUseCase"
 import { UpdateInvestmentRequestProps } from "../useCases/Investments/updateInvestment/UpdateInvestmentController"
 import { InvestmentEntity } from "../entities/Investments"
+import { Worksheet } from "exceljs"
 
 
 interface IInvestmentRepository {
@@ -24,7 +25,8 @@ interface IInvestmentRepository {
     deleteInvestmentDocument(investmentID:InvestmentEntity["id"] , id: InvestmentEntity["documents"][0]["id"]): Promise<Investment["documents"]>
 
     deleteInvestmentPartner(investmentID:InvestmentEntity["id"] , id: InvestmentEntity["partners"][0]["id"]): Promise<Investment["partners"]>
-
+    
+    importInvestmentProgress(worksheet:Worksheet, id:Investment["id"]): Promise<Investment>
 }
 
 export { IInvestmentRepository }

@@ -8,32 +8,33 @@ import { DeleteInvestmentImageController } from "../modules/investments/useCases
 import { DeleteInvestmentDocumentController } from "../modules/investments/useCases/Investments/deleteInvestmentDocument/DeleteInvestmentDocumentController"
 import { DeleteInvestmentPartnerController } from "../modules/investments/useCases/Investments/deleteInvestmentPartner/DeleteInvestmentPartnerController"
 import { ProjectProgressInvestmentPartnerController } from "../modules/investments/useCases/Investments/investmentProgressImport/InvestmentProgressImportController"
+import { checkJwtFromCookie } from "../modules/registrations/middleware/auth0Check"
 
 const investmentsRoutes = Router()
 
 const listInvestmentsController = new ListInvestmentsController()
-investmentsRoutes.get('/', listInvestmentsController.handle)
+investmentsRoutes.get('/', checkJwtFromCookie, listInvestmentsController.handle)
 
 const getInvestmentByIDController = new GetInvestmentByIDController()
-investmentsRoutes.get('/:id', getInvestmentByIDController.handle)
+investmentsRoutes.get('/:id', checkJwtFromCookie, getInvestmentByIDController.handle)
 
 const createInvestmentsController = new CreateInvestmentsController()
-investmentsRoutes.post('/create', createInvestmentsController.handle)
+investmentsRoutes.post('/create', checkJwtFromCookie, createInvestmentsController.handle)
 
 const updateInvestmentsController = new UpdateInvestmentsController()
-investmentsRoutes.put('/update/:id', updateInvestmentsController.handle)
+investmentsRoutes.put('/update/:id', checkJwtFromCookie, updateInvestmentsController.handle)
 
 const deleteInvestmentsController = new DeleteInvestmentsController()
-investmentsRoutes.delete('/delete/:id', deleteInvestmentsController.handle)
+investmentsRoutes.delete('/delete/:id', checkJwtFromCookie, deleteInvestmentsController.handle)
 
 const deleteInvestmentImageController = new DeleteInvestmentImageController()
-investmentsRoutes.put('/delete/image', deleteInvestmentImageController.handle)
+investmentsRoutes.put('/delete/image', checkJwtFromCookie, deleteInvestmentImageController.handle)
 
 const deleteInvestmentDocumentController = new DeleteInvestmentDocumentController()
-investmentsRoutes.put('/delete/document', deleteInvestmentDocumentController.handle)
+investmentsRoutes.put('/delete/document', checkJwtFromCookie, deleteInvestmentDocumentController.handle)
 
 const deleteInvestmentPartnerController = new DeleteInvestmentPartnerController()
-investmentsRoutes.put('/delete/partner', deleteInvestmentPartnerController.handle)
+investmentsRoutes.put('/delete/partner', checkJwtFromCookie, deleteInvestmentPartnerController.handle)
 
 // const projectProgressInvestmentPartnerController = new ProjectProgressInvestmentPartnerController()
 // investmentsRoutes.post('/progress/import', projectProgressInvestmentPartnerController.handle)

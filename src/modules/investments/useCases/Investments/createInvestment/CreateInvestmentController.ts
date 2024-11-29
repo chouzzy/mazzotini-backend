@@ -35,6 +35,8 @@ interface CreateInvestmentRequestProps {
     valorOriginal?: InvestmentEntity["valorOriginal"]
     valorCorrente?: InvestmentEntity["valorCorrente"]
     historicoDeValorizacao?: InvestmentEntity["historicoDeValorizacao"]
+    financialTotalProgress?: InvestmentEntity["financialTotalProgress"]
+    buildingTotalProgress?: InvestmentEntity["buildingTotalProgress"]
 
 }
 
