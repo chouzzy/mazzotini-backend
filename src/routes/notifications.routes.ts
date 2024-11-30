@@ -7,13 +7,13 @@ import { ReadNotificationsController } from "../modules/notifications/useCases/N
 const notificationsRoutes = Router()
 
 const createNotificationsController = new CreateNotificationsController()
-notificationsRoutes.post('/create', checkJwtFromCookie, createNotificationsController.handle)
+notificationsRoutes.post('/create', createNotificationsController.handle)
 
 const listNotificationsController = new ListNotificationsController()
-notificationsRoutes.get('/list/:id', checkJwtFromCookie, listNotificationsController.handle)
+notificationsRoutes.get('/list/:id', listNotificationsController.handle)
 
 const readNotificationsController = new ReadNotificationsController()
-notificationsRoutes.put('/update/:id', checkJwtFromCookie, readNotificationsController.handle)
+notificationsRoutes.put('/update/:id', readNotificationsController.handle)
 
 
 export { notificationsRoutes }

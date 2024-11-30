@@ -14,7 +14,7 @@ var cookieParser = require('cookie-parser')
 const app = express()
 
 app.use(cors({
-    origin: 'http://localhost:3000',
+    origin: 'https://c2di-front.vercel.app',
     methods: ['GET', 'PUT', 'POST', 'DELETE', 'PATCH'],
     credentials: true, // Permita o envio de credenciais (cookies, headers de autorização)
 }));
@@ -25,6 +25,11 @@ app.post('/investments/progress/import/:id', projectProgressInvestmentPartnerCon
 
 app.use(express.json()); // Define o body parser para JSON após a rota de upload
 app.use(cookieParser());
+
+app.get('/test-cookies', (req, res) => {
+    res.json({ cookies: req.cookies });
+});
+
 app.use(router);
 
 

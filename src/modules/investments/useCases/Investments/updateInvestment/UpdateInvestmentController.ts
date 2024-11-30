@@ -34,6 +34,8 @@ interface UpdateInvestmentRequestProps {
     valorOriginal?: InvestmentEntity["valorOriginal"]
     valorCorrente?: InvestmentEntity["valorCorrente"]
     historicoDeValorizacao?: InvestmentEntity["historicoDeValorizacao"]
+    financialTotalProgress?: InvestmentEntity["financialTotalProgress"]
+    buildingTotalProgress?: InvestmentEntity["buildingTotalProgress"]
 
 }
 
@@ -43,8 +45,6 @@ class UpdateInvestmentsController {
         try {
 
             const { id } = req.params
-
-            console.log(req.body)
             const investmentData: UpdateInvestmentRequestProps = req.body
             const { partners, documents, images } = investmentData
 
@@ -80,7 +80,7 @@ class UpdateInvestmentsController {
 
         } catch (error) {
 
-            console.log(error)
+            // console.log(error)
             if (error instanceof Prisma.PrismaClientValidationError) {
                 console.log(error)
                 return res.status(401).json({

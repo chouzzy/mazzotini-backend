@@ -9,16 +9,16 @@ import { checkJwtFromCookie } from "../modules/registrations/middleware/auth0Che
 const userInvestmentsRoutes = Router()
 
 const listUserInvestmentController = new ListUserInvestmentController()
-userInvestmentsRoutes.get('/', checkJwtFromCookie, listUserInvestmentController.handle)
+userInvestmentsRoutes.get('/', listUserInvestmentController.handle)
 
 const listUserInvestmentByInvestmentsIDController = new ListUserInvestmentByInvestmentsIDController()
-userInvestmentsRoutes.get('/byInvestment', checkJwtFromCookie, listUserInvestmentByInvestmentsIDController.handle)
+userInvestmentsRoutes.get('/byInvestment', listUserInvestmentByInvestmentsIDController.handle)
 
 const deleteUserInvestmentController = new DeleteUserInvestmentsController()
-userInvestmentsRoutes.delete('/delete/:id', checkJwtFromCookie, deleteUserInvestmentController.handle)
+userInvestmentsRoutes.delete('/delete/:id', deleteUserInvestmentController.handle)
 
 const createUserInvestmentController = new CreateUserInvestmentController()
-userInvestmentsRoutes.post('/create', checkJwtFromCookie, createUserInvestmentController.handle)
+userInvestmentsRoutes.post('/create', createUserInvestmentController.handle)
 
 
 

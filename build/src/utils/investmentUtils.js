@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deletePrismaInvestmentPartner = exports.deletePrismaInvestmentDocument = exports.validatePageParams = exports.deletePrismaInvestmentImage = exports.filterPrismaInvestmentByID = exports.deletePrismaInvestment = exports.updatePrismaInvestment = exports.filterPrismaInvestment = exports.createPrismaInvestment = void 0;
+exports.importPrismaInvestmentProgress = exports.deletePrismaInvestmentPartner = exports.deletePrismaInvestmentDocument = exports.validatePageParams = exports.deletePrismaInvestmentImage = exports.filterPrismaInvestmentByID = exports.deletePrismaInvestment = exports.updatePrismaInvestment = exports.filterPrismaInvestment = exports.createPrismaInvestment = void 0;
 const prisma_1 = require("../prisma");
 function createPrismaInvestment(investmentData) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -265,6 +265,53 @@ function deletePrismaInvestmentPartner(investmentID, id) {
     });
 }
 exports.deletePrismaInvestmentPartner = deletePrismaInvestmentPartner;
+function importPrismaInvestmentProgress(worksheet, id) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const investmentExists = yield prisma_1.prisma.investment.findFirst({
+                where: { id: id }
+            });
+            if (!investmentExists) {
+                throw Error("O empreendimento informado não existe.");
+            }
+            const financialTotalProgress = [];
+            const buildingTotalProgress = [];
+            // Começa da segunda linha, pois a primeira linha é o cabeçalho
+            for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
+                const row = worksheet.getRow(rowNumber);
+                // Extrai os dados da linha
+                const data = row.getCell(1).value; // Se o valor for null ou undefined, define como string vazia
+                const financeiroPrevisto = Math.round(parseFloat(parseFloat(row.getCell(2).text).toFixed(2)));
+                const financeiroRealizado = Math.round(parseFloat(parseFloat(row.getCell(3).text).toFixed(2)));
+                const obraPrevisto = parseFloat(parseFloat(row.getCell(4).text.replace('%', '')).toFixed(2));
+                const obraRealizado = parseFloat(parseFloat(row.getCell(5).text.replace('%', '')).toFixed(2));
+                // Adiciona os dados aos arrays
+                financialTotalProgress.push({
+                    data: data,
+                    previsto: financeiroPrevisto,
+                    realizado: financeiroRealizado,
+                });
+                buildingTotalProgress.push({
+                    data: data,
+                    previsto: obraPrevisto,
+                    realizado: obraRealizado,
+                });
+            }
+            const updatedInvestment = yield prisma_1.prisma.investment.update({
+                where: { id: id },
+                data: {
+                    financialTotalProgress: financialTotalProgress,
+                    buildingTotalProgress: buildingTotalProgress
+                }
+            });
+            return (updatedInvestment);
+        }
+        catch (error) {
+            throw error;
+        }
+    });
+}
+exports.importPrismaInvestmentProgress = importPrismaInvestmentProgress;
 function validatePageParams(listInvestmentData) {
     return __awaiter(this, void 0, void 0, function* () {
         try {

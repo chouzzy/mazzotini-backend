@@ -18,8 +18,14 @@ const checkJwtFromCookie = (req, res, next) => {
     if (!secretKey) {
         throw Error("Secret Key not found");
     }
+    console.log('req.cookies');
+    console.log(req.cookies);
+    console.log('req.cookies.accessToken');
+    console.log(req.cookies.accessToken);
     const encryptedToken = req.cookies.accessToken;
     const decryptedToken = crypto_js_1.default.AES.decrypt(encryptedToken, secretKey).toString(crypto_js_1.default.enc.Utf8);
+    console.log('decryptedToken');
+    console.log(decryptedToken);
     if (token) {
         req.headers.authorization = `Bearer ${decryptedToken}`; // Adiciona o token ao header
     }

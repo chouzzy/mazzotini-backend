@@ -5,7 +5,7 @@ import { CreateInvestorProfileController } from "../modules/registrations/useCas
 const investorProfileRoutes = Router()   
 
 const createInvestorProfileController = new CreateInvestorProfileController()
-investorProfileRoutes.post('/create', checkJwtFromCookie , createInvestorProfileController.handle)
+investorProfileRoutes.post('/create' , createInvestorProfileController.handle)
 
 
 export { investorProfileRoutes }

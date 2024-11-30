@@ -5,8 +5,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "ts-node-dev --inspect --transpile-only --ignore-watch node_modules --respawn src/server.ts",
-    "production": "node ./build/server.js",
-    "postinstall": "tsc",
+    "production": "node ./build/src/server.js",
+    "build": "tsc",
     "typeorm": "ts-node-dev ./node_modules/typeorm/cli"
   },
   "dependencies": {

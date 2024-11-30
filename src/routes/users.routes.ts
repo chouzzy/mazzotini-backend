@@ -13,28 +13,28 @@ const usersRoutes = Router()
 
 
 const listUsersController = new ListUsersController()
-usersRoutes.get('/', checkJwtFromCookie , listUsersController.handle)
+usersRoutes.get('/' , listUsersController.handle)
 
 const findUserByIDController = new FindUserByIDController()
-usersRoutes.get('/findByID/:id', checkJwtFromCookie , findUserByIDController.handle)
+usersRoutes.get('/findByID/:id' , findUserByIDController.handle)
 
 const findUserByEmailController = new FindUserByEmailController()
 usersRoutes.get('/findUnique' , findUserByEmailController.handle)
 
 const createUsersController = new CreateUsersController()
-usersRoutes.post('/create', checkJwtFromCookie, createUsersController.handle)
+usersRoutes.post('/create', createUsersController.handle)
 
 const updateUsersController = new UpdateUsersController()
-usersRoutes.put('/update/:id', checkJwtFromCookie, updateUsersController.handle)
+usersRoutes.put('/update/:id', updateUsersController.handle)
 
 const deleteUsersController = new DeleteUsersController()
-usersRoutes.delete('/delete', checkJwtFromCookie, checkJwtFromCookie, deleteUsersController.handle)
+usersRoutes.delete('/delete', deleteUsersController.handle)
 
 const listResumedUsersController = new ListResumedUsersController()
-usersRoutes.get('/resume', checkJwtFromCookie, listResumedUsersController.handle)
+usersRoutes.get('/resume', listResumedUsersController.handle)
 
 const resetPasswordUsersController = new ResetPasswordUsersController()
-usersRoutes.post('/reset-password', checkJwtFromCookie, resetPasswordUsersController.handle)
+usersRoutes.post('/reset-password', resetPasswordUsersController.handle)
 
 
 

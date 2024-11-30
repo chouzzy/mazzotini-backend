@@ -20,7 +20,6 @@ class UpdateInvestmentsController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { id } = req.params;
-                console.log(req.body);
                 const investmentData = req.body;
                 const { partners, documents, images } = investmentData;
                 if (partners) {
@@ -49,7 +48,7 @@ class UpdateInvestmentsController {
                 });
             }
             catch (error) {
-                console.log(error);
+                // console.log(error)
                 if (error instanceof client_1.Prisma.PrismaClientValidationError) {
                     console.log(error);
                     return res.status(401).json({

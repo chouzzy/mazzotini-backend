@@ -7,20 +7,24 @@ require("reflect-metadata");
 const express_1 = __importDefault(require("express"));
 const routes_1 = require("./routes");
 const AppError_1 = require("./errors/AppError");
-const body_parser_1 = __importDefault(require("body-parser"));
 const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
 const cors_1 = __importDefault(require("cors"));
 const swagger_1 = __importDefault(require("../swagger"));
+const InvestmentProgressImportController_1 = require("./modules/investments/useCases/Investments/investmentProgressImport/InvestmentProgressImportController");
 var cookieParser = require('cookie-parser');
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({
-    origin: 'http://localhost:3000',
+    origin: 'https://c2di-front.vercel.app',
     methods: ['GET', 'PUT', 'POST', 'DELETE', 'PATCH'],
     credentials: true, // Permita o envio de credenciais (cookies, headers de autorização)
 }));
-app.use(express_1.default.json());
-app.use(body_parser_1.default.json({ type: 'application/json' }));
+const projectProgressInvestmentPartnerController = new InvestmentProgressImportController_1.ProjectProgressInvestmentPartnerController();
+app.post('/investments/progress/import/:id', projectProgressInvestmentPartnerController.handle);
+app.use(express_1.default.json()); // Define o body parser para JSON após a rota de upload
 app.use(cookieParser());
+app.get('/test-cookies', (req, res) => {
+    res.json({ cookies: req.cookies });
+});
 app.use(routes_1.router);
 // Tratamento de erro
 app.use((err, req, res, next) => {

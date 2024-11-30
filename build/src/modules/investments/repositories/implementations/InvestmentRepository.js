@@ -100,5 +100,16 @@ class InvestmentRepository {
             }
         });
     }
+    importInvestmentProgress(worksheet, id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const investment = (0, investmentUtils_1.importPrismaInvestmentProgress)(worksheet, id);
+                return investment;
+            }
+            catch (error) {
+                throw error;
+            }
+        });
+    }
 }
 exports.InvestmentRepository = InvestmentRepository;
