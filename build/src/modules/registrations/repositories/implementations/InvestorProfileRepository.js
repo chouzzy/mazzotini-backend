@@ -34,15 +34,15 @@ class InvestorProfileRepository {
                 }
                 let riskToleranceCalculated = 'CONSERVADOR';
                 let investorProfileDescriptionCalculated = 'CONSERVADOR';
-                if (pesoFinal <= 10) {
+                if (pesoFinal <= 20) {
                     riskToleranceCalculated = 'CONSERVADOR';
                     investorProfileDescriptionCalculated = 'Você possui um perfil conservador, priorizando a segurança e a preservação do capital. Prefere investimentos com baixo risco e retorno previsível, mesmo que isso signifique um crescimento mais lento do patrimônio.';
                 }
-                if ((pesoFinal > 10) && (pesoFinal <= 15)) {
+                if ((pesoFinal > 20) && (pesoFinal <= 35)) {
                     riskToleranceCalculated = 'MODERADO';
                     investorProfileDescriptionCalculated = 'Você possui um perfil moderado, buscando um equilíbrio entre risco e retorno. Está disposto a correr alguns riscos para alcançar seus objetivos, mas também se preocupa com a segurança do seu investimento.';
                 }
-                if ((pesoFinal > 15)) {
+                if ((pesoFinal > 35)) {
                     riskToleranceCalculated = 'ARROJADO';
                     investorProfileDescriptionCalculated = 'Você possui um perfil arrojado, buscando maximizar seus retornos e disposto a correr maiores riscos para alcançar seus objetivos. Tem um horizonte de investimento mais longo e se sente confortável com a volatilidade do mercado.';
                 }

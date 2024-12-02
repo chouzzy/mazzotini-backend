@@ -8,6 +8,7 @@ import cors from 'cors';
 import specs from '../swagger';
 import { ProjectProgressInvestmentPartnerController } from './modules/investments/useCases/Investments/investmentProgressImport/InvestmentProgressImportController';
 import formidable from 'formidable';
+import { checkJwtFromCookie, jwtCheck } from './modules/registrations/middleware/auth0Check';
 var cookieParser = require('cookie-parser')
 
 
@@ -29,6 +30,8 @@ app.use(cookieParser());
 app.get('/test-cookies', (req, res) => {
     res.json({ cookies: req.cookies });
 });
+
+
 
 app.use(router);
 

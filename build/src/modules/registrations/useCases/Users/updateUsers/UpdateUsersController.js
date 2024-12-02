@@ -23,7 +23,10 @@ class UpdateUsersController {
                 if (typeof (id) != 'string') {
                     return res.status(401).json({ Error: "ID inválido" });
                 }
-                // usersData.birth = new Date(usersData.birth)
+                if (typeof (usersData.birth) != 'string') {
+                    return res.status(401).json({ Error: "Data inválida" });
+                }
+                usersData.birth = new Date(usersData.birth);
                 yield (0, UpdateUsersCheck_1.checkBody)(usersData, id);
                 const userRepository = new UsersRepository_1.UsersRepository();
                 const updateUsersUseCase = new UpdateUsersUseCase_1.UpdateUsersUseCase(userRepository);
@@ -34,6 +37,7 @@ class UpdateUsersController {
                 });
             }
             catch (error) {
+                console.log(error);
                 if (error instanceof client_1.Prisma.PrismaClientValidationError) {
                     return res.status(401).json({
                         error: {

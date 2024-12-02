@@ -14,7 +14,7 @@ const InvestmentProgressImportController_1 = require("./modules/investments/useC
 var cookieParser = require('cookie-parser');
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({
-    origin: 'https://c2di-front.vercel.app',
+    origin: process.env.FRONT_END_URL,
     methods: ['GET', 'PUT', 'POST', 'DELETE', 'PATCH'],
     credentials: true, // Permita o envio de credenciais (cookies, headers de autorização)
 }));

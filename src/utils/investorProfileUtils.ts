@@ -2,7 +2,7 @@
 
 async function calcularPesoIdade(idade: number): Promise<number> {
     if (idade >= 18 && idade <= 30) {
-        return 4; // Arrojado
+        return 3; // Arrojado
     } else if (idade >= 31 && idade <= 45) {
         return 3; // Moderado/Arrojado
     } else if (idade >= 46 && idade <= 60) {
@@ -40,7 +40,7 @@ async function calcularPesoObjetivoInvestimento(objetivo: string): Promise<numbe
         case 'Diversificação de investimentos':
             return 1;
         default:
-            return 2; // Peso padrão para "Outro"
+            return 1; // Peso padrão para "Outro"
     }
 }
 
@@ -51,7 +51,7 @@ async function calcularPesoExperiencia(investiuAntes: boolean, tipoInvestimento:
         peso += 3;
         switch (tipoInvestimento) {
             case 'Residencial':
-                peso += 1;
+                peso += 2;
                 break;
             case 'Comercial':
             case 'Terrenos':
@@ -105,7 +105,7 @@ async function calcularPesoInvestimentosAtuais(possuiOutros: boolean, quaisOutro
                 break;
             case 'Fundos de investimento':
             case 'Outros':
-                peso += 2;
+                peso += 1;
                 break;
         }
     }
@@ -130,13 +130,13 @@ async function calcularPesoPreferencias(tipoImovel: string, tipoRenda: string): 
 
     switch (tipoRenda) {
         case 'Apenas aluguel':
-            peso += 1;
+            peso += 2;
             break;
         case 'Apenas revenda':
-            peso += 3;
+            peso += 2;
             break;
         case 'Ambos':
-            peso += 2;
+            peso += 3;
             break;
     }
 

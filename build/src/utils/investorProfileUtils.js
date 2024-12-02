@@ -13,7 +13,7 @@ exports.calcularPesoPreferencias = exports.calcularPesoInvestimentosAtuais = exp
 function calcularPesoIdade(idade) {
     return __awaiter(this, void 0, void 0, function* () {
         if (idade >= 18 && idade <= 30) {
-            return 4; // Arrojado
+            return 3; // Arrojado
         }
         else if (idade >= 31 && idade <= 45) {
             return 3; // Moderado/Arrojado
@@ -62,7 +62,7 @@ function calcularPesoObjetivoInvestimento(objetivo) {
             case 'Diversificação de investimentos':
                 return 1;
             default:
-                return 2; // Peso padrão para "Outro"
+                return 1; // Peso padrão para "Outro"
         }
     });
 }
@@ -74,7 +74,7 @@ function calcularPesoExperiencia(investiuAntes, tipoInvestimento, conhecimento) 
             peso += 3;
             switch (tipoInvestimento) {
                 case 'Residencial':
-                    peso += 1;
+                    peso += 2;
                     break;
                 case 'Comercial':
                 case 'Terrenos':
@@ -130,7 +130,7 @@ function calcularPesoInvestimentosAtuais(possuiOutros, quaisOutros) {
                     break;
                 case 'Fundos de investimento':
                 case 'Outros':
-                    peso += 2;
+                    peso += 1;
                     break;
             }
         }
@@ -154,13 +154,13 @@ function calcularPesoPreferencias(tipoImovel, tipoRenda) {
         }
         switch (tipoRenda) {
             case 'Apenas aluguel':
-                peso += 1;
+                peso += 2;
                 break;
             case 'Apenas revenda':
-                peso += 3;
+                peso += 2;
                 break;
             case 'Ambos':
-                peso += 2;
+                peso += 3;
                 break;
         }
         return peso;
