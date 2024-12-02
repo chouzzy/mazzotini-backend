@@ -27,12 +27,16 @@ class UpdateUsersController {
             const usersData: UpdateUsersRequestProps = req.body
 
             const { id } = req.params
+            
 
             if (typeof (id) != 'string') {
                 return res.status(401).json({ Error: "ID inválido" })
             }
 
-            // usersData.birth = new Date(usersData.birth)
+            if (typeof (usersData.birth) != 'string') {
+                return res.status(401).json({ Error: "Data inválida" })
+            }
+            usersData.birth = new Date(usersData.birth)
 
             await checkBody(usersData, id)
             
@@ -48,7 +52,7 @@ class UpdateUsersController {
             })
 
         } catch (error) {
-
+            console.log(error)
             if (error instanceof Prisma.PrismaClientValidationError) {
                 return res.status(401).json({
                     error: {

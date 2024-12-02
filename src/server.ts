@@ -14,7 +14,7 @@ var cookieParser = require('cookie-parser')
 const app = express()
 
 app.use(cors({
-    origin: 'https://c2di-front.vercel.app',
+    origin: process.env.FRONT_END_URL,
     methods: ['GET', 'PUT', 'POST', 'DELETE', 'PATCH'],
     credentials: true, // Permita o envio de credenciais (cookies, headers de autorização)
 }));

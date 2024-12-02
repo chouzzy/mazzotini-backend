@@ -15,6 +15,7 @@ class FindUserByEmailController {
 
             console.log('Token aceito!')
             const { email } = query
+
             await checkQuery(query)
 
 
