@@ -205,7 +205,8 @@ async function updatePrismaUser(usersData: UpdateUsersRequestProps, id: UsersEnt
                 username: usersData.username ?? user.username,
                 address: usersData.address ?? user.address,
                 investorProfileName: usersData.investorProfileName ?? user.investorProfileName,
-                investorProfileDescription: usersData.investorProfileDescription ?? user.investorProfileDescription
+                investorProfileDescription: usersData.investorProfileDescription ?? user.investorProfileDescription,
+                userNotifications: usersData.userNotifications ?? user.userNotifications 
             },
         });
 

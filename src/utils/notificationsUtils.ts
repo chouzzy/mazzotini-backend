@@ -3,18 +3,45 @@ import { Notification } from "@prisma/client";
 import { CreateNotificationsRequestProps } from "../modules/notifications/useCases/Notifications/createNotifications/CreateNotificationsController";
 import { prisma } from "../prisma";
 import { ListNotificationsRequestProps } from "../modules/notifications/useCases/Notifications/listNotifications/ListNotificationsController";
+import { UsersEntity } from "../modules/registrations/entities/Users";
 
 
 async function createPrismaNotifications(notificationsData: CreateNotificationsRequestProps) {
 
     try {
 
-        console.log('notificationsData')
-        console.log(notificationsData)
+        const { investmentId } = notificationsData
+
+        // 1. Verificar se o investmentId existe
+        const investment = await prisma.investment.findUnique({
+            where: { id: investmentId },
+        });
+        if (!investment) {
+            throw new Error("Investment não encontrado.");
+        }
 
         const notification = await prisma.notification.create({
             data: notificationsData
         })
+
+        const usersWithThisInvestment = await prisma.userInvestment.findMany({
+            where: { investmentID: investmentId }, // Filtra pelo investmentID
+            select: { userID: true } // Seleciona apenas o campo userIDs
+        });
+
+        const updatedUsers = await prisma.users.updateMany({
+            where: {
+                id: { in: usersWithThisInvestment.map(user => user.userID) }
+            },
+            data: {
+                userNotifications: {
+                    push: { // Usa push para adicionar um novo objeto ao array
+                        notificationID: notification.id,
+                        isRead: false
+                    }
+                }
+            }
+        });
 
         return notification
 
@@ -23,7 +50,42 @@ async function createPrismaNotifications(notificationsData: CreateNotificationsR
     }
 }
 
-async function listPrismaNotifications(id: Notification["investmentId"], page:number, pageRange:number) {
+async function listPrismaUserNotifications(userID: UsersEntity["id"], page: number, pageRange: number) {
+
+    try {
+        const notifications = await prisma.users.findUnique({
+            where: { id: userID },
+            select: { userNotifications: true },
+        })
+
+        if (!notifications) {
+            return { notifications, totalCount: 0 }
+        }
+
+        const { userNotifications } = notifications
+
+        const notificationIDs = userNotifications.map((notification) => notification.notificationID);
+
+        const paginatedUserNotifications = await prisma.notification.findMany({
+            where: {
+                id: { in: notificationIDs }, // Filtra pelo notificationID
+            },
+            skip: (page - 1) * pageRange,
+            take: pageRange,
+            orderBy: { createdAt: "desc" }, // Ordena por data de criação (opcional)
+        });
+
+        return {
+            notifications: paginatedUserNotifications,
+            totalCount: userNotifications.length,
+        };
+
+    } catch (error) {
+        throw error
+    }
+}
+
+async function listPrismaNotifications(id: Notification["investmentId"], page: number, pageRange: number) {
 
     try {
         const notification = await prisma.notification.findMany({
@@ -41,7 +103,7 @@ async function listPrismaNotifications(id: Notification["investmentId"], page:nu
             where: { investmentId: id }
         })
 
-        return {notification, totalDocuments}
+        return { notification, totalDocuments }
 
     } catch (error) {
         throw error
@@ -91,4 +153,4 @@ async function validatePageParams(listNotificationsData: ListNotificationsReques
     }
 }
 
-export { createPrismaNotifications, listPrismaNotifications, readPrismaNotifications, validatePageParams }
+export { createPrismaNotifications, listPrismaNotifications, readPrismaNotifications, listPrismaUserNotifications, validatePageParams }

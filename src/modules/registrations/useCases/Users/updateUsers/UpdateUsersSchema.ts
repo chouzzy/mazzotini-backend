@@ -3,6 +3,7 @@ import YupPassword from 'yup-password';
 YupPassword(yup); // Isso adiciona os métodos de validação de senha ao yup
 
 const updateUsersSchema = yup.object({
+  id: yup.string().required(),
   name: yup.string(),
   email: yup.string().email("Formato de email inválido"),
   phoneNumber: yup.string(),
@@ -25,7 +26,14 @@ const updateUsersSchema = yup.object({
 
   investorProfileName: yup.string().optional(),
   investorProfileDescription: yup.string().optional(),
-  
-}).noUnknown(true, "Campos desconhecidos no corpo da requisição.").strict()
+
+  userNotifications: yup.array().of(
+    yup.object().shape({
+      notificationID: yup.string().required("notificationID é obrigatório"),
+      isRead: yup.boolean().required("isRead é obrigatório"),
+    })
+  )
+
+})
 
 export { updateUsersSchema };

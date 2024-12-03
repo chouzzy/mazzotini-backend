@@ -38,12 +38,18 @@ model Users {
 
   userInvestments UserInvestment[] // Lista de investimentos que o usuário possui (relacionamento um-para-muitos)
   investorProfile InvestorProfile? // Relacionamento um-para-um com InvestorProfile
+  userNotifications UserNotifications[] // Lista de investimentos que o usuário possui (relacionamento um-para-muitos)
 
-  createdAt     DateTime      @default(now()) // Data e hora de criação do usuário
-  updatedAt     DateTime      @updatedAt // Data e hora da última atualização do usuário
+  createdAt     DateTime       @default(now()) // Data e hora de criação do usuário
+  updatedAt     DateTime       @updatedAt // Data e hora da última atualização do usuário
   refresh_token RefreshToken? // Token para renovar a sessão do usuário (opcional)
 
   @@map("users") // Nome da coleção no MongoDB
+}
+
+type UserNotifications {
+  notificationID   String
+  isRead    Boolean @default(false)
 }
 
 enum Role {

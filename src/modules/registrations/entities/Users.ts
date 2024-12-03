@@ -14,6 +14,7 @@ class UsersEntity {
   address!: Users["address"];
   investorProfileName!: Users["investorProfileName"];
   investorProfileDescription!: Users["investorProfileDescription"];
+  userNotifications!: Users["userNotifications"];
   role!: Users["role"]; 
   createdAt!: Users["createdAt"];
   updatedAt?: Users["updatedAt"];

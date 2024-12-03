@@ -1,7 +1,8 @@
-import { Notification } from "@prisma/client"
-import { INotificationsRepository, listNotificationsResponse } from "../INotificationsRepository"
+import { Notification, Users } from "@prisma/client"
+import { INotificationsRepository, listNotificationsResponse, listUserNotificationsResponseProps } from "../INotificationsRepository"
 import { CreateNotificationsRequestProps } from "../../useCases/Notifications/createNotifications/CreateNotificationsController"
-import { createPrismaNotifications, listPrismaNotifications, readPrismaNotifications } from "../../../../utils/notificationsUtils"
+import { createPrismaNotifications, listPrismaNotifications, listPrismaUserNotifications, readPrismaNotifications } from "../../../../utils/notificationsUtils"
+import { UsersEntity } from "../../../registrations/entities/Users"
 
 
 class NotificationsRepository implements INotificationsRepository {
@@ -19,10 +20,23 @@ class NotificationsRepository implements INotificationsRepository {
         }
     }
 
-    async listNotifications(id: Notification["investmentId"], page:number, pageRange:number): Promise<listNotificationsResponse> {
+    async listNotifications(id: Notification["investmentId"], page: number, pageRange: number): Promise<listNotificationsResponse> {
         try {
 
             const response = await listPrismaNotifications(id, page, pageRange)
+
+            return response
+
+        } catch (error) {
+            throw error
+        }
+    }
+
+
+    async listUserNotifications(userID: UsersEntity["id"], page: number, pageRange: number): Promise<listUserNotificationsResponseProps> {
+        try {
+
+            const response = await listPrismaUserNotifications(userID, page, pageRange)
 
             return response
 

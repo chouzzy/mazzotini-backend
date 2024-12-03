@@ -9,8 +9,9 @@ import { UpdateUsersRequestProps } from "./UpdateUsersController";
 async function checkBody(usersData: UpdateUsersRequestProps, id: any){
     // check body properties
     try {
+        const data = {... usersData, id}
 
-        const yupValidation = await updateUsersSchema.validate(usersData, {
+        const yupValidation = await updateUsersSchema.validate(data, {
             abortEarly: false,
         })
 
@@ -18,7 +19,7 @@ async function checkBody(usersData: UpdateUsersRequestProps, id: any){
             throw Error("ID do usuário inválido.")
         }
 
-        return
+        return yupValidation
     }
     catch (error) {
         throw error

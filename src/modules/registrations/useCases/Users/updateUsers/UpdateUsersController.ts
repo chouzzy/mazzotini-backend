@@ -17,6 +17,7 @@ interface UpdateUsersRequestProps {
     address: UsersEntity["address"]
     investorProfileName: UsersEntity["investorProfileName"]
     investorProfileDescription: UsersEntity["investorProfileDescription"]
+    userNotifications: UsersEntity["userNotifications"]
 }
 
 class UpdateUsersController {
@@ -24,22 +25,15 @@ class UpdateUsersController {
     async handle(req: Request, res: Response): Promise<Response> {
 
         try {
+
             const usersData: UpdateUsersRequestProps = req.body
-
-            const { id } = req.params
-            
-
-            if (typeof (id) != 'string') {
-                return res.status(401).json({ Error: "ID inválido" })
-            }
 
             if (typeof (usersData.birth) != 'string') {
                 return res.status(401).json({ Error: "Data inválida" })
             }
             usersData.birth = new Date(usersData.birth)
 
-            await checkBody(usersData, id)
-            
+            const { id } = await checkBody(usersData, req.params.id)
 
             const userRepository = new UsersRepository()
             const updateUsersUseCase = new UpdateUsersUseCase(userRepository)
@@ -47,7 +41,7 @@ class UpdateUsersController {
 
 
             return res.status(200).json({
-                successMessage:"Usuário atualizado com sucesso!",
+                successMessage: "Usuário atualizado com sucesso!",
                 user: user
             })
 
