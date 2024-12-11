@@ -41,6 +41,21 @@ async function createPrismaInvestment(investmentData: CreateInvestmentRequestPro
         console.log('investmentData')
         console.log(investmentData)
 
+        const { buildingTotalProgress, financialTotalProgress, buildingProgress } = investmentData
+        if (!buildingTotalProgress) { investmentData.buildingTotalProgress = [{ data: new Date(), previsto: 0, realizado: 0 }] }
+        if (!financialTotalProgress) { investmentData.financialTotalProgress = [{ data: new Date(), previsto: 0, realizado: 0 }] }
+        
+        if (!buildingProgress) {
+            investmentData.buildingProgress = {
+                acabamento: 0,
+                alvenaria: 0,
+                estrutura: 0,
+                fundacao: 0,
+                instalacoes: 0,
+                pintura: 0
+            }
+        }
+
         const createdInvestment = await prisma.investment.create({
             data: investmentData
         })
@@ -328,9 +343,9 @@ async function importPrismaInvestmentProgress(worksheet: Worksheet, id: Investme
             const row = worksheet.getRow(rowNumber);
             // Extrai os dados da linha
             const data = row.getCell(1).value as Date; // Se o valor for null ou undefined, define como string vazia
-            const financeiroPrevisto = Math.round(parseFloat(parseFloat(row.getCell(2).text).toFixed(2))); 
-            const financeiroRealizado = Math.round(parseFloat(parseFloat(row.getCell(3).text).toFixed(2))); 
-            const obraPrevisto = parseFloat(parseFloat(row.getCell(4).text.replace('%', '')).toFixed(2)); 
+            const financeiroPrevisto = Math.round(parseFloat(parseFloat(row.getCell(2).text).toFixed(2)));
+            const financeiroRealizado = Math.round(parseFloat(parseFloat(row.getCell(3).text).toFixed(2)));
+            const obraPrevisto = parseFloat(parseFloat(row.getCell(4).text.replace('%', '')).toFixed(2));
             const obraRealizado = parseFloat(parseFloat(row.getCell(5).text.replace('%', '')).toFixed(2));
 
             // Adiciona os dados aos arrays
@@ -348,7 +363,7 @@ async function importPrismaInvestmentProgress(worksheet: Worksheet, id: Investme
         }
 
         const updatedInvestment = await prisma.investment.update({
-            where:{id:id},
+            where: { id: id },
             data: {
                 financialTotalProgress: financialTotalProgress,
                 buildingTotalProgress: buildingTotalProgress

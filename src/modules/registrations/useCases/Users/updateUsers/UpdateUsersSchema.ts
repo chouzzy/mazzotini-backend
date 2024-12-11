@@ -24,8 +24,8 @@ const updateUsersSchema = yup.object({
     zipCode: yup.string(),
   }).nullable(), // Permite que o endereço seja nulo
 
-  investorProfileName: yup.string().optional(),
-  investorProfileDescription: yup.string().optional(),
+  investorProfileName: yup.string().optional().nullable(),
+  investorProfileDescription: yup.string().optional().nullable(),
 
   userNotifications: yup.array().of(
     yup.object().shape({

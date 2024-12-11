@@ -9,24 +9,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkBody = void 0;
-const UpdateUsersSchema_1 = require("./UpdateUsersSchema");
-function checkBody(usersData, id) {
+exports.checkParams = void 0;
+const ListUserNotificationsSchema_1 = require("./ListUserNotificationsSchema");
+function checkParams(userNotificationsPostData) {
     return __awaiter(this, void 0, void 0, function* () {
         // check body properties
         try {
-            const data = Object.assign(Object.assign({}, usersData), { id });
-            const yupValidation = yield UpdateUsersSchema_1.updateUsersSchema.validate(data, {
+            const { userID, page, pageRange } = yield ListUserNotificationsSchema_1.listUserNotificationsSchema.validate(userNotificationsPostData, {
                 abortEarly: false,
             });
-            if (!id) {
-                throw Error("ID do usuário inválido.");
-            }
-            return yupValidation;
+            return { userID, page, pageRange };
         }
         catch (error) {
             throw error;
         }
     });
 }
-exports.checkBody = checkBody;
+exports.checkParams = checkParams;

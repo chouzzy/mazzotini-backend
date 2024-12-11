@@ -110,7 +110,7 @@ model Investment {
   documents             Document[] // documentos da obra (armazenar como JSON)
   images                Image[] // imagens da obra (armazenar como JSON)
 
-  investmentValue String // valor do investimento    
+  investmentValue String? // valor do investimento    
 
   valorOriginal          Int                      @default(1) // Valor do imóvel no momento do lançamento
   valorCorrente          Int                      @default(1) // Valor atual do imóvel
@@ -120,7 +120,7 @@ model Investment {
   partners         Partners[] // fornecedores principais
   finishDate       DateTime? // data de entrega
   buildingStatus   String // status da construção -- vai abrir em uma nova tabela
-  buildingProgress BuildingProgress // status da construção -- vai abrir em uma nova tabela
+  buildingProgress BuildingProgress? // status da construção -- vai abrir em uma nova tabela
   investmentDate   DateTime? // data da compra do investidor
 
   predictedCost PredictedCost // custo previsto - gerente de projeto vai cadastrar custo total e custos macro

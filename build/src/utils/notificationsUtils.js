@@ -9,15 +9,38 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.validatePageParams = exports.readPrismaNotifications = exports.listPrismaNotifications = exports.createPrismaNotifications = void 0;
+exports.validatePageParams = exports.listPrismaUserNotifications = exports.readPrismaNotifications = exports.listPrismaNotifications = exports.createPrismaNotifications = void 0;
 const prisma_1 = require("../prisma");
 function createPrismaNotifications(notificationsData) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            console.log('notificationsData');
-            console.log(notificationsData);
+            const { investmentId } = notificationsData;
+            // 1. Verificar se o investmentId existe
+            const investment = yield prisma_1.prisma.investment.findUnique({
+                where: { id: investmentId },
+            });
+            if (!investment) {
+                throw new Error("Investment não encontrado.");
+            }
             const notification = yield prisma_1.prisma.notification.create({
                 data: notificationsData
+            });
+            const usersWithThisInvestment = yield prisma_1.prisma.userInvestment.findMany({
+                where: { investmentID: investmentId },
+                select: { userID: true } // Seleciona apenas o campo userIDs
+            });
+            const updatedUsers = yield prisma_1.prisma.users.updateMany({
+                where: {
+                    id: { in: usersWithThisInvestment.map(user => user.userID) }
+                },
+                data: {
+                    userNotifications: {
+                        push: {
+                            notificationID: notification.id,
+                            isRead: false
+                        }
+                    }
+                }
             });
             return notification;
         }
@@ -27,6 +50,37 @@ function createPrismaNotifications(notificationsData) {
     });
 }
 exports.createPrismaNotifications = createPrismaNotifications;
+function listPrismaUserNotifications(userID, page, pageRange) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const notifications = yield prisma_1.prisma.users.findUnique({
+                where: { id: userID },
+                select: { userNotifications: true },
+            });
+            if (!notifications) {
+                return { notifications, totalCount: 0 };
+            }
+            const { userNotifications } = notifications;
+            const notificationIDs = userNotifications.map((notification) => notification.notificationID);
+            const paginatedUserNotifications = yield prisma_1.prisma.notification.findMany({
+                where: {
+                    id: { in: notificationIDs }, // Filtra pelo notificationID
+                },
+                skip: (page - 1) * pageRange,
+                take: pageRange,
+                orderBy: { createdAt: "desc" }, // Ordena por data de criação (opcional)
+            });
+            return {
+                notifications: paginatedUserNotifications,
+                totalCount: userNotifications.length,
+            };
+        }
+        catch (error) {
+            throw error;
+        }
+    });
+}
+exports.listPrismaUserNotifications = listPrismaUserNotifications;
 function listPrismaNotifications(id, page, pageRange) {
     return __awaiter(this, void 0, void 0, function* () {
         try {

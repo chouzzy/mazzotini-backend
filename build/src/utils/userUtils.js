@@ -157,7 +157,7 @@ function filterResumedPrismaUser(listUserFormatted) {
 }
 exports.filterResumedPrismaUser = filterResumedPrismaUser;
 function updatePrismaUser(usersData, id) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const user = yield getPrismaUsersByID(id);
@@ -176,7 +176,8 @@ function updatePrismaUser(usersData, id) {
                     username: (_g = usersData.username) !== null && _g !== void 0 ? _g : user.username,
                     address: (_h = usersData.address) !== null && _h !== void 0 ? _h : user.address,
                     investorProfileName: (_j = usersData.investorProfileName) !== null && _j !== void 0 ? _j : user.investorProfileName,
-                    investorProfileDescription: (_k = usersData.investorProfileDescription) !== null && _k !== void 0 ? _k : user.investorProfileDescription
+                    investorProfileDescription: (_k = usersData.investorProfileDescription) !== null && _k !== void 0 ? _k : user.investorProfileDescription,
+                    userNotifications: (_l = usersData.userNotifications) !== null && _l !== void 0 ? _l : user.userNotifications
                 },
             });
             return updatedUser;

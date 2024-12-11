@@ -19,15 +19,11 @@ class UpdateUsersController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const usersData = req.body;
-                const { id } = req.params;
-                if (typeof (id) != 'string') {
-                    return res.status(401).json({ Error: "ID inválido" });
-                }
                 if (typeof (usersData.birth) != 'string') {
                     return res.status(401).json({ Error: "Data inválida" });
                 }
                 usersData.birth = new Date(usersData.birth);
-                yield (0, UpdateUsersCheck_1.checkBody)(usersData, id);
+                const { id } = yield (0, UpdateUsersCheck_1.checkBody)(usersData, req.params.id);
                 const userRepository = new UsersRepository_1.UsersRepository();
                 const updateUsersUseCase = new UpdateUsersUseCase_1.UpdateUsersUseCase(userRepository);
                 const user = yield updateUsersUseCase.execute(usersData, id);
