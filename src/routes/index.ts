@@ -1,36 +1,13 @@
-import { Router } from "express"
-import { refreshTokenRoutes } from "./refreshToken.routes"
-import { welcomeRoutes } from "./welcome.routes"
-import { usersRoutes } from "./users.routes"
-import { investmentsRoutes } from "./investments.routes"
-import { userInvestmentsRoutes } from "./userInvestments.routes"
-import { notificationsRoutes } from "./notifications.routes"
-import { investorProfileRoutes } from "./investorProfile.routes"
-import { checkJwtFromCookie, jwtCheck } from "../modules/registrations/middleware/auth0Check"
-// import { jwtCheck } from "../modules/registrations/middleware/auth0Check"
+import { Router } from "express";
+import { protectedRoutes } from "./protected.routes";
+import { checkJwt } from "../middleware/auth"; // Importa o "segurança"
 
-const router = Router()
+const router = Router();
 
-router.use('/',  welcomeRoutes)
+// Rota pública de boas-vindas
+router.get('/', (req, res) => res.json({ message: 'API Base está online!' }));
 
-router.use('/investorProfile', checkJwtFromCookie, jwtCheck,  investorProfileRoutes)
+// Usa o roteador de rotas protegidas, aplicando o middleware de segurança
+router.use('/api', checkJwt, protectedRoutes);
 
-router.use('/investments', checkJwtFromCookie, jwtCheck,  investmentsRoutes)
-
-router.use('/usersInvestments', checkJwtFromCookie, jwtCheck,  userInvestmentsRoutes)
-
-router.use('/users', usersRoutes)
-
-router.use('/notifications', checkJwtFromCookie, jwtCheck, notificationsRoutes)
-
-router.use('/refresh-token', checkJwtFromCookie, jwtCheck, refreshTokenRoutes)
-
-router.get('/logintest', (req, res) => {
-    return res.json({ success: true })
-})
-
-
-
-export { router }
-// mathfernando
-// LL9i3EHl8M8NRvOn
+export { router };

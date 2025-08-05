@@ -1,1063 +1,1063 @@
-openapi: 3.0.0
-info:
-  title: C2DI Api
-  version: 1.0.0
-  description: Documentação do sistema awer-C2DI
-servers:
-  - url: https:localhost:8081/
+# openapi: 3.0.0
+# info:
+#   title: C2DI Api
+#   version: 1.0.0
+#   description: Documentação do sistema awer-C2DI
+# servers:
+#   - url: https:localhost:8081/
 
-paths:
-  /users:
-    get:
-      summary: Lista todos os usuários
-      tags:
-      - Users
-      description: Filtros para busca de usuários
-      parameters:
-        - name: id
-          in: query
-          description: ID do usuário
-          schema:
-            type: string
-        - name: name
-          in: query
-          description: Nome do usuário
-          schema:
-            type: string
-        - name: email
-          in: query
-          description: Email do usuário
-          schema:
-            type: string
-        - name: cpf
-          in: query
-          description: CPF do usuário
-          schema:
-            type: string
-        - name: username
-          in: query
-          description: Nome de usuário
-          schema:
-            type: string
-        - name: page
-          in: query
-          description: Número da página
-          schema:
-            type: string
-        - name: pageRange
-          in: query
-          description: Quantidade de registros por página
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Lista todos os usuários
-          content:
-            application/json:
-              schema:
-                type: object
-                items:
-                  $ref: "#/components/schemas/FilterUsersResponse"
-              examples:
-                success:
-                  value:
-                    successMessage: "Usuários encontrados com sucesso"
-                    users:
-                      - id: "user1"
-                        name: "João da Silva"
-                        email: "joao@example.com"
-                      - id: "user2"
-                        name: "João da Silva 2"
-                        email: "joao2@example.com"
-                error:
-                  value:
-                    name: "PrismaClientValidationError"
-                    message: Error.message
+# paths:
+#   /users:
+#     get:
+#       summary: Lista todos os usuários
+#       tags:
+#       - Users
+#       description: Filtros para busca de usuários
+#       parameters:
+#         - name: id
+#           in: query
+#           description: ID do usuário
+#           schema:
+#             type: string
+#         - name: name
+#           in: query
+#           description: Nome do usuário
+#           schema:
+#             type: string
+#         - name: email
+#           in: query
+#           description: Email do usuário
+#           schema:
+#             type: string
+#         - name: cpf
+#           in: query
+#           description: CPF do usuário
+#           schema:
+#             type: string
+#         - name: username
+#           in: query
+#           description: Nome de usuário
+#           schema:
+#             type: string
+#         - name: page
+#           in: query
+#           description: Número da página
+#           schema:
+#             type: string
+#         - name: pageRange
+#           in: query
+#           description: Quantidade de registros por página
+#           schema:
+#             type: string
+#       responses:
+#         "200":
+#           description: Lista todos os usuários
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 items:
+#                   $ref: "#/components/schemas/FilterUsersResponse"
+#               examples:
+#                 success:
+#                   value:
+#                     successMessage: "Usuários encontrados com sucesso"
+#                     users:
+#                       - id: "user1"
+#                         name: "João da Silva"
+#                         email: "joao@example.com"
+#                       - id: "user2"
+#                         name: "João da Silva 2"
+#                         email: "joao2@example.com"
+#                 error:
+#                   value:
+#                     name: "PrismaClientValidationError"
+#                     message: Error.message
 
-  /users/create:
-    post:
-      summary: Cria um novo usuário
-      tags:
-      - Users
-      description: Cria um novo usuário com os dados fornecidos
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateUserRequest"
-      responses:
-        "201":
-          description: Usuário criado com sucesso
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CreateUserResponse"
-              examples:
-                success:
-                  value:
-                    successMessage: "Usuário criado com sucesso"
-                    users:
-                      name: "João da Silva"
-                      email: "joao@example.com"
-                      cpf: "12345678901"
-                      username: "joao123"
-                error:
-                  value:
-                    name: "PrismaClientValidationError"
-                    message: Error.message
-        "400":
-          description: Requisição inválida
-        "500":
-          description: Erro interno do servidor
+#   /users/create:
+#     post:
+#       summary: Cria um novo usuário
+#       tags:
+#       - Users
+#       description: Cria um novo usuário com os dados fornecidos
+#       requestBody:
+#         content:
+#           application/json:
+#             schema:
+#               $ref: "#/components/schemas/CreateUserRequest"
+#       responses:
+#         "201":
+#           description: Usuário criado com sucesso
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: "#/components/schemas/CreateUserResponse"
+#               examples:
+#                 success:
+#                   value:
+#                     successMessage: "Usuário criado com sucesso"
+#                     users:
+#                       name: "João da Silva"
+#                       email: "joao@example.com"
+#                       cpf: "12345678901"
+#                       username: "joao123"
+#                 error:
+#                   value:
+#                     name: "PrismaClientValidationError"
+#                     message: Error.message
+#         "400":
+#           description: Requisição inválida
+#         "500":
+#           description: Erro interno do servidor
 
-  /users/update:
-    put:
-      summary: Atualiza os dados de um usuário
-      tags:
-      - Users
-      parameters:
-      - name: id
-        in: query
-        description: ID do usuário
-        schema:
-          type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-             $ref: "#/components/schemas/UpdateUserRequest"
-      responses:
-        '200':
-          description: Usuário atualizado com sucesso
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UpdateUserResponse' # Referência ao schema da entidade UsersEntity
-              examples:
-                success:
-                  value:
-                    successMessage: "Usuário criado com sucesso"
-                    users:
-                      name: "João da Silva"
-                      email: "joao@example.com"
-                      phoneNumber: "(11) 91234-5678"
-                      gender: "Masculino"
-                      profession: "Engenheiro"
-                      birth: "1990-05-10"
-                      cpf: "12345678901"
-                      username: "joao123"
-                      address:
-                        street: "Rua das Flores"
-                        number: "123"
-                        complement: "Apto 42"
-                        district: "Jardim Primavera"
-                        city: "São Paulo"
-                        state: "SP"
-                        zipCode: "01234-567"
-                      investorProfileName: "João Investidor"
-                      investorProfileDescription: "Buscando investimentos de longo prazo"
-                      role: "INVESTOR"
-                error:
-                  value:
-                    name: "PrismaClientValidationError"
-                    message: Error.message
-        "400":
-          description: Requisição inválida
-        "500":
-          description: Erro interno do servidor
+#   /users/update:
+#     put:
+#       summary: Atualiza os dados de um usuário
+#       tags:
+#       - Users
+#       parameters:
+#       - name: id
+#         in: query
+#         description: ID do usuário
+#         schema:
+#           type: string
+#       requestBody:
+#         required: true
+#         content:
+#           application/json:
+#             schema:
+#              $ref: "#/components/schemas/UpdateUserRequest"
+#       responses:
+#         '200':
+#           description: Usuário atualizado com sucesso
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/UpdateUserResponse' # Referência ao schema da entidade UsersEntity
+#               examples:
+#                 success:
+#                   value:
+#                     successMessage: "Usuário criado com sucesso"
+#                     users:
+#                       name: "João da Silva"
+#                       email: "joao@example.com"
+#                       phoneNumber: "(11) 91234-5678"
+#                       gender: "Masculino"
+#                       profession: "Engenheiro"
+#                       birth: "1990-05-10"
+#                       cpf: "12345678901"
+#                       username: "joao123"
+#                       address:
+#                         street: "Rua das Flores"
+#                         number: "123"
+#                         complement: "Apto 42"
+#                         district: "Jardim Primavera"
+#                         city: "São Paulo"
+#                         state: "SP"
+#                         zipCode: "01234-567"
+#                       investorProfileName: "João Investidor"
+#                       investorProfileDescription: "Buscando investimentos de longo prazo"
+#                       role: "INVESTOR"
+#                 error:
+#                   value:
+#                     name: "PrismaClientValidationError"
+#                     message: Error.message
+#         "400":
+#           description: Requisição inválida
+#         "500":
+#           description: Erro interno do servidor
   
-  /users/delete:
-    delete:
-      summary: Lista todos os usuários
-      tags:
-      - Users
-      description: Filtros para busca de usuários
-      parameters:
-        - name: id
-          in: query
-          description: ID do usuário
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Lista todos os usuários
-          content:
-            application/json:
-              schema:
-                type: object
-                items:
-                  $ref: "#/components/schemas/DeleteUsersResponse"
-              examples:
-                success:
-                  value:
-                    successMessage: "Usuário deletado com sucesso!"
-                error:
-                  value:
-                    name: "PrismaClientKnownRequestError"
-                    message: An operation failed because it depends on one or more records that were required but not found. Record to delete does not exist.
+#   /users/delete:
+#     delete:
+#       summary: Lista todos os usuários
+#       tags:
+#       - Users
+#       description: Filtros para busca de usuários
+#       parameters:
+#         - name: id
+#           in: query
+#           description: ID do usuário
+#           schema:
+#             type: string
+#       responses:
+#         "200":
+#           description: Lista todos os usuários
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 items:
+#                   $ref: "#/components/schemas/DeleteUsersResponse"
+#               examples:
+#                 success:
+#                   value:
+#                     successMessage: "Usuário deletado com sucesso!"
+#                 error:
+#                   value:
+#                     name: "PrismaClientKnownRequestError"
+#                     message: An operation failed because it depends on one or more records that were required but not found. Record to delete does not exist.
 
-  /users/resume:
-    get:
-      summary: Lista todos os usuários resumidos por nome, email e role
-      tags:
-      - Users
-      description: Filtros para busca de usuários e retorna apenas nome, email e role.
-      parameters:
-        - name: id
-          in: query
-          description: ID do usuário
-          schema:
-            type: string
-        - name: name
-          in: query
-          description: Nome do usuário
-          schema:
-            type: string
-        - name: email
-          in: query
-          description: Email do usuário
-          schema:
-            type: string
-        - name: role
-          in: query
-          description: ROLE do usuário
-          schema:
-            type: string
-        - name: page
-          in: query
-          description: Número da página
-          schema:
-            type: string
-        - name: pageRange
-          in: query
-          description: Quantidade de registros por página
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Lista todos os usuários resumidos por nome, email e role
-          content:
-            application/json:
-              schema:
-                type: object
-                items:
-                  $ref: "#/components/schemas/ListResumedUsersResponse"
-              examples:
-                success:
-                  value:
-                    isValid: true
-                    statusCode: 200
-                    successMessage: "Usuários encontrados com sucesso"
-                    usersList:
-                      - id: "user1"
-                        name: "João da Silva"
-                        email: "joao@example.com"
-                        role: "PROJECT_MANAGER"
-                      - id: "user2"
-                        name: "João da Silva 2"
-                        email: "joao2@example.com"
-                        role: "INVESTOR"
-                error:
-                  value:
-                    name: "PrismaClientValidationError"
-                    message: Error.message
+#   /users/resume:
+#     get:
+#       summary: Lista todos os usuários resumidos por nome, email e role
+#       tags:
+#       - Users
+#       description: Filtros para busca de usuários e retorna apenas nome, email e role.
+#       parameters:
+#         - name: id
+#           in: query
+#           description: ID do usuário
+#           schema:
+#             type: string
+#         - name: name
+#           in: query
+#           description: Nome do usuário
+#           schema:
+#             type: string
+#         - name: email
+#           in: query
+#           description: Email do usuário
+#           schema:
+#             type: string
+#         - name: role
+#           in: query
+#           description: ROLE do usuário
+#           schema:
+#             type: string
+#         - name: page
+#           in: query
+#           description: Número da página
+#           schema:
+#             type: string
+#         - name: pageRange
+#           in: query
+#           description: Quantidade de registros por página
+#           schema:
+#             type: string
+#       responses:
+#         "200":
+#           description: Lista todos os usuários resumidos por nome, email e role
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 items:
+#                   $ref: "#/components/schemas/ListResumedUsersResponse"
+#               examples:
+#                 success:
+#                   value:
+#                     isValid: true
+#                     statusCode: 200
+#                     successMessage: "Usuários encontrados com sucesso"
+#                     usersList:
+#                       - id: "user1"
+#                         name: "João da Silva"
+#                         email: "joao@example.com"
+#                         role: "PROJECT_MANAGER"
+#                       - id: "user2"
+#                         name: "João da Silva 2"
+#                         email: "joao2@example.com"
+#                         role: "INVESTOR"
+#                 error:
+#                   value:
+#                     name: "PrismaClientValidationError"
+#                     message: Error.message
 
-  /investments:
-    get:
-      summary: Lista os investimentos com filtros
-      tags:
-        - Investments
-      description: Retorna uma lista de investimentos que correspondem aos filtros fornecidos.
-      parameters:
-        - in: query
-          name: title
-          schema:
-            type: string
-          description: Filtra por título do investimento.
-        - in: query
-          name: investmentValue
-          schema:
-            type: number
-            format: float
-          description: Filtra por valor do investimento.
-        - in: query
-          name: companyName
-          schema:
-            type: string
-          description: Filtra por nome da construtora.
-        - in: query
-          name: expectedDeliveryDateInitial
-          schema:
-            type: string
-            format: date
-          description: Filtra por data inicial de previsão de entrega.
-        - in: query
-          name: expectedDeliveryDateFinal
-          schema:
-            type: string
-            format: date
-          description: Filtra por data final de previsão de entrega.
-        - in: query
-          name: city
-          schema:
-            type: string
-          description: Filtra por cidade do endereço.
-        - in: query
-          name: page
-          schema:
-            type: integer
-          description: Número da página (para paginação).
-        - in: query
-          name: pageRange
-          schema:
-            type: integer
-          description: Quantidade de registros por página (para paginação).
-      responses:
-        '200':
-          description: Lista de investimentos
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/FilterInvestmentsResponse'
-              examples:
-                success:
-                  value:
-                    - id: "uuid-do-investimento-1"
-                      title: "Residencial Alpha"
-                      description: "Apartamentos modernos com vista para o mar."
-                      projectType: "RESIDENCIAL_VERTICAL"
-                      totalUnits: 200
-                      numberOfFloors: 20
-                      unitsPerFloor: 10
-                      floorPlanTypes:
-                        - "2 quartos (40m²)"
-                        - "3 quartos com suíte (60m²)"
-                      launchDate: "2023-10-27"
-                      constructionStartDate: "2024-01-15"
-                      expectedDeliveryDate: "2025-12-31"
-                      address: 
-                        street: "Rua da Praia"
-                        number: "123"
-                        complement: "Apto 42"
-                        district: "Copacabana"
-                        city: "Rio de Janeiro"
-                        state: "RJ"
-                        zipCode: "22021-001"
-                      documents:
-                        - title: "Alvará de construção"
-                          url: "https://..."
-                        - title: "Projeto arquitetônico"
-                          url: "https://..."
-                      images: 
-                        - url: "https://..."
-                          description: "Fachada do prédio"
-                        - url: "https://..."
-                          description: "Planta do apartamento"
-                      investmentValue: 1000000
-                      companyName: "Construtora XYZ"
-                      partners:
-                        - "Fornecedor A"
-                        - "Fornecedor B"
-                      finishDate: "2026-06-30"
-                      buildingStatus: "Em construção"
-                      investmentDate: "2024-10-28"
-                      predictedCost:
-                        foundation: "R$ 1.000.000"
-                        structure: "R$ 2.000.000"
-                        implantation: "R$ 500.000"
-                        workmanship: "R$ 1.500.000"
-                      realizedCost:
-                        foundation: "R$ 1.200.000"
-                        structure: "R$ 2.100.000"
-                        implantation: "R$ 550.000"
-                        workmanship: "R$ 1.600.000"
-                      notifications:
-                        - id: "uuid-da-notificacao-1"
-                          userId: "uuid-do-usuario-1"
-                          title: "Atualização da obra"
-                          message: "Início das obras do Residencial Alpha"
-                          isRead: false
-                          createdAt: "2024-10-28T10:00:00Z"
-                      userInvestments:
-                        - id: "uuid-do-investimento-usuario-1"
-                          userId: "uuid-do-usuario-1"
-                          investmentId: "uuid-do-investimento-1"
-                          createdAt: "2024-10-28T12:00:00Z"
-                          updatedAt: "2024-10-28T14:00:00Z"
-                      createdAt: "2024-10-26T10:00:00Z"
-                      updatedAt: "2024-10-28T16:00:00Z"
-                error:
-                  value:
-                    name: "PrismaClientValidationError"
-                    message: Error.message
-        '400':
-          description: Erro de validação ou requisição inválida
-        '500':
-          description: Erro interno do servidor
+#   /investments:
+#     get:
+#       summary: Lista os investimentos com filtros
+#       tags:
+#         - Investments
+#       description: Retorna uma lista de investimentos que correspondem aos filtros fornecidos.
+#       parameters:
+#         - in: query
+#           name: title
+#           schema:
+#             type: string
+#           description: Filtra por título do investimento.
+#         - in: query
+#           name: investmentValue
+#           schema:
+#             type: number
+#             format: float
+#           description: Filtra por valor do investimento.
+#         - in: query
+#           name: companyName
+#           schema:
+#             type: string
+#           description: Filtra por nome da construtora.
+#         - in: query
+#           name: expectedDeliveryDateInitial
+#           schema:
+#             type: string
+#             format: date
+#           description: Filtra por data inicial de previsão de entrega.
+#         - in: query
+#           name: expectedDeliveryDateFinal
+#           schema:
+#             type: string
+#             format: date
+#           description: Filtra por data final de previsão de entrega.
+#         - in: query
+#           name: city
+#           schema:
+#             type: string
+#           description: Filtra por cidade do endereço.
+#         - in: query
+#           name: page
+#           schema:
+#             type: integer
+#           description: Número da página (para paginação).
+#         - in: query
+#           name: pageRange
+#           schema:
+#             type: integer
+#           description: Quantidade de registros por página (para paginação).
+#       responses:
+#         '200':
+#           description: Lista de investimentos
+#           content:
+#             application/json:
+#               schema:
+#                 type: array
+#                 items:
+#                   $ref: '#/components/schemas/FilterInvestmentsResponse'
+#               examples:
+#                 success:
+#                   value:
+#                     - id: "uuid-do-investimento-1"
+#                       title: "Residencial Alpha"
+#                       description: "Apartamentos modernos com vista para o mar."
+#                       projectType: "RESIDENCIAL_VERTICAL"
+#                       totalUnits: 200
+#                       numberOfFloors: 20
+#                       unitsPerFloor: 10
+#                       floorPlanTypes:
+#                         - "2 quartos (40m²)"
+#                         - "3 quartos com suíte (60m²)"
+#                       launchDate: "2023-10-27"
+#                       constructionStartDate: "2024-01-15"
+#                       expectedDeliveryDate: "2025-12-31"
+#                       address: 
+#                         street: "Rua da Praia"
+#                         number: "123"
+#                         complement: "Apto 42"
+#                         district: "Copacabana"
+#                         city: "Rio de Janeiro"
+#                         state: "RJ"
+#                         zipCode: "22021-001"
+#                       documents:
+#                         - title: "Alvará de construção"
+#                           url: "https://..."
+#                         - title: "Projeto arquitetônico"
+#                           url: "https://..."
+#                       images: 
+#                         - url: "https://..."
+#                           description: "Fachada do prédio"
+#                         - url: "https://..."
+#                           description: "Planta do apartamento"
+#                       investmentValue: 1000000
+#                       companyName: "Construtora XYZ"
+#                       partners:
+#                         - "Fornecedor A"
+#                         - "Fornecedor B"
+#                       finishDate: "2026-06-30"
+#                       buildingStatus: "Em construção"
+#                       investmentDate: "2024-10-28"
+#                       predictedCost:
+#                         foundation: "R$ 1.000.000"
+#                         structure: "R$ 2.000.000"
+#                         implantation: "R$ 500.000"
+#                         workmanship: "R$ 1.500.000"
+#                       realizedCost:
+#                         foundation: "R$ 1.200.000"
+#                         structure: "R$ 2.100.000"
+#                         implantation: "R$ 550.000"
+#                         workmanship: "R$ 1.600.000"
+#                       notifications:
+#                         - id: "uuid-da-notificacao-1"
+#                           userId: "uuid-do-usuario-1"
+#                           title: "Atualização da obra"
+#                           message: "Início das obras do Residencial Alpha"
+#                           isRead: false
+#                           createdAt: "2024-10-28T10:00:00Z"
+#                       userInvestments:
+#                         - id: "uuid-do-investimento-usuario-1"
+#                           userId: "uuid-do-usuario-1"
+#                           investmentId: "uuid-do-investimento-1"
+#                           createdAt: "2024-10-28T12:00:00Z"
+#                           updatedAt: "2024-10-28T14:00:00Z"
+#                       createdAt: "2024-10-26T10:00:00Z"
+#                       updatedAt: "2024-10-28T16:00:00Z"
+#                 error:
+#                   value:
+#                     name: "PrismaClientValidationError"
+#                     message: Error.message
+#         '400':
+#           description: Erro de validação ou requisição inválida
+#         '500':
+#           description: Erro interno do servidor
 
-  /investments/{id}:
-    get:
-      summary: Retorna um investimento pelo ID
-      tags:
-        - Investments
-      description: Retorna um investimento que corresponde ao ID fornecido.
-      parameters:
-        - in: path
-          name: id
-          schema:
-            type: string
-          required: true
-          description: ID do investimento
-      responses:
-        '200':
-          description: Investimento encontrado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InvestmentEntity'
-              examples:
-                Exemplo de resposta com um investimento:
-                  value:
-                    id: "uuid-do-investimento-1"
-                    title: "Residencial Alpha"
-                    description: "Apartamentos modernos com vista para o mar."
-                    projectType: "RESIDENCIAL_VERTICAL"
-                    totalUnits: 200
-                    numberOfFloors: 20
-                    unitsPerFloor: 10
-                    floorPlanTypes:
-                      - "2 quartos (40m²)"
-                      - "3 quartos com suíte (60m²)"
-                    launchDate: "2023-10-27"
-                    constructionStartDate: "2024-01-15"
-                    expectedDeliveryDate: "2025-12-31"
-                    address: 
-                      street: "Rua da Praia"
-                      number: "123"
-                      complement: "Apto 42"
-                      district: "Copacabana"
-                      city: "Rio de Janeiro"
-                      state: "RJ"
-                      zipCode: "22021-001"
-                    documents:
-                      - title: "Alvará de construção"
-                        url: "https://..."
-                      - title: "Projeto arquitetônico"
-                        url: "https://..."
-                    images: 
-                      - url: "https://..."
-                        description: "Fachada do prédio"
-                      - url: "https://..."
-                        description: "Planta do apartamento"
-                    investmentValue: 1000000
-                    companyName: "Construtora XYZ"
-                    partners:
-                      - "Fornecedor A"
-                      - "Fornecedor B"
-                    finishDate: "2026-06-30"
-                    buildingStatus: "Em construção"
-                    investmentDate: "2024-10-28"
-                    predictedCost:
-                      foundation: "R$ 1.000.000"
-                      structure: "R$ 2.000.000"
-                      implantation: "R$ 500.000"
-                      workmanship: "R$ 1.500.000"
-                    realizedCost:
-                      foundation: "R$ 1.200.000"
-                      structure: "R$ 2.100.000"
-                      implantation: "R$ 550.000"
-                      workmanship: "R$ 1.600.000"
-                    notifications:
-                      - id: "uuid-da-notificacao-1"
-                        userId: "uuid-do-usuario-1"
-                        investmentId: "uuid-do-investimento-1"
-                        title: "Atualização da obra"
-                        message: "Início das obras do Residencial Alpha"
-                        isRead: false
-                        createdAt: "2024-10-28T10:00:00Z"
-                    userInvestments:
-                      - id: "uuid-do-investimento-usuario-1"
-                        userId: "uuid-do-usuario-1"
-                        investmentId: "uuid-do-investimento-1"
-                        createdAt: "2024-10-28T12:00:00Z"
-                        updatedAt: "2024-10-28T14:00:00Z"
-                    createdAt: "2024-10-26T10:00:00Z"
-                    updatedAt: "2024-10-28T16:00:00Z"
-                error:
-                  value:
-                    name: "PrismaClientValidationError"
-                    message: Error.message
-        '400':
-          description: ID inválido
-        '404':
-          description: Investimento não encontrado
-        '500':
-          description: Erro interno do servidor
+#   /investments/{id}:
+#     get:
+#       summary: Retorna um investimento pelo ID
+#       tags:
+#         - Investments
+#       description: Retorna um investimento que corresponde ao ID fornecido.
+#       parameters:
+#         - in: path
+#           name: id
+#           schema:
+#             type: string
+#           required: true
+#           description: ID do investimento
+#       responses:
+#         '200':
+#           description: Investimento encontrado
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/InvestmentEntity'
+#               examples:
+#                 Exemplo de resposta com um investimento:
+#                   value:
+#                     id: "uuid-do-investimento-1"
+#                     title: "Residencial Alpha"
+#                     description: "Apartamentos modernos com vista para o mar."
+#                     projectType: "RESIDENCIAL_VERTICAL"
+#                     totalUnits: 200
+#                     numberOfFloors: 20
+#                     unitsPerFloor: 10
+#                     floorPlanTypes:
+#                       - "2 quartos (40m²)"
+#                       - "3 quartos com suíte (60m²)"
+#                     launchDate: "2023-10-27"
+#                     constructionStartDate: "2024-01-15"
+#                     expectedDeliveryDate: "2025-12-31"
+#                     address: 
+#                       street: "Rua da Praia"
+#                       number: "123"
+#                       complement: "Apto 42"
+#                       district: "Copacabana"
+#                       city: "Rio de Janeiro"
+#                       state: "RJ"
+#                       zipCode: "22021-001"
+#                     documents:
+#                       - title: "Alvará de construção"
+#                         url: "https://..."
+#                       - title: "Projeto arquitetônico"
+#                         url: "https://..."
+#                     images: 
+#                       - url: "https://..."
+#                         description: "Fachada do prédio"
+#                       - url: "https://..."
+#                         description: "Planta do apartamento"
+#                     investmentValue: 1000000
+#                     companyName: "Construtora XYZ"
+#                     partners:
+#                       - "Fornecedor A"
+#                       - "Fornecedor B"
+#                     finishDate: "2026-06-30"
+#                     buildingStatus: "Em construção"
+#                     investmentDate: "2024-10-28"
+#                     predictedCost:
+#                       foundation: "R$ 1.000.000"
+#                       structure: "R$ 2.000.000"
+#                       implantation: "R$ 500.000"
+#                       workmanship: "R$ 1.500.000"
+#                     realizedCost:
+#                       foundation: "R$ 1.200.000"
+#                       structure: "R$ 2.100.000"
+#                       implantation: "R$ 550.000"
+#                       workmanship: "R$ 1.600.000"
+#                     notifications:
+#                       - id: "uuid-da-notificacao-1"
+#                         userId: "uuid-do-usuario-1"
+#                         investmentId: "uuid-do-investimento-1"
+#                         title: "Atualização da obra"
+#                         message: "Início das obras do Residencial Alpha"
+#                         isRead: false
+#                         createdAt: "2024-10-28T10:00:00Z"
+#                     userInvestments:
+#                       - id: "uuid-do-investimento-usuario-1"
+#                         userId: "uuid-do-usuario-1"
+#                         investmentId: "uuid-do-investimento-1"
+#                         createdAt: "2024-10-28T12:00:00Z"
+#                         updatedAt: "2024-10-28T14:00:00Z"
+#                     createdAt: "2024-10-26T10:00:00Z"
+#                     updatedAt: "2024-10-28T16:00:00Z"
+#                 error:
+#                   value:
+#                     name: "PrismaClientValidationError"
+#                     message: Error.message
+#         '400':
+#           description: ID inválido
+#         '404':
+#           description: Investimento não encontrado
+#         '500':
+#           description: Erro interno do servidor
 
 
-components:
-  schemas:
+# components:
+#   schemas:
 
-    FilterInvestmentsResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          description: ID do investimento
-        title:
-          type: string
-          description: Título do investimento
-        description:
-          type: string
-          description: Descrição do investimento
-        projectType:
-          type: string
-          enum: [RESIDENCIAL_MULTIFAMILIAR, RESIDENCIAL_VERTICAL, COMERCIAL_GERAL, MISTO]
-          description: Tipo do projeto
-        totalUnits:
-          type: integer
-          description: Total de unidades
-        numberOfFloors:
-          type: integer
-          description: Número de pavimentos
-        unitsPerFloor:
-          type: integer
-          description: Unidades por pavimento
-        floorPlanTypes:
-          type: array
-          items:
-            type: string
-          description: Tipologia das plantas
-        launchDate:
-          type: string
-          format: date
-          description: Data de lançamento
-        constructionStartDate:
-          type: string
-          format: date
-          description: Data de início da obra
-        expectedDeliveryDate:
-          type: string
-          format: date
-          description: Data de previsão de entrega
-        address:
-          type: object
-          properties:
-            street:
-              type: string
-              description: Nome da rua
-            number:
-              type: string
-              description: Número do endereço
-            complement:
-              type: string
-              description: Complemento do endereço (opcional)
-            district:
-              type: string
-              description: Bairro
-            city:
-              type: string
-              description: Cidade
-            state:
-              type: string
-              description: Estado
-            zipCode:
-              type: string
-              description: CEP
-        documents:
-          type: array
-          items:
-            type: object
-            properties:
-              title:
-                type: string
-                description: Título do documento
-              url:
-                type: string
-                format: url
-                description: URL do documento
-        images:
-          type: array
-          items:
-            type: object
-            properties:
-              url:
-                type: string
-                format: url
-                description: URL da imagem
-              description:
-                type: string
-                description: Descrição da imagem (opcional)
-        investmentValue:
-          type: number
-          format: float
-          description: Valor do investimento
-        companyName:
-          type: string
-          description: Nome da construtora
-        partners:
-          type: array
-          items:
-            type: string
-          description: Fornecedores principais
-        finishDate:
-          type: string
-          format: date
-          nullable: true
-          description: Data de término (opcional)
-        buildingStatus:
-          type: string
-          description: Status da construção
-        investmentDate:
-          type: string
-          format: date
-          description: Data do investimento
-        predictedCost:
-          type: object
-          properties:
-            foundation:
-              type: string
-            structure:
-              type: string
-            implantation:
-              type: string
-            workmanship:
-              type: string
-        realizedCost:
-          type: object
-          properties:
-            foundation:
-              type: string
-            structure:
-              type: string
-            implantation:
-              type: string
-            workmanship:
-              type: string
-        notifications:
-          type: array
-          description: Para mais detalhes do formato, acesse as rotas de notifications
-        userInvestments:
-          type: array
-          description: Para mais detalhes do formato, acesse as rotas de userInvestments
-        createdAt:
-          type: string
-          format: date-time
-          description: Data e hora de criação do investimento
-        updatedAt:
-          type: string
-          format: date-time
-          description: Data e hora da última atualização do investimento
+#     FilterInvestmentsResponse:
+#       type: object
+#       properties:
+#         id:
+#           type: string
+#           description: ID do investimento
+#         title:
+#           type: string
+#           description: Título do investimento
+#         description:
+#           type: string
+#           description: Descrição do investimento
+#         projectType:
+#           type: string
+#           enum: [RESIDENCIAL_MULTIFAMILIAR, RESIDENCIAL_VERTICAL, COMERCIAL_GERAL, MISTO]
+#           description: Tipo do projeto
+#         totalUnits:
+#           type: integer
+#           description: Total de unidades
+#         numberOfFloors:
+#           type: integer
+#           description: Número de pavimentos
+#         unitsPerFloor:
+#           type: integer
+#           description: Unidades por pavimento
+#         floorPlanTypes:
+#           type: array
+#           items:
+#             type: string
+#           description: Tipologia das plantas
+#         launchDate:
+#           type: string
+#           format: date
+#           description: Data de lançamento
+#         constructionStartDate:
+#           type: string
+#           format: date
+#           description: Data de início da obra
+#         expectedDeliveryDate:
+#           type: string
+#           format: date
+#           description: Data de previsão de entrega
+#         address:
+#           type: object
+#           properties:
+#             street:
+#               type: string
+#               description: Nome da rua
+#             number:
+#               type: string
+#               description: Número do endereço
+#             complement:
+#               type: string
+#               description: Complemento do endereço (opcional)
+#             district:
+#               type: string
+#               description: Bairro
+#             city:
+#               type: string
+#               description: Cidade
+#             state:
+#               type: string
+#               description: Estado
+#             zipCode:
+#               type: string
+#               description: CEP
+#         documents:
+#           type: array
+#           items:
+#             type: object
+#             properties:
+#               title:
+#                 type: string
+#                 description: Título do documento
+#               url:
+#                 type: string
+#                 format: url
+#                 description: URL do documento
+#         images:
+#           type: array
+#           items:
+#             type: object
+#             properties:
+#               url:
+#                 type: string
+#                 format: url
+#                 description: URL da imagem
+#               description:
+#                 type: string
+#                 description: Descrição da imagem (opcional)
+#         investmentValue:
+#           type: number
+#           format: float
+#           description: Valor do investimento
+#         companyName:
+#           type: string
+#           description: Nome da construtora
+#         partners:
+#           type: array
+#           items:
+#             type: string
+#           description: Fornecedores principais
+#         finishDate:
+#           type: string
+#           format: date
+#           nullable: true
+#           description: Data de término (opcional)
+#         buildingStatus:
+#           type: string
+#           description: Status da construção
+#         investmentDate:
+#           type: string
+#           format: date
+#           description: Data do investimento
+#         predictedCost:
+#           type: object
+#           properties:
+#             foundation:
+#               type: string
+#             structure:
+#               type: string
+#             implantation:
+#               type: string
+#             workmanship:
+#               type: string
+#         realizedCost:
+#           type: object
+#           properties:
+#             foundation:
+#               type: string
+#             structure:
+#               type: string
+#             implantation:
+#               type: string
+#             workmanship:
+#               type: string
+#         notifications:
+#           type: array
+#           description: Para mais detalhes do formato, acesse as rotas de notifications
+#         userInvestments:
+#           type: array
+#           description: Para mais detalhes do formato, acesse as rotas de userInvestments
+#         createdAt:
+#           type: string
+#           format: date-time
+#           description: Data e hora de criação do investimento
+#         updatedAt:
+#           type: string
+#           format: date-time
+#           description: Data e hora da última atualização do investimento
 
-    FilterUsersResponse:
-      type: object
-      properties:
-        successMessage:
-          type: string
-          nullable: true
-        errorMessage:
-          type: string
-        usersList:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: string
-              name:
-                type: string
-              email:
-                type: string
-              cpf:
-                type: string
-              username:
-                type: string
-              password:
-                type: string
-              createdAt:
-                type: string
-              updatedAt:
-                type: string
+#     FilterUsersResponse:
+#       type: object
+#       properties:
+#         successMessage:
+#           type: string
+#           nullable: true
+#         errorMessage:
+#           type: string
+#         usersList:
+#           type: array
+#           items:
+#             type: object
+#             properties:
+#               id:
+#                 type: string
+#               name:
+#                 type: string
+#               email:
+#                 type: string
+#               cpf:
+#                 type: string
+#               username:
+#                 type: string
+#               password:
+#                 type: string
+#               createdAt:
+#                 type: string
+#               updatedAt:
+#                 type: string
 
-    CreateUserRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          description: Nome do usuário
-        email:
-          type: string
-          description: Email do usuário
-        phoneNumber:
-          type: string
-          description: Número de telefone do usuário
-        gender:
-          type: string
-          description: Gênero do usuário
-        profession:
-          type: string
-          description: Profissão do usuário
-        birth:
-          type: string
-          format: date # Formato da data (YYYY-MM-DD)
-          description: Data de nascimento do usuário
-        cpf:
-          type: string
-          description: CPF do usuário
-        username:
-          type: string
-          description: Nome de usuário
-        address:
-          type: object
-          properties:
-            street:
-              type: string
-              description: Nome da rua
-            number:
-              type: string
-              description: Número do endereço
-            complement:
-              type: string
-              description: Complemento do endereço (opcional)
-            district:
-              type: string
-              description: Bairro
-            city:
-              type: string
-              description: Cidade
-            state:
-              type: string
-              description: Estado
-            zipCode:
-              type: string
-              description: CEP
-        investorProfileName:
-          type: string
-          description: Nome do perfil de investidor (opcional)
-        investorProfileDescription:
-          type: string
-          description: Descrição do perfil de investidor (opcional)
-        role:
-          type: string
-          enum: [INVESTOR, PROJECT_MANAGER, ADMINISTRATOR]
-          description: Role do usuário
+#     CreateUserRequest:
+#       type: object
+#       properties:
+#         name:
+#           type: string
+#           description: Nome do usuário
+#         email:
+#           type: string
+#           description: Email do usuário
+#         phoneNumber:
+#           type: string
+#           description: Número de telefone do usuário
+#         gender:
+#           type: string
+#           description: Gênero do usuário
+#         profession:
+#           type: string
+#           description: Profissão do usuário
+#         birth:
+#           type: string
+#           format: date # Formato da data (YYYY-MM-DD)
+#           description: Data de nascimento do usuário
+#         cpf:
+#           type: string
+#           description: CPF do usuário
+#         username:
+#           type: string
+#           description: Nome de usuário
+#         address:
+#           type: object
+#           properties:
+#             street:
+#               type: string
+#               description: Nome da rua
+#             number:
+#               type: string
+#               description: Número do endereço
+#             complement:
+#               type: string
+#               description: Complemento do endereço (opcional)
+#             district:
+#               type: string
+#               description: Bairro
+#             city:
+#               type: string
+#               description: Cidade
+#             state:
+#               type: string
+#               description: Estado
+#             zipCode:
+#               type: string
+#               description: CEP
+#         investorProfileName:
+#           type: string
+#           description: Nome do perfil de investidor (opcional)
+#         investorProfileDescription:
+#           type: string
+#           description: Descrição do perfil de investidor (opcional)
+#         role:
+#           type: string
+#           enum: [INVESTOR, PROJECT_MANAGER, ADMINISTRATOR]
+#           description: Role do usuário
 
-    CreateUserResponse:
-      type: object
-      properties:
-        user:
-          type: object
-          properties:
-            id:
-              type: string
-            name:
-              type: string
-            email:
-              type: string
-            username:
-              type: string
-        successMessage:
-          type: string
+#     CreateUserResponse:
+#       type: object
+#       properties:
+#         user:
+#           type: object
+#           properties:
+#             id:
+#               type: string
+#             name:
+#               type: string
+#             email:
+#               type: string
+#             username:
+#               type: string
+#         successMessage:
+#           type: string
 
-    UpdateUserRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          description: Nome do usuário
-        email:
-          type: string
-          description: Email do usuário
-        phoneNumber: 
-          type: string
-          description: Número de telefone do usuário
-        gender:
-          type: string
-          description: Gênero do usuário
-        profession:
-          type: string
-          description: Profissão do usuário
-        birth:
-          type: string
-          format: date
-          description: Data de nascimento do usuário
-        username:
-          type: string
-          description: Nome de usuário
-        address:
-          type: object
-          properties:
-            street:
-              type: string
-              description: Nome da rua
-            number:
-              type: string
-              description: Número do endereço
-            complement:
-              type: string
-              description: Complemento do endereço (opcional)
-            district:
-              type: string
-              description: Bairro
-            city:
-              type: string
-              description: Cidade
-            state:
-              type: string
-              description: Estado
-            zipCode:
-              type: string
-              description: CEP
-        investorProfileName:
-          type: string
-          description: Nome do perfil de investidor (opcional)
-        investorProfileDescription:
-          type: string
-          description: Descrição do perfil de investidor (opcional)
+#     UpdateUserRequest:
+#       type: object
+#       properties:
+#         name:
+#           type: string
+#           description: Nome do usuário
+#         email:
+#           type: string
+#           description: Email do usuário
+#         phoneNumber: 
+#           type: string
+#           description: Número de telefone do usuário
+#         gender:
+#           type: string
+#           description: Gênero do usuário
+#         profession:
+#           type: string
+#           description: Profissão do usuário
+#         birth:
+#           type: string
+#           format: date
+#           description: Data de nascimento do usuário
+#         username:
+#           type: string
+#           description: Nome de usuário
+#         address:
+#           type: object
+#           properties:
+#             street:
+#               type: string
+#               description: Nome da rua
+#             number:
+#               type: string
+#               description: Número do endereço
+#             complement:
+#               type: string
+#               description: Complemento do endereço (opcional)
+#             district:
+#               type: string
+#               description: Bairro
+#             city:
+#               type: string
+#               description: Cidade
+#             state:
+#               type: string
+#               description: Estado
+#             zipCode:
+#               type: string
+#               description: CEP
+#         investorProfileName:
+#           type: string
+#           description: Nome do perfil de investidor (opcional)
+#         investorProfileDescription:
+#           type: string
+#           description: Descrição do perfil de investidor (opcional)
 
-    UpdateUserResponse:
-      type: object
-      properties:
-        user:
-          type: object
-          properties:
-            name:
-              type: string
-              description: Nome do usuário
-            email:
-              type: string
-              description: Email do usuário
-            phoneNumber: 
-              type: string
-              description: Número de telefone do usuário
-            gender:
-              type: string
-              description: Gênero do usuário
-            profession:
-              type: string
-              description: Profissão do usuário
-            birth:
-              type: string
-              format: date
-              description: Data de nascimento do usuário
-            username:
-              type: string
-              description: Nome de usuário
-            address:
-              type: object
-              properties:
-                street:
-                  type: string
-                  description: Nome da rua
-                number:
-                  type: string
-                  description: Número do endereço
-                complement:
-                  type: string
-                  description: Complemento do endereço (opcional)
-                district:
-                  type: string
-                  description: Bairro
-                city:
-                  type: string
-                  description: Cidade
-                state:
-                  type: string
-                  description: Estado
-                zipCode:
-                  type: string
-                  description: CEP
-            investorProfileName:
-              type: string
-              description: Nome do perfil de investidor (opcional)
-            investorProfileDescription:
-              type: string
-              description: Descrição do perfil de investidor (opcional)
-        successMessage:
-          type: string
-          example: "Usuário atualizado com sucesso!"
+#     UpdateUserResponse:
+#       type: object
+#       properties:
+#         user:
+#           type: object
+#           properties:
+#             name:
+#               type: string
+#               description: Nome do usuário
+#             email:
+#               type: string
+#               description: Email do usuário
+#             phoneNumber: 
+#               type: string
+#               description: Número de telefone do usuário
+#             gender:
+#               type: string
+#               description: Gênero do usuário
+#             profession:
+#               type: string
+#               description: Profissão do usuário
+#             birth:
+#               type: string
+#               format: date
+#               description: Data de nascimento do usuário
+#             username:
+#               type: string
+#               description: Nome de usuário
+#             address:
+#               type: object
+#               properties:
+#                 street:
+#                   type: string
+#                   description: Nome da rua
+#                 number:
+#                   type: string
+#                   description: Número do endereço
+#                 complement:
+#                   type: string
+#                   description: Complemento do endereço (opcional)
+#                 district:
+#                   type: string
+#                   description: Bairro
+#                 city:
+#                   type: string
+#                   description: Cidade
+#                 state:
+#                   type: string
+#                   description: Estado
+#                 zipCode:
+#                   type: string
+#                   description: CEP
+#             investorProfileName:
+#               type: string
+#               description: Nome do perfil de investidor (opcional)
+#             investorProfileDescription:
+#               type: string
+#               description: Descrição do perfil de investidor (opcional)
+#         successMessage:
+#           type: string
+#           example: "Usuário atualizado com sucesso!"
     
-    DeleteUsersResponse:
-      type: object
-      properties:
-        successMessage:
-          type: string
-          nullable: true
-        errorMessage:
-          type: string
+#     DeleteUsersResponse:
+#       type: object
+#       properties:
+#         successMessage:
+#           type: string
+#           nullable: true
+#         errorMessage:
+#           type: string
 
-    ListResumedUsersResponse:
-      type: object
-      properties:
-        successMessage:
-          type: string
-          nullable: true
-        errorMessage:
-          type: string
-        usersList:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: string
-              name:
-                type: string
-              email:
-                type: string
-              role:
-                type: string
+#     ListResumedUsersResponse:
+#       type: object
+#       properties:
+#         successMessage:
+#           type: string
+#           nullable: true
+#         errorMessage:
+#           type: string
+#         usersList:
+#           type: array
+#           items:
+#             type: object
+#             properties:
+#               id:
+#                 type: string
+#               name:
+#                 type: string
+#               email:
+#                 type: string
+#               role:
+#                 type: string
 
-    InvestmentEntity:
-      type: object
-      properties:
-        id:
-          type: string
-          description: ID do investimento
-        title:
-          type: string
-          description: Título do investimento
-        description:
-          type: string
-          description: Descrição do investimento
-        projectType:
-          type: string
-          enum: [RESIDENCIAL_MULTIFAMILIAR, RESIDENCIAL_VERTICAL, COMERCIAL_GERAL, MISTO]
-          description: Tipo do projeto
-        totalUnits:
-          type: integer
-          description: Total de unidades
-        numberOfFloors:
-          type: integer
-          description: Número de pavimentos
-        unitsPerFloor:
-          type: integer
-          description: Unidades por pavimento
-        floorPlanTypes:
-          type: array
-          items:
-            type: string
-          description: Tipologia das plantas
-        launchDate:
-          type: string
-          format: date
-          description: Data de lançamento
-        constructionStartDate:
-          type: string
-          format: date
-          description: Data de início da obra
-        expectedDeliveryDate:
-          type: string
-          format: date
-          description: Data de previsão de entrega
-        address:
-          type: object
-          properties:
-            street:
-              type: string
-              description: Nome da rua
-            number:
-              type: string
-              description: Número do endereço
-            complement:
-              type: string
-              description: Complemento do endereço (opcional)
-            district:
-              type: string
-              description: Bairro
-            city:
-              type: string
-              description: Cidade
-            state:
-              type: string
-              description: Estado
-            zipCode:
-              type: string
-              description: CEP
-        documents:
-          type: array
-          items:
-            type: object
-            properties:
-              title:
-                type: string
-                description: Título do documento
-              url:
-                type: string
-                format: url
-                description: URL do documento
-        images:
-          type: array
-          items:
-            type: object
-            properties:
-              url:
-                type: string
-                format: url
-                description: URL da imagem
-              description:
-                type: string
-                description: Descrição da imagem (opcional)
-        investmentValue:
-          type: number
-          format: float
-          description: Valor do investimento
-        companyName:
-          type: string
-          description: Nome da construtora
-        partners:
-          type: array
-          items:
-            type: string
-          description: Fornecedores principais
-        finishDate:
-          type: string
-          format: date
-          nullable: true
-          description: Data de término (opcional)
-        buildingStatus:
-          type: string
-          description: Status da construção
-        investmentDate:
-          type: string
-          format: date
-          description: Data do investimento
-        predictedCost:
-          type: object
-          properties:
-            foundation:
-              type: string
-            structure:
-              type: string
-            implantation:
-              type: string
-            workmanship:
-              type: string
-        realizedCost:
-          type: object
-          properties:
-            foundation:
-              type: string
-            structure:
-              type: string
-            implantation:
-              type: string
-            workmanship:
-              type: string
-        notifications:
-          type: array
-          description: Para mais detalhes do formato, acesse as rotas de notifications
-        userInvestments:
-          type: array
-          description: Para mais detalhes do formato, acesse as rotas de userInvestments
-        createdAt:
-          type: string
-          format: date-time
-          description: Data e hora de criação do investimento
-        updatedAt:
-          type: string
-          format: date-time
-          description: Data e hora da última atualização do investimento
+#     InvestmentEntity:
+#       type: object
+#       properties:
+#         id:
+#           type: string
+#           description: ID do investimento
+#         title:
+#           type: string
+#           description: Título do investimento
+#         description:
+#           type: string
+#           description: Descrição do investimento
+#         projectType:
+#           type: string
+#           enum: [RESIDENCIAL_MULTIFAMILIAR, RESIDENCIAL_VERTICAL, COMERCIAL_GERAL, MISTO]
+#           description: Tipo do projeto
+#         totalUnits:
+#           type: integer
+#           description: Total de unidades
+#         numberOfFloors:
+#           type: integer
+#           description: Número de pavimentos
+#         unitsPerFloor:
+#           type: integer
+#           description: Unidades por pavimento
+#         floorPlanTypes:
+#           type: array
+#           items:
+#             type: string
+#           description: Tipologia das plantas
+#         launchDate:
+#           type: string
+#           format: date
+#           description: Data de lançamento
+#         constructionStartDate:
+#           type: string
+#           format: date
+#           description: Data de início da obra
+#         expectedDeliveryDate:
+#           type: string
+#           format: date
+#           description: Data de previsão de entrega
+#         address:
+#           type: object
+#           properties:
+#             street:
+#               type: string
+#               description: Nome da rua
+#             number:
+#               type: string
+#               description: Número do endereço
+#             complement:
+#               type: string
+#               description: Complemento do endereço (opcional)
+#             district:
+#               type: string
+#               description: Bairro
+#             city:
+#               type: string
+#               description: Cidade
+#             state:
+#               type: string
+#               description: Estado
+#             zipCode:
+#               type: string
+#               description: CEP
+#         documents:
+#           type: array
+#           items:
+#             type: object
+#             properties:
+#               title:
+#                 type: string
+#                 description: Título do documento
+#               url:
+#                 type: string
+#                 format: url
+#                 description: URL do documento
+#         images:
+#           type: array
+#           items:
+#             type: object
+#             properties:
+#               url:
+#                 type: string
+#                 format: url
+#                 description: URL da imagem
+#               description:
+#                 type: string
+#                 description: Descrição da imagem (opcional)
+#         investmentValue:
+#           type: number
+#           format: float
+#           description: Valor do investimento
+#         companyName:
+#           type: string
+#           description: Nome da construtora
+#         partners:
+#           type: array
+#           items:
+#             type: string
+#           description: Fornecedores principais
+#         finishDate:
+#           type: string
+#           format: date
+#           nullable: true
+#           description: Data de término (opcional)
+#         buildingStatus:
+#           type: string
+#           description: Status da construção
+#         investmentDate:
+#           type: string
+#           format: date
+#           description: Data do investimento
+#         predictedCost:
+#           type: object
+#           properties:
+#             foundation:
+#               type: string
+#             structure:
+#               type: string
+#             implantation:
+#               type: string
+#             workmanship:
+#               type: string
+#         realizedCost:
+#           type: object
+#           properties:
+#             foundation:
+#               type: string
+#             structure:
+#               type: string
+#             implantation:
+#               type: string
+#             workmanship:
+#               type: string
+#         notifications:
+#           type: array
+#           description: Para mais detalhes do formato, acesse as rotas de notifications
+#         userInvestments:
+#           type: array
+#           description: Para mais detalhes do formato, acesse as rotas de userInvestments
+#         createdAt:
+#           type: string
+#           format: date-time
+#           description: Data e hora de criação do investimento
+#         updatedAt:
+#           type: string
+#           format: date-time
+#           description: Data e hora da última atualização do investimento
