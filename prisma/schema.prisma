@@ -1,299 +1,99 @@
-// // This is your Prisma schema file
-// // learn more about it in the docs: https://pris.ly/d/prisma-schema
+// prisma/schema.prisma
 
-// generator client {
-//   provider      = "prisma-client-js"
-//   binaryTargets = ["native", "debian-openssl-1.1.x"]
-// }
+// Define o gerador de cliente do Prisma.
+generator client {
+  provider = "prisma-client-js"
+}
 
-// datasource db {
-//   provider = "mongodb"
-//   url      = env("DATABASE_URL")
-// }
+// Define a fonte de dados (MongoDB).
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
 
-// model RefreshToken {
-//   id         String @id @default(uuid()) @map("_id")
-//   expires_at Int
-//   users      Users  @relation(fields: [usersID], references: [id])
-//   usersID    String @unique
+// ============================================================================
+//   MODELOS PRINCIPAIS (Adaptados para Mazzotini)
+// ============================================================================
 
-//   @@map("refresh_token")
-// }
+// --- Modelo de Usuário ---
+// Armazena todos os usuários do sistema: Admins, Operadores e Investidores.
+model User {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  email       String   @unique
+  auth0UserId String   @unique // Ligação com o sistema de autenticação Auth0
+  name        String?
+  // O campo 'role' foi removido. A fonte da verdade agora será o token do Auth0.
 
-// model Users {
-//   id                         String    @id @default(uuid()) @map("_id") // ID único do usuário, gerado automaticamente
-//   name                       String // Nome completo do usuário
-//   email                      String    @unique // Endereço de email do usuário (deve ser único)
-//   phoneNumber                String? // Número de telefone do usuário
-//   gender                     String? // Gênero do usuário (ex: Masculino, Feminino, Outro)
-//   profession                 String? // Profissão do usuário
-//   birth                      DateTime? // Data de nascimento do usuário
-//   cpf                        String    @unique // CPF do usuário (deve ser único)
-//   username                   String    @unique // Nome de usuário para login (deve ser único)
-//   address                    Json? // Endereço completo do usuário (opcional), armazenado como JSON
-//   investorProfileName        String? // Nome que o usuário escolhe para seu perfil de investidor (opcional)
-//   investorProfileDescription String? // Descrição que o usuário fornece para seu perfil de investidor (opcional)
+  // Relações
+  investments Investment[] // Lista de investimentos que este usuário (investidor) fez
 
-//   role Role // Role do usuário (ex: "investidor", "gerente de projetos", "administrador")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
 
-//   userInvestments   UserInvestment[] // Lista de investimentos que o usuário possui (relacionamento um-para-muitos)
-//   userProprietarios UserProprietario[] // tabela que relaciona investimento com usuario
+// --- Modelo de Ativo de Crédito ---
+// A entidade central do sistema, representando um crédito judicial adquirido.
+model CreditAsset {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  processNumber   String   @unique // Número do processo judicial, para identificação
+  originalCreditor String  // Nome do cidadão que processou a empresa
+  debtorCompany   String   // Nome da empresa devedora
+  
+  // Valores
+  originalValue   Float    // Valor original do crédito (ex: 50.000)
+  acquisitionValue Float   // Valor pago pelo crédito (ex: 30.000)
+  currentValue    Float    // Valor atualizado do crédito (com juros)
+  
+  status          String   // Ex: "Ativo", "Liquidado", "Em negociação"
+  
+  // Relações
+  updates         AssetUpdate[]   // Histórico de atualizações do ativo
+  investors       Investment[]    // Lista de investidores neste ativo
+  documents       Document[]      // Documentos associados ao ativo
 
-//   investorProfile   InvestorProfile? // Relacionamento um-para-um com InvestorProfile
-//   userNotifications UserNotifications[] // Lista de investimentos que o usuário possui (relacionamento um-para-muitos)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
 
-//   createdAt     DateTime      @default(now()) // Data e hora de criação do usuário
-//   updatedAt     DateTime      @updatedAt // Data e hora da última atualização do usuário
-//   refresh_token RefreshToken? // Token para renovar a sessão do usuário (opcional)
+// --- Modelo de Atualização do Ativo ---
+// Registra o histórico de atualizações do valor do crédito, vindo do Legal One.
+model AssetUpdate {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  date        DateTime
+  description String   // Descrição da atualização (ex: "Correção monetária mensal")
+  updatedValue Float   // O novo valor do ativo após a atualização
+  source      String   @default("Legal One") // De onde veio a informação
+  
+  assetId     String   @db.ObjectId
+  asset       CreditAsset @relation(fields: [assetId], references: [id])
+}
 
-//   @@map("users") // Nome da coleção no MongoDB
-// }
+// --- Modelo de Relação (Investidor <-> Ativo) ---
+// Tabela de junção que define a participação de cada investidor em um ativo.
+model Investment {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  investorShare     Float    // Percentual de participação do investidor (ex: 80.0)
+  mazzotiniShare    Float    // Percentual de participação da Mazzotini (ex: 20.0)
+  
+  userId            String   @db.ObjectId
+  user              User     @relation(fields: [userId], references: [id])
 
-// type UserNotifications {
-//   notificationID String
-//   isRead         Boolean @default(false)
-// }
+  creditAssetId     String   @db.ObjectId
+  asset             CreditAsset @relation(fields: [creditAssetId], references: [id])
+}
 
-// enum Role {
-//   INVESTOR
-//   PROJECT_MANAGER
-//   ADMINISTRATOR
-//   PROPRIETARIO
-// }
+// --- Modelo de Documento ---
+// Para gerenciar contratos e outros arquivos associados ao crédito.
+model Document {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  url         String   // URL do arquivo (ex: S3, Google Cloud Storage)
+  category    String   // Ex: "Cessão de Crédito", "Sentença Judicial"
+  
+  assetId     String   @db.ObjectId
+  asset       CreditAsset @relation(fields: [assetId], references: [id])
 
-// model InvestorProfile {
-//   id     String @id @default(uuid()) @map("_id")
-//   userId String @unique
+  uploadedAt  DateTime @default(now())
+}
 
-//   //Dados sobre o perfil do investidor
-//   riskTolerance            RiskTolerance // Tolerância a risco (ex: "conservador", "moderado", "arrojado")
-//   investmentGoals          String[] // Objetivos de investimento (ex: ["aposentadoria", "comprar imóvel"])
-//   investmentHorizon        String // Horizonte de investimento (ex: "curto prazo", "longo prazo")
-//   monthlyIncome            Float // Renda mensal do investidor
-//   netWorth                 Float? // Patrimônio líquido do investidor -- quanto você tem disponível para investir hoje?
-//   investmentExperience     InvestmentExperience // Experiência com investimentos (ex: 1 - nunca investi, 2 - invisto moderadamente, 3 - avançado)
-//   preferredInvestmentTypes String[] // Tipos de investimento preferidos (ex: ["renda fixa", "ações", "imóveis"])
-//   otherInvestments         String? // Outros investimentos que o investidor possui - seu patrimonio investido, a maioria se reflete em que área?
-
-//   createdAt DateTime @default(now())
-//   updatedAt DateTime @updatedAt
-
-//   //validade do cadastro
-
-//   user Users @relation(fields: [userId], references: [id], onDelete: Cascade) // user agora é obrigatório
-
-//   @@map("investor_profiles")
-// }
-
-// enum RiskTolerance {
-//   CONSERVADOR
-//   MODERADO
-//   ARROJADO
-// }
-
-// enum InvestmentExperience {
-//   INICIANTE
-//   INTERMEDIARIO
-//   AVANCADO
-// }
-
-// model Investment {
-//   id                    String      @id @default(uuid()) @map("_id")
-//   title                 String // nome do projeto
-//   description           String // descrição
-//   projectType           ProjectType // tipo do projeto (residencial: unifamiliar; multifamiliar horizontal; multifamiliar vertical.) Comercial geral e misto
-//   totalUnits            String // total de unidades
-//   numberOfFloors        String // numero de pavimentos
-//   unitsPerFloor         String // unidade por pavimentos
-//   floorPlanTypes        String[] // tipologia das plantas -- apto 40m, 50m, 100m
-//   launchDate            DateTime // data de lancamento - dia do anuncio 
-//   constructionStartDate DateTime // data de inicio de obra
-//   expectedDeliveryDate  DateTime // previsao de entrega
-//   address               Address // endereço (armazenar como JSON)
-//   documents             Document[] // documentos da obra (armazenar como JSON)
-//   images                Image[] // imagens da obra (armazenar como JSON)
-
-//   investmentValue String? // valor do investimento    
-
-//   valorOriginal          Int                      @default(1) // Valor do imóvel no momento do lançamento
-//   valorCorrente          Int                      @default(1) // Valor atual do imóvel
-//   historicoDeValorizacao HistoricoDeValorizacao[] // Array de objetos com o histórico de valorização
-
-//   companyName      String //nome da construtora
-//   partners         Partners[] // fornecedores principais
-//   finishDate       DateTime? // data de entrega
-//   buildingStatus   String // status da construção -- vai abrir em uma nova tabela
-//   buildingProgress BuildingProgress? // status da construção -- vai abrir em uma nova tabela
-//   investmentDate   DateTime? // data da compra do investidor
-
-//   predictedCost PredictedCost // custo previsto - gerente de projeto vai cadastrar custo total e custos macro
-//   realizedCost  RealizedCost? // custo realizado - custo total, itens macro (mesmos itens do buildingStatus)
-
-//   financialTotalProgress FinancialTotalProgress[]
-//   buildingTotalProgress  BuildingTotalProgress[]
-
-//   notifications     Notification[]
-//   userInvestments   UserInvestment[] // tabela que relaciona investimento com usuario
-//   userProprietarios UserProprietario[] // tabela que relaciona investimento com usuario
-//   apartamentTypes   ApartamentTypes[]
-//   apartaments       Apartaments[]
-
-//   projectManagerID String //ID Do criador do projeto
-
-//   active Boolean @default(true) //Status do projeto (arquivado ou ativo)
-
-//   createdAt DateTime @default(now())
-//   updatedAt DateTime @updatedAt
-
-//   @@map("investments")
-// }
-
-// enum ProjectType {
-//   RESIDENCIAL_MULTIFAMILIAR
-//   RESIDENCIAL_VERTICAL
-//   COMERCIAL_GERAL
-//   MISTO
-// }
-
-// type ApartamentTypes {
-//   id          String
-//   metragem    String
-//   description String
-//   fotos       String[]
-//   plantas     String[]
-// }
-
-// type Apartaments {
-//   id       String
-//   andar    String
-//   final    String
-//   metragem String
-//   userId   String?
-//   tipoId   String // Adiciona o campo tipoId para referenciar o ApartamentTypes
-// }
-
-// type RealizedCost {
-//   foundation   Int @default(0)
-//   structure    Int @default(0)
-//   implantation Int @default(0)
-//   workmanship  Int @default(0)
-// }
-
-// type PredictedCost {
-//   foundation   Int @default(0)
-//   structure    Int @default(0)
-//   implantation Int @default(0)
-//   workmanship  Int @default(0)
-// }
-
-// type BuildingProgress {
-//   acabamento  Int @default(0)
-//   alvenaria   Int @default(0)
-//   estrutura   Int @default(0)
-//   fundacao    Int @default(0)
-//   instalacoes Int @default(0)
-//   pintura     Int @default(0)
-// }
-
-// type FinancialTotalProgress {
-//   data      DateTime @default(now())
-//   previsto  Float    @default(0)
-//   realizado Float    @default(0)
-// }
-
-// type BuildingTotalProgress {
-//   data      DateTime @default(now())
-//   previsto  Float    @default(0)
-//   realizado Float    @default(0)
-// }
-
-// type Address {
-//   street     String
-//   number     String
-//   complement String?
-//   district   String
-//   city       String
-//   state      String
-//   zipCode    String
-// }
-
-// type Document {
-//   id          String
-//   title       String
-//   description String
-//   url         String
-// }
-
-// type Image {
-//   id          String
-//   label       ImageLabel
-//   url         String
-//   description String?
-// }
-
-// enum ImageLabel {
-//   DESTAQUES
-//   GERAL
-//   PLANTAS
-//   EXTERNO
-//   INTERNO
-//   PANORAMICAS
-// }
-
-// type Partners {
-//   id       String
-//   url      String
-//   name     String
-//   activity String
-// }
-
-// type HistoricoDeValorizacao {
-//   value Int      @default(1)
-//   date  DateTime @default(now())
-// }
-
-// model UserInvestment {
-//   id               String     @id @default(uuid()) @map("_id")
-//   user             Users      @relation(fields: [userID], references: [id])
-//   userID           String
-//   investment       Investment @relation(fields: [investmentID], references: [id])
-//   investmentID     String
-//   investedValue    Int // Valor investido pelo usuário
-//   valorCorrente    Int // Valor do empreendimento quando investido pelo usuário
-//   documents        Document[] // Valor do empreendimento quando investido pelo usuário
-//   dataInvestimento DateTime   @default(now())
-//   createdAt        DateTime   @default(now())
-//   updatedAt        DateTime   @updatedAt
-
-//   @@map("userInvestments")
-// }
-
-// model UserProprietario {
-//   id               String     @id @default(uuid()) @map("_id")
-//   user             Users      @relation(fields: [userID], references: [id])
-//   userID           String
-//   investment       Investment @relation(fields: [investmentID], references: [id])
-//   investmentID     String
-//   apartamentID     String
-//   investedValue    Int // Valor investido pelo usuário
-//   valorCorrente    Int // Valor do empreendimento quando investido pelo usuário
-//   documents        Document[] // Valor do empreendimento quando investido pelo usuário
-//   dataInvestimento DateTime   @default(now())
-//   createdAt        DateTime   @default(now())
-//   updatedAt        DateTime   @updatedAt
-
-//   @@map("userProprietarios")
-// }
-
-// model Notification {
-//   id           String   @id @default(uuid()) @map("_id")
-//   investmentId String // ID do investimento relacionado à notificação
-//   title        String // Título da notificação (ex: "Atualização da obra X")
-//   message      String // Mensagem da notificação (ex: "O status da obra X foi atualizado para 'Em construção'")
-//   isRead       Boolean  @default(false) // Indica se a notificação foi lida
-//   createdAt    DateTime @default(now())
-
-//   investment Investment @relation(fields: [investmentId], references: [id]) // Relacionamento com Investment
-
-//   @@map("notifications")
-// }
+// O Enum 'Role' não é mais necessário aqui, será gerenciado pelo Auth0.
