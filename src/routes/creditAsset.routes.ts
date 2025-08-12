@@ -7,12 +7,15 @@ import { checkJwt } from '../middleware/auth'; // O nosso "segurança" da API
 
 // --- Controllers ---
 import { CreateCreditAssetController } from '../modules/creditAssets/useCases/createCreditAsset/CreateCreditAssetController';
+// 1. Importa o novo controller de enriquecimento
+import { EnrichAssetFromLegalOneController } from '../modules/creditAssets/useCases/enrichAssetFromLegalOne/EnrichAssetFromLegalOneController';
 
 // --- Inicialização ---
 const creditAssetRoutes = Router();
 
-// Cria uma instância do nosso controller
+// Cria instâncias dos nossos controllers
 const createCreditAssetController = new CreateCreditAssetController();
+const enrichAssetFromLegalOneController = new EnrichAssetFromLegalOneController();
 
 // ============================================================================
 //   DEFINIÇÃO DAS ROTAS DE ATIVOS DE CRÉDITO
@@ -20,14 +23,26 @@ const createCreditAssetController = new CreateCreditAssetController();
 
 /**
  * @route   POST /api/assets
- * @desc    Cria um novo ativo de crédito no banco de dados.
- * @access  Privado (Requer token JWT válido e, futuramente, uma role de OPERATOR ou ADMIN)
+ * @desc    Cria um novo "esqueleto" de ativo e dispara o enriquecimento de dados.
+ * @access  Privado (Requer token JWT válido)
  */
 creditAssetRoutes.post(
     '/api/assets',
-    checkJwt, // 1. O "segurança" verifica se o utilizador está autenticado
-    createCreditAssetController.handle // 2. Se estiver, o controller processa a requisição
+    checkJwt,
+    createCreditAssetController.handle
 );
+
+/**
+ * @route   POST /api/assets/:id/enrich
+ * @desc    Aciona manualmente o processo de enriquecimento de dados para um ativo específico.
+ * @access  Privado (Requer token JWT válido)
+ */
+creditAssetRoutes.post(
+    '/api/assets/:id/enrich', // A rota inclui o ID do ativo
+    checkJwt,
+    enrichAssetFromLegalOneController.handle
+);
+
 
 // Adicione aqui outras rotas para o CRUD de ativos no futuro
 // Ex: creditAssetRoutes.get('/api/assets', checkJwt, listAssetsController.handle);

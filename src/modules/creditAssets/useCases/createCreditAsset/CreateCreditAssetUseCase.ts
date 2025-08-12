@@ -1,72 +1,58 @@
 // src/modules/creditAssets/useCases/createCreditAsset/CreateCreditAssetUseCase.ts
 
-import { PrismaClient, CreditAsset, Prisma } from "@prisma/client";
+import { PrismaClient, CreditAsset } from "@prisma/client";
+// 1. Importa o UseCase de enriquecimento
+import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/EnrichAssetFromLegalOneUseCase";
 
 const prisma = new PrismaClient();
 
-// A MUDANÇA: Usando um tipo derivado diretamente do modelo CreditAsset do Prisma.
-// Usamos o 'Pick' do TypeScript para selecionar apenas os campos necessários para a criação,
-// garantindo que nosso DTO esteja sempre sincronizado com o schema.prisma.
-type ICreateCreditAssetDTO = Pick<
-    CreditAsset,
-    | 'processNumber'
-    | 'origemProcesso'
-    | 'devedor'
-    | 'originalValue'
+// A MUDANÇA: Interface preenchida com os dados que o operador insere manualmente.
+// Usamos o 'Pick' do TypeScript para garantir que os tipos estejam sempre sincronizados com o schema.prisma.
+type ICreateCreditAssetDTO = Pick<CreditAsset,
+    | 'processNumber' 
     | 'acquisitionValue'
     | 'initialValue'
     | 'acquisitionDate'
-    | 'status'
+    | 'originalValue'
+    | 'originalCreditor'
 >;
 
 /**
  * @class CreateCreditAssetUseCase
- * @description Contém a lógica de negócio para criar um novo ativo de crédito.
+ * @description Lógica de negócio para criar o "esqueleto" de um ativo e disparar o enriquecimento.
  */
 class CreateCreditAssetUseCase {
-    /**
-     * Executa a criação do ativo de crédito.
-     * @param {ICreateCreditAssetDTO} data - Os dados do ativo a serem criados.
-     * @returns {Promise<CreditAsset>} O ativo recém-criado.
-     */
-    async execute({
-        processNumber,
-        origemProcesso,
-        devedor,
-        originalValue,
-        acquisitionValue,
-        initialValue,
-        acquisitionDate,
-        status,
-    }: ICreateCreditAssetDTO): Promise<CreditAsset> {
-
-        // 1. Validação: Verifica se já existe um ativo com o mesmo número de processo
+    async execute(data: ICreateCreditAssetDTO): Promise<CreditAsset> {
+        
         const assetAlreadyExists = await prisma.creditAsset.findUnique({
-            where: { processNumber },
+            where: { processNumber: data.processNumber },
         });
 
         if (assetAlreadyExists) {
             throw new Error("Já existe um ativo de crédito com este número de processo.");
         }
 
-        // 2. Criação: Usa o Prisma para criar o novo ativo no banco de dados.
+        // 2. Cria o ativo com um status "pendente"
         const newCreditAsset = await prisma.creditAsset.create({
             data: {
-                processNumber,
-                origemProcesso,
-                devedor,
-                originalValue,
-                acquisitionValue,
-                initialValue,
-                currentValue: initialValue, // O valor atual começa igual ao valor inicial
-                acquisitionDate,
-                status,
+                ...data, // Espalha os dados recebidos (processNumber, acquisitionValue, etc.)
+                status: 'PENDING_ENRICHMENT', // Status inicial
+                
+                // Campos que serão preenchidos pelo Legal One são inicializados com valores padrão.
+                origemProcesso: 'Aguardando Legal One...',
+                originalCreditor: 'Aguardando Legal One...',
+                originalValue: 0, // Será preenchido pelo Legal One
+                currentValue: data.initialValue, // O valor atual começa igual ao valor inicial
             },
         });
 
-        console.log(`✅ Novo ativo de crédito criado com sucesso: Processo ${processNumber}`);
+        console.log(`✅ Esqueleto do ativo criado: Processo ${newCreditAsset.processNumber}`);
 
-        // 3. Retorno: Devolve o objeto do ativo recém-criado.
+        // 3. A MÁGICA: Aciona o processo de enriquecimento em segundo plano.
+        // Não usamos 'await' aqui para que a resposta ao frontend seja imediata.
+        const enrichUseCase = new EnrichAssetFromLegalOneUseCase();
+        enrichUseCase.execute(newCreditAsset.id);
+        
         return newCreditAsset;
     }
 }

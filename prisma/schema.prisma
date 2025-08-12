@@ -18,62 +18,62 @@ datasource db {
 // --- Modelo de Usuário ---
 // Armazena todos os usuários do sistema: Admins, Operadores e Investidores.
 model User {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  email       String   @unique
-  auth0UserId String   @unique // Ligação com o sistema de autenticação Auth0
-  name        String   // Nome completo do investidor ou operador.
-  
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  email       String @unique
+  auth0UserId String @unique // Ligação com o sistema de autenticação Auth0
+  name        String // Nome completo do investidor ou operador.
+
   // --- Informações Cadastrais (Opcionais) ---
-  cpfOrCnpj     String?  // CPF ou CNPJ do investidor.
-  phone         String?  // Telefone principal.
-  cellPhone     String?  // Telefone celular.
-  address       String?  // Endereço.
-  nationality   String?  // Nacionalidade.
-  maritalStatus String?  // Estado Civil.
-  indication    String?  // Como conheceu a Mazzotini.
+  cpfOrCnpj     String? // CPF ou CNPJ do investidor.
+  phone         String? // Telefone principal.
+  cellPhone     String? // Telefone celular.
+  address       String? // Endereço.
+  nationality   String? // Nacionalidade.
+  maritalStatus String? // Estado Civil.
+  indication    String? // Como conheceu a Mazzotini.
 
   // Relações
   investments Investment[] // Lista de investimentos que este usuário (se investidor) fez.
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // --- Modelo de Ativo de Crédito ---
 // A entidade central do sistema, representando um crédito judicial adquirido.
 model CreditAsset {
-  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
-  processNumber      String   @unique // Número único do processo judicial.
-  origemProcesso     String   // Descrição da origem. Ex: "1ª Vara Cível do Foro Central da Comarca de SP".
-  devedor            String   // Nome da empresa devedora.
-  
+  id               String @id @default(auto()) @map("_id") @db.ObjectId
+  processNumber    String @unique // Número único do processo judicial.
+  origemProcesso   String // Descrição da origem. Ex: "1ª Vara Cível do Foro Central da Comarca de SP".
+  originalCreditor String // Nome da empresa devedora.
+
   // --- Valores Financeiros ---
-  originalValue      Float    // Valor original do crédito no momento do ajuizamento.
-  acquisitionValue   Float    // Valor pago pelo investidor para adquirir o crédito.
-  initialValue       Float    // Valor inicial do ativo na data da aquisição (pode ser diferente do acquisitionValue).
-  currentValue       Float    // O valor mais recente do ativo, atualizado mensalmente.
+  originalValue    Float // Valor original do crédito no momento do ajuizamento.
+  acquisitionValue Float // Valor pago pelo investidor para adquirir o crédito.
+  initialValue     Float // Valor inicial do ativo na data da aquisição (pode ser diferente do acquisitionValue).
+  currentValue     Float // O valor mais recente do ativo, atualizado mensalmente.
 
   // --- Datas ---
-  acquisitionDate    DateTime // Data em que o crédito foi adquirido.
-  settlementDate     DateTime?// Data em que o crédito foi liquidado/pago.
-  
+  acquisitionDate DateTime // Data em que o crédito foi adquirido.
+  settlementDate  DateTime? // Data em que o crédito foi liquidado/pago.
+
   // --- Índices e Informações Adicionais ---
-  contractualIndexRate Float?   // Taxa de juros estabelecida em contrato (ex: 2.0 para 2%).
-  updateIndexType    String?  // Índice de atualização monetária (ex: "SELIC", "IPCA").
-  informacaoExtra    String?  // Campo de texto livre para observações importantes.
+  contractualIndexRate Float? // Taxa de juros estabelecida em contrato (ex: 2.0 para 2%).
+  updateIndexType      String? // Índice de atualização monetária (ex: "SELIC", "IPCA").
+  informacaoExtra      String? // Campo de texto livre para observações importantes.
 
   // --- Status e Gestão ---
-  status             String   // Status atual do ativo (ex: "Ativo", "Liquidado", "Em Negociação").
-  lawsuitType        String?  // Tipo de ação (ex: "Trabalhista", "Cível").
-  lawyerResponsible  String?  // Advogado da Mazzotini responsável pelo caso.
-  
-  // --- Relações com outras tabelas ---
-  updates         AssetUpdate[]   // Histórico de todas as atualizações do ativo.
-  investors       Investment[]    // Lista de investidores neste ativo.
-  documents       Document[]      // Documentos associados ao ativo.
+  status            String // Status atual do ativo (ex: "Ativo", "Liquidado", "Em Negociação").
+  lawsuitType       String? // Tipo de ação (ex: "Trabalhista", "Cível").
+  lawyerResponsible String? // Advogado da Mazzotini responsável pelo caso.
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  // --- Relações com outras tabelas ---
+  updates   AssetUpdate[] // Histórico de todas as atualizações do ativo.
+  investors Investment[] // Lista de investidores neste ativo.
+  documents Document[] // Documentos associados ao ativo.
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // --- Modelo de Atualização do Ativo ---
@@ -82,38 +82,38 @@ model CreditAsset {
 model AssetUpdate {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   date         DateTime @default(now()) // Data em que a atualização foi registrada.
-  updatedValue Float    // O novo valor do ativo após esta atualização.
-  description  String?  // Descrição/observação sobre a atualização.
-  source       String   // De onde veio a informação (ex: "Legal One", "Ajuste Manual").
-  
-  assetId      String   @db.ObjectId
-  asset        CreditAsset @relation(fields: [assetId], references: [id])
+  updatedValue Float // O novo valor do ativo após esta atualização.
+  description  String? // Descrição/observação sobre a atualização.
+  source       String // De onde veio a informação (ex: "Legal One", "Ajuste Manual").
+
+  assetId String      @db.ObjectId
+  asset   CreditAsset @relation(fields: [assetId], references: [id])
 }
 
 // --- Modelo de Relação (Investidor <-> Ativo) ---
 // Tabela de junção que define a participação de cada investidor em um ativo.
 model Investment {
-  id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  investorShare     Float    // Percentual de participação do investidor (ex: 80.0).
-  mazzotiniShare    Float    // Percentual de participação da Mazzotini (ex: 20.0).
-  
-  userId            String   @db.ObjectId
-  user              User     @relation(fields: [userId], references: [id])
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  investorShare  Float // Percentual de participação do investidor (ex: 80.0).
+  mazzotiniShare Float // Percentual de participação da Mazzotini (ex: 20.0).
 
-  creditAssetId     String   @db.ObjectId
-  asset             CreditAsset @relation(fields: [creditAssetId], references: [id])
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+
+  creditAssetId String      @db.ObjectId
+  asset         CreditAsset @relation(fields: [creditAssetId], references: [id])
 }
 
 // --- Modelo de Documento ---
 // Para gerenciar contratos e outros arquivos associados ao crédito.
 model Document {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  name        String
-  url         String   // URL do arquivo (ex: S3, Google Cloud Storage).
-  category    String   // Ex: "Cessão de Crédito", "Sentença Judicial".
-  
-  assetId     String   @db.ObjectId
-  asset       CreditAsset @relation(fields: [assetId], references: [id])
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  name     String
+  url      String // URL do arquivo (ex: S3, Google Cloud Storage).
+  category String // Ex: "Cessão de Crédito", "Sentença Judicial".
 
-  uploadedAt  DateTime @default(now())
+  assetId String      @db.ObjectId
+  asset   CreditAsset @relation(fields: [assetId], references: [id])
+
+  uploadedAt DateTime @default(now())
 }
