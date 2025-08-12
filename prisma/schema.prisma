@@ -12,7 +12,7 @@ datasource db {
 }
 
 // ============================================================================
-//   MODELOS PRINCIPAIS (Adaptados para Mazzotini)
+//   MODELOS PRINCIPAIS (Versão Final para Mazzotini)
 // ============================================================================
 
 // --- Modelo de Usuário ---
@@ -21,11 +21,19 @@ model User {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   email       String   @unique
   auth0UserId String   @unique // Ligação com o sistema de autenticação Auth0
-  name        String?
-  // O campo 'role' foi removido. A fonte da verdade agora será o token do Auth0.
+  name        String   // Nome completo do investidor ou operador.
+  
+  // --- Informações Cadastrais (Opcionais) ---
+  cpfOrCnpj     String?  // CPF ou CNPJ do investidor.
+  phone         String?  // Telefone principal.
+  cellPhone     String?  // Telefone celular.
+  address       String?  // Endereço.
+  nationality   String?  // Nacionalidade.
+  maritalStatus String?  // Estado Civil.
+  indication    String?  // Como conheceu a Mazzotini.
 
   // Relações
-  investments Investment[] // Lista de investimentos que este usuário (investidor) fez
+  investments Investment[] // Lista de investimentos que este usuário (se investidor) fez.
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -34,46 +42,60 @@ model User {
 // --- Modelo de Ativo de Crédito ---
 // A entidade central do sistema, representando um crédito judicial adquirido.
 model CreditAsset {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  processNumber   String   @unique // Número do processo judicial, para identificação
-  originalCreditor String  // Nome do cidadão que processou a empresa
-  debtorCompany   String   // Nome da empresa devedora
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  processNumber      String   @unique // Número único do processo judicial.
+  origemProcesso     String   // Descrição da origem. Ex: "1ª Vara Cível do Foro Central da Comarca de SP".
+  devedor            String   // Nome da empresa devedora.
   
-  // Valores
-  originalValue   Float    // Valor original do crédito (ex: 50.000)
-  acquisitionValue Float   // Valor pago pelo crédito (ex: 30.000)
-  currentValue    Float    // Valor atualizado do crédito (com juros)
+  // --- Valores Financeiros ---
+  originalValue      Float    // Valor original do crédito no momento do ajuizamento.
+  acquisitionValue   Float    // Valor pago pelo investidor para adquirir o crédito.
+  initialValue       Float    // Valor inicial do ativo na data da aquisição (pode ser diferente do acquisitionValue).
+  currentValue       Float    // O valor mais recente do ativo, atualizado mensalmente.
+
+  // --- Datas ---
+  acquisitionDate    DateTime // Data em que o crédito foi adquirido.
+  settlementDate     DateTime?// Data em que o crédito foi liquidado/pago.
   
-  status          String   // Ex: "Ativo", "Liquidado", "Em negociação"
+  // --- Índices e Informações Adicionais ---
+  contractualIndexRate Float?   // Taxa de juros estabelecida em contrato (ex: 2.0 para 2%).
+  updateIndexType    String?  // Índice de atualização monetária (ex: "SELIC", "IPCA").
+  informacaoExtra    String?  // Campo de texto livre para observações importantes.
+
+  // --- Status e Gestão ---
+  status             String   // Status atual do ativo (ex: "Ativo", "Liquidado", "Em Negociação").
+  lawsuitType        String?  // Tipo de ação (ex: "Trabalhista", "Cível").
+  lawyerResponsible  String?  // Advogado da Mazzotini responsável pelo caso.
   
-  // Relações
-  updates         AssetUpdate[]   // Histórico de atualizações do ativo
-  investors       Investment[]    // Lista de investidores neste ativo
-  documents       Document[]      // Documentos associados ao ativo
+  // --- Relações com outras tabelas ---
+  updates         AssetUpdate[]   // Histórico de todas as atualizações do ativo.
+  investors       Investment[]    // Lista de investidores neste ativo.
+  documents       Document[]      // Documentos associados ao ativo.
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
 
 // --- Modelo de Atualização do Ativo ---
-// Registra o histórico de atualizações do valor do crédito, vindo do Legal One.
+// Registra o histórico de atualizações do valor do crédito, vindo do Legal One ou inserido manualmente.
+// Este modelo unifica 'AssetUpdate' e 'MonthlyUpdate'.
 model AssetUpdate {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  date        DateTime
-  description String   // Descrição da atualização (ex: "Correção monetária mensal")
-  updatedValue Float   // O novo valor do ativo após a atualização
-  source      String   @default("Legal One") // De onde veio a informação
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  date         DateTime @default(now()) // Data em que a atualização foi registrada.
+  updatedValue Float    // O novo valor do ativo após esta atualização.
+  description  String?  // Descrição/observação sobre a atualização.
+  source       String   // De onde veio a informação (ex: "Legal One", "Ajuste Manual").
   
-  assetId     String   @db.ObjectId
-  asset       CreditAsset @relation(fields: [assetId], references: [id])
+  assetId      String   @db.ObjectId
+  asset        CreditAsset @relation(fields: [assetId], references: [id])
 }
 
 // --- Modelo de Relação (Investidor <-> Ativo) ---
 // Tabela de junção que define a participação de cada investidor em um ativo.
 model Investment {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  investorShare     Float    // Percentual de participação do investidor (ex: 80.0)
-  mazzotiniShare    Float    // Percentual de participação da Mazzotini (ex: 20.0)
+  investorShare     Float    // Percentual de participação do investidor (ex: 80.0).
+  mazzotiniShare    Float    // Percentual de participação da Mazzotini (ex: 20.0).
   
   userId            String   @db.ObjectId
   user              User     @relation(fields: [userId], references: [id])
@@ -87,13 +109,11 @@ model Investment {
 model Document {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   name        String
-  url         String   // URL do arquivo (ex: S3, Google Cloud Storage)
-  category    String   // Ex: "Cessão de Crédito", "Sentença Judicial"
+  url         String   // URL do arquivo (ex: S3, Google Cloud Storage).
+  category    String   // Ex: "Cessão de Crédito", "Sentença Judicial".
   
   assetId     String   @db.ObjectId
   asset       CreditAsset @relation(fields: [assetId], references: [id])
 
   uploadedAt  DateTime @default(now())
 }
-
-// O Enum 'Role' não é mais necessário aqui, será gerenciado pelo Auth0.
