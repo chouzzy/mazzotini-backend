@@ -25,7 +25,6 @@ const createUserController = new CreateUserController();
  */
 userRoutes.post(
     '/api/users',
-    checkJwt, // 1. O "segurança" verifica se o utilizador está autenticado
     createUserController.handle // 2. Se estiver, o controller processa a requisição
 );
 
