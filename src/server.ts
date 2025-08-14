@@ -1,12 +1,8 @@
 // src/server.ts
 
-// A MUDANÇA: Importa e configura o dotenv como a PRIMEIRA COISA no arquivo.
-// Isso garante que todas as variáveis de ambiente estejam disponíveis para
-// qualquer outro módulo que for importado a seguir.
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Agora, o resto das suas importações
 import 'reflect-metadata';
 import express, { NextFunction, Request, Response } from 'express';
 import { router } from './routes';
