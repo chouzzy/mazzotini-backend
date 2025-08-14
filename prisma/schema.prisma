@@ -50,7 +50,6 @@ model CreditAsset {
   // --- Valores Financeiros ---
   originalValue    Float // Valor original do crédito no momento do ajuizamento.
   acquisitionValue Float // Valor pago pelo investidor para adquirir o crédito.
-  initialValue     Float // Valor inicial do ativo na data da aquisição (pode ser diferente do acquisitionValue).
   currentValue     Float // O valor mais recente do ativo, atualizado mensalmente.
 
   // --- Datas ---

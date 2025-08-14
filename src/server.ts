@@ -39,4 +39,8 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     });
 });
 
-app.listen(8081, () => console.log('System working... 🦥'));
+const PORT = Number(process.env.PORT) || 8080;
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Servidor a rodar na porta ${PORT} e a ouvir em todas as interfaces.`);
+});

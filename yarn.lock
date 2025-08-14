@@ -1292,6 +1292,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"auth0@npm:^4.28.0":
+  version: 4.28.0
+  resolution: "auth0@npm:4.28.0"
+  dependencies:
+    jose: ^4.13.2
+    undici-types: ^6.15.0
+    uuid: ^9.0.0
+  checksum: 35298832922e2bb03c6ad57b5eacfb67bfd16082d68cab54d62f47cd8756747ae9d100579ea76aa89cd382779721cd7b8cefa59b95aa29ef6a1800f484787f11
+  languageName: node
+  linkType: hard
+
 "available-typed-arrays@npm:^1.0.7":
   version: 1.0.7
   resolution: "available-typed-arrays@npm:1.0.7"
@@ -3669,7 +3680,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jose@npm:^4.15.5":
+"jose@npm:^4.13.2, jose@npm:^4.15.5":
   version: 4.15.9
   resolution: "jose@npm:4.15.9"
   checksum: 41abe1c99baa3cf8a78ebbf93da8f8e50e417b7a26754c4afa21865d87527b8ac2baf66de2c5f6accc3f7d7158658dae7364043677236ea1d07895b040097f15
@@ -4054,6 +4065,7 @@ __metadata:
     "@typescript-eslint/eslint-plugin": ^5.42.0
     "@typescript-eslint/parser": ^5.42.0
     add: ^2.0.6
+    auth0: ^4.28.0
     bcryptjs: ^2.4.3
     body-parser: ^1.20.2
     cookie-parser: ^1.4.7
@@ -6241,6 +6253,13 @@ __metadata:
     has-symbols: ^1.1.0
     which-boxed-primitive: ^1.1.1
   checksum: 729f13b84a5bfa3fead1d8139cee5c38514e63a8d6a437819a473e241ba87eeb593646568621c7fc7f133db300ef18d65d1a5a60dc9c7beb9000364d93c581df
+  languageName: node
+  linkType: hard
+
+"undici-types@npm:^6.15.0":
+  version: 6.21.0
+  resolution: "undici-types@npm:6.21.0"
+  checksum: 46331c7d6016bf85b3e8f20c159d62f5ae471aba1eb3dc52fff35a0259d58dcc7d592d4cc4f00c5f9243fa738a11cfa48bd20203040d4a9e6bc25e807fab7ab3
   languageName: node
   linkType: hard
 

@@ -18,6 +18,7 @@
     "@types/formidable": "^3.4.5",
     "@types/swagger-jsdoc": "^6.0.4",
     "add": "^2.0.6",
+    "auth0": "^4.28.0",
     "bcryptjs": "^2.4.3",
     "body-parser": "^1.20.2",
     "cookie-parser": "^1.4.7",
