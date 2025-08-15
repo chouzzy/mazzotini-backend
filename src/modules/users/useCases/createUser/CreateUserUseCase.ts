@@ -16,7 +16,7 @@ const management = new ManagementClient({
 type ICreateUserDTO = Pick<
     User,
     'email' | 'name' | 'phone' | 'cellPhone' | 'cpfOrCnpj'
-    // Adicione outros campos do formulário aqui
+// Adicione outros campos do formulário aqui
 >;
 
 /**
@@ -30,7 +30,7 @@ class CreateUserUseCase {
      * @returns {Promise<User>} O utilizador recém-criado no nosso banco de dados.
      */
     async execute(data: ICreateUserDTO): Promise<User> {
-        
+
         // 1. Validação: Verifica se o e-mail já existe no nosso banco de dados
         const userAlreadyExists = await prisma.user.findUnique({
             where: { email: data.email },
@@ -61,14 +61,20 @@ class CreateUserUseCase {
             },
         });
 
-        // Opcional: Atribuir a role de 'INVESTOR' ao utilizador no Auth0
-        await management.roles.assignUsers(
-            { id: 'ID_DA_SUA_ROLE_INVESTOR' }, // TODO: Substituir pelo ID real da role no Auth0
-            { users: [auth0User.data.user_id] }
-        );
+        // A MUDANÇA: Atribui a role de 'INVESTOR' ao utilizador no Auth0
+        const investorRoleId = process.env.AUTH0_INVESTOR_ROLE_ID;
+        if (investorRoleId) {
+            await management.roles.assignUsers(
+                { id: investorRoleId }, // O ID da role que copiámos do painel do Auth0
+                { users: [auth0User.data.user_id] }
+            );
+            console.log(`✅ Role 'INVESTOR' atribuída ao utilizador ${data.email}`);
+        } else {
+            console.warn("⚠️ A variável AUTH0_INVESTOR_ROLE_ID não está definida. A role não foi atribuída.");
+        }
 
         console.log(`✅ Novo utilizador INVESTOR criado com sucesso: ${data.email}`);
-        
+
         return newUserInDb;
     }
 }
