@@ -16,12 +16,11 @@ const management = new ManagementClient({
 type ICreateUserDTO = Pick<
     User,
     'email' | 'name' | 'phone' | 'cellPhone' | 'cpfOrCnpj'
-// Adicione outros campos do formulário aqui
 >;
 
 /**
  * @class CreateUserUseCase
- * @description Lógica de negócio para criar um novo utilizador no Auth0 e no banco de dados local.
+ * @description Lógica de negócio para criar um novo utilizador e enviar um convite.
  */
 class CreateUserUseCase {
     /**
@@ -30,8 +29,7 @@ class CreateUserUseCase {
      * @returns {Promise<User>} O utilizador recém-criado no nosso banco de dados.
      */
     async execute(data: ICreateUserDTO): Promise<User> {
-
-        // 1. Validação: Verifica se o e-mail já existe no nosso banco de dados
+        
         const userAlreadyExists = await prisma.user.findUnique({
             where: { email: data.email },
         });
@@ -40,20 +38,19 @@ class CreateUserUseCase {
             throw new Error("Já existe um utilizador com este e-mail.");
         }
 
-        // 2. Criação no Auth0: Primeiro, criamos o utilizador no sistema de identidade.
+        // 1. Criação no Auth0: Criamos o utilizador SEM SENHA.
         const auth0User = await management.users.create({
-            connection: 'Username-Password-Authentication', // Conexão padrão de e-mail/senha
+            connection: 'Username-Password-Authentication', // Conexão padrão
             email: data.email,
             name: data.name,
-            password: 'uma-senha-temporaria-muito-forte!123', // O utilizador poderá redefinir depois
-            email_verified: true, // Opcional: já marca o e-mail como verificado
+            email_verified: true,
         });
 
         if (!auth0User.data.user_id) {
             throw new Error("Falha ao criar o utilizador no Auth0.");
         }
 
-        // 3. Criação no Banco de Dados Local: Com o ID do Auth0 em mãos, guardamos o registo.
+        // 2. Criação no Banco de Dados Local
         const newUserInDb = await prisma.user.create({
             data: {
                 ...data,
@@ -61,20 +58,26 @@ class CreateUserUseCase {
             },
         });
 
-        // A MUDANÇA: Atribui a role de 'INVESTOR' ao utilizador no Auth0
+        // 3. Atribui a role de 'INVESTOR'
         const investorRoleId = process.env.AUTH0_INVESTOR_ROLE_ID;
         if (investorRoleId) {
             await management.roles.assignUsers(
-                { id: investorRoleId }, // O ID da role que copiámos do painel do Auth0
+                { id: investorRoleId },
                 { users: [auth0User.data.user_id] }
             );
             console.log(`✅ Role 'INVESTOR' atribuída ao utilizador ${data.email}`);
         } else {
-            console.warn("⚠️ A variável AUTH0_INVESTOR_ROLE_ID não está definida. A role não foi atribuída.");
+            console.warn("⚠️ A variável AUTH0_INVESTOR_ROLE_ID não está definida.");
         }
 
-        console.log(`✅ Novo utilizador INVESTOR criado com sucesso: ${data.email}`);
-
+        // 4. A MÁGICA: Gera um link de redefinição de senha, que funciona como um convite.
+        await management.tickets.changePassword({
+            user_id: auth0User.data.user_id,
+            // Opcional: pode incluir o nome da organização, e-mail do remetente, etc.
+        });
+        
+        console.log(`✅ Novo utilizador INVESTOR criado e convite enviado para: ${data.email}`);
+        
         return newUserInDb;
     }
 }
