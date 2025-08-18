@@ -15,6 +15,8 @@ class CreateUserController {
      * @param {Response} response - O objeto de resposta do Express.
      */
     async handle(request: Request, response: Response): Promise<Response> {
+
+        console.log("🔍 Criando novo utilizador...", request.body);
         // 1. Define o schema de validação para os dados do formulário.
         const validationSchema = yup.object().shape({
             email: yup.string().email("Formato de e-mail inválido.").required("O e-mail é obrigatório."),
