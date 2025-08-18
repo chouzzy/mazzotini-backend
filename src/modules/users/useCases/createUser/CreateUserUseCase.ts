@@ -2,6 +2,7 @@
 
 import { PrismaClient, User } from "@prisma/client";
 import { ManagementClient } from "auth0";
+import { randomBytes } from 'crypto'; // Importa o módulo de criptografia do Node.js
 
 const prisma = new PrismaClient();
 
@@ -38,11 +39,16 @@ class CreateUserUseCase {
             throw new Error("Já existe um utilizador com este e-mail.");
         }
 
-        // 1. Criação no Auth0: Criamos o utilizador SEM SENHA.
+        // A MUDANÇA: Gera uma senha temporária forte e aleatória.
+        // O utilizador nunca verá esta senha, pois será forçado a alterá-la.
+        const temporaryPassword = `${randomBytes(16).toString('hex')}A1!`;
+
+        // 1. Criação no Auth0: Criamos o utilizador COM A SENHA TEMPORÁRIA.
         const auth0User = await management.users.create({
             connection: 'Username-Password-Authentication', // Conexão padrão
             email: data.email,
             name: data.name,
+            password: temporaryPassword, // Utiliza a senha temporária
             email_verified: true,
         });
 
@@ -70,7 +76,7 @@ class CreateUserUseCase {
             console.warn("⚠️ A variável AUTH0_INVESTOR_ROLE_ID não está definida.");
         }
 
-        // 4. A MÁGICA: Gera um link de redefinição de senha, que funciona como um convite.
+        // 4. Gera um e-mail de redefinição de senha, que funciona como um convite.
         await management.tickets.changePassword({
             user_id: auth0User.data.user_id,
             // Opcional: pode incluir o nome da organização, e-mail do remetente, etc.
