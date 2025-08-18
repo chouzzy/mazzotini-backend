@@ -2,18 +2,16 @@
 
 import { PrismaClient, User } from "@prisma/client";
 import { ManagementClient } from "auth0";
-import { randomBytes } from 'crypto'; // Importa o módulo de criptografia do Node.js
+import { randomBytes } from 'crypto';
 
 const prisma = new PrismaClient();
 
-// Configura o cliente da API de Gestão do Auth0
 const management = new ManagementClient({
     domain: process.env.AUTH0_MGMT_DOMAIN!,
     clientId: process.env.AUTH0_MGMT_CLIENT_ID!,
     clientSecret: process.env.AUTH0_MGMT_CLIENT_SECRET!,
 });
 
-// Define a estrutura dos dados que o operador vai inserir no formulário
 type ICreateUserDTO = Pick<
     User,
     'email' | 'name' | 'phone' | 'cellPhone' | 'cpfOrCnpj'
@@ -21,68 +19,77 @@ type ICreateUserDTO = Pick<
 
 /**
  * @class CreateUserUseCase
- * @description Lógica de negócio para criar um novo utilizador e enviar um convite.
+ * @description Lógica de negócio para encontrar ou criar um utilizador no Auth0 e sincronizá-lo com o banco de dados local.
  */
 class CreateUserUseCase {
-    /**
-     * Executa a criação do utilizador.
-     * @param {ICreateUserDTO} data - Os dados do utilizador a serem criados.
-     * @returns {Promise<User>} O utilizador recém-criado no nosso banco de dados.
-     */
     async execute(data: ICreateUserDTO): Promise<User> {
         
-        const userAlreadyExists = await prisma.user.findUnique({
+        // 1. Validação: Verifica se o e-mail já existe no NOSSO banco de dados.
+        const userAlreadyInDb = await prisma.user.findUnique({
             where: { email: data.email },
         });
 
-        if (userAlreadyExists) {
-            throw new Error("Já existe um utilizador com este e-mail.");
+        if (userAlreadyInDb) {
+            throw new Error("Já existe um utilizador com este e-mail no sistema Mazzotini.");
         }
 
-        // A MUDANÇA: Gera uma senha temporária forte e aleatória.
-        // O utilizador nunca verá esta senha, pois será forçado a alterá-la.
-        const temporaryPassword = `${randomBytes(16).toString('hex')}A1!`;
+        // 2. A MUDANÇA CRUCIAL: Procura o utilizador no Auth0 pelo e-mail ANTES de criar.
+        const existingAuth0Users = await management.usersByEmail.getByEmail({ email: data.email });
 
-        // 1. Criação no Auth0: Criamos o utilizador COM A SENHA TEMPORÁRIA.
-        const auth0User = await management.users.create({
-            connection: 'Username-Password-Authentication', // Conexão padrão
-            email: data.email,
-            name: data.name,
-            password: temporaryPassword, // Utiliza a senha temporária
-            email_verified: true,
-        });
+        let auth0UserId: string;
+        let isNewAuth0User = false;
 
-        if (!auth0User.data.user_id) {
-            throw new Error("Falha ao criar o utilizador no Auth0.");
+        // 3. Lógica Condicional: Decide se cria um novo utilizador ou usa um existente.
+        if (existingAuth0Users.data.length > 0) {
+            // Utilizador já existe no Auth0 (ex: cadastrou-se com Google no site)
+            auth0UserId = existingAuth0Users.data[0].user_id!;
+            console.log(`[SYNC] Utilizador ${data.email} já existe no Auth0. A usar ID existente: ${auth0UserId}`);
+        } else {
+            // Utilizador é 100% novo. Criamos a sua identidade no Auth0.
+            isNewAuth0User = true;
+            const temporaryPassword = `${randomBytes(16).toString('hex')}A1!`;
+            const newAuth0User = await management.users.create({
+                connection: 'Username-Password-Authentication',
+                email: data.email,
+                name: data.name,
+                password: temporaryPassword,
+                email_verified: true,
+            });
+
+            if (!newAuth0User.data.user_id) {
+                throw new Error("Falha ao criar o utilizador no Auth0.");
+            }
+            auth0UserId = newAuth0User.data.user_id;
+            console.log(`[SYNC] Novo utilizador criado no Auth0 para ${data.email}. ID: ${auth0UserId}`);
         }
 
-        // 2. Criação no Banco de Dados Local
+        // 4. Criação no Banco de Dados Local
         const newUserInDb = await prisma.user.create({
             data: {
                 ...data,
-                auth0UserId: auth0User.data.user_id,
+                auth0UserId: auth0UserId,
             },
         });
 
-        // 3. Atribui a role de 'INVESTOR'
+        // 5. Atribui a role de 'INVESTOR'
         const investorRoleId = process.env.AUTH0_INVESTOR_ROLE_ID;
         if (investorRoleId) {
             await management.roles.assignUsers(
                 { id: investorRoleId },
-                { users: [auth0User.data.user_id] }
+                { users: [auth0UserId] }
             );
             console.log(`✅ Role 'INVESTOR' atribuída ao utilizador ${data.email}`);
         } else {
             console.warn("⚠️ A variável AUTH0_INVESTOR_ROLE_ID não está definida.");
         }
 
-        // 4. Gera um e-mail de redefinição de senha, que funciona como um convite.
-        await management.tickets.changePassword({
-            user_id: auth0User.data.user_id,
-            // Opcional: pode incluir o nome da organização, e-mail do remetente, etc.
-        });
-        
-        console.log(`✅ Novo utilizador INVESTOR criado e convite enviado para: ${data.email}`);
+        // 6. Se for um utilizador criado do zero, envia o e-mail de convite/reset de senha.
+        if (isNewAuth0User) {
+            await management.tickets.changePassword({
+                user_id: auth0UserId,
+            });
+            console.log(`✅ Convite enviado para o novo utilizador: ${data.email}`);
+        }
         
         return newUserInDb;
     }
