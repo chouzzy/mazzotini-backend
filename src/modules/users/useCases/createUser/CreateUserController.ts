@@ -39,6 +39,7 @@ class CreateUserController {
         const {
             email,
             name,
+            auth0UserId,
             phone,
             cellPhone,
             cpfOrCnpj
@@ -53,6 +54,7 @@ class CreateUserController {
             const newUser = await createUserUseCase.execute({
                 email,
                 name,
+                auth0UserId,
                 phone,
                 cellPhone,
                 cpfOrCnpj,
