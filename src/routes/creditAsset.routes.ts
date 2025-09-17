@@ -9,6 +9,7 @@ import { checkJwt } from '../middleware/auth'; // O nosso "segurança" da API
 import { CreateCreditAssetController } from '../modules/creditAssets/useCases/createCreditAsset/CreateCreditAssetController';
 // 1. Importa o novo controller de enriquecimento
 import { EnrichAssetFromLegalOneController } from '../modules/creditAssets/useCases/enrichAssetFromLegalOne/EnrichAssetFromLegalOneController';
+import { GetAssetByProcessNumberController } from '../modules/creditAssets/useCases/getAssetByProcessNumber/GetAssetByProcessNumberController';
 
 // --- Inicialização ---
 const creditAssetRoutes = Router();
@@ -16,7 +17,7 @@ const creditAssetRoutes = Router();
 // Cria instâncias dos nossos controllers
 const createCreditAssetController = new CreateCreditAssetController();
 const enrichAssetFromLegalOneController = new EnrichAssetFromLegalOneController();
-
+const getAssetByProcessNumberController = new GetAssetByProcessNumberController();
 // ============================================================================
 //   DEFINIÇÃO DAS ROTAS DE ATIVOS DE CRÉDITO
 // ============================================================================
@@ -43,6 +44,17 @@ creditAssetRoutes.post(
     enrichAssetFromLegalOneController.handle
 );
 
+
+/**
+ * @route   GET /api/assets/:processNumber
+ * @desc    Busca os detalhes completos de um ativo de crédito específico.
+ * @access  Privado (Requer token JWT válido)
+ */
+creditAssetRoutes.get(
+    '/api/assets/:processNumber',
+    checkJwt,
+    getAssetByProcessNumberController.handle
+);
 
 // Adicione aqui outras rotas para o CRUD de ativos no futuro
 // Ex: creditAssetRoutes.get('/api/assets', checkJwt, listAssetsController.handle);
