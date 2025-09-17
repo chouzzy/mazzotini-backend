@@ -23,6 +23,7 @@ class CreateCreditAssetController {
             acquisitionDate: yup.date().required("A data de aquisição é obrigatória."),
             investorId: yup.string().required("O ID do investidor é obrigatório."),
             investorShare: yup.number().positive("A participação do investidor deve ser positiva.").required("A participação do investidor é obrigatória."),
+            associateId: yup.string().optional().nullable(),
         });
 
         try {
@@ -40,7 +41,8 @@ class CreateCreditAssetController {
             acquisitionValue,
             acquisitionDate,
             investorId,
-            investorShare
+            investorShare,
+            associateId, 
         } = request.body;
 
         const createCreditAssetUseCase = new CreateCreditAssetUseCase();
@@ -54,9 +56,10 @@ class CreateCreditAssetController {
                 acquisitionValue,
                 acquisitionDate: new Date(acquisitionDate),
                 investorId,
-                investorShare
+                investorShare,
+                associateId
             });
-            
+
             return response.status(201).json(newAsset);
 
         } catch (err: any) {

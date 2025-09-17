@@ -18,6 +18,7 @@ type ICreateCreditAssetDTO =
     > & {
         investorId: User['id'];
         investorShare: Investment['investorShare'];
+        associateId?: User['id']; // NOVO CAMPO (opcional)
     };
 
 /**
@@ -26,11 +27,12 @@ type ICreateCreditAssetDTO =
  */
 class CreateCreditAssetUseCase {
     async execute(data: ICreateCreditAssetDTO): Promise<CreditAsset> {
-        
+
         const {
             processNumber,
             investorId,
             investorShare,
+            associateId,
             ...assetData // O resto dos dados para o CreditAsset
         } = data;
 
@@ -51,7 +53,18 @@ class CreateCreditAssetUseCase {
         if (!investorExists) {
             throw new Error("O investidor selecionado não foi encontrado no sistema.");
         }
-        
+
+        // 3. Validação: Se um associateId foi fornecido, verifica se ele existe
+        if (associateId) {
+            const associateExists = await prisma.user.findUnique({
+                where: { id: associateId }
+            });
+
+            if (!associateExists) {
+                throw new Error("O associado selecionado não foi encontrado no sistema.");
+            }
+        }
+
         // 3. Criação Atómica com Transação
         const newCreditAsset = await prisma.$transaction(async (tx) => {
             // 3.1. Cria o "esqueleto" do ativo com status pendente
@@ -64,6 +77,7 @@ class CreateCreditAssetUseCase {
                     currentValue: assetData.acquisitionValue,
                     // Campos que serão preenchidos pelo Legal One
                     origemProcesso: 'Aguardando Legal One...',
+                    associateId: associateId
                     // O 'originalCreditor' já está em 'assetData'
                 },
             });
@@ -79,14 +93,14 @@ class CreateCreditAssetUseCase {
             });
 
             console.log(`✅ Esqueleto do ativo e investimento criados para o processo ${createdAsset.processNumber}`);
-            
+
             return createdAsset;
         });
 
         // 4. Dispara o processo de enriquecimento em segundo plano
         const enrichUseCase = new EnrichAssetFromLegalOneUseCase();
         enrichUseCase.execute(newCreditAsset.id);
-        
+
         return newCreditAsset;
     }
 }

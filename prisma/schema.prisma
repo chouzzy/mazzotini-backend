@@ -33,10 +33,12 @@ model User {
   indication    String? // Como conheceu a Mazzotini.
 
   // Relações
-  investments Investment[] // Lista de investimentos que este usuário (se investidor) fez.
+  investments      Investment[] // Lista de investimentos que este usuário (se investidor) fez.
+  associatedAssets CreditAsset[] @relation("AssociatedAssets")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  CreditAsset CreditAsset[]
 }
 
 // --- Modelo de Ativo de Crédito ---
@@ -71,8 +73,13 @@ model CreditAsset {
   investors Investment[] // Lista de investidores neste ativo.
   documents Document[] // Documentos associados ao ativo.
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  User        User?    @relation(fields: [userId], references: [id])
+  associateId String?  @db.ObjectId
+  associate   User?    @relation("AssociatedAssets", fields: [associateId], references: [id])
+
+  userId String? @db.ObjectId
 }
 
 // --- Modelo de Atualização do Ativo ---
