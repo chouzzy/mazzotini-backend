@@ -1,5 +1,3 @@
-// src/modules/creditAssets/useCases/enrichAssetFromLegalOne/EnrichAssetFromLegalOneController.ts
-
 import { Request, Response } from 'express';
 import { EnrichAssetFromLegalOneUseCase } from './EnrichAssetFromLegalOneUseCase';
 
@@ -30,17 +28,18 @@ class EnrichAssetFromLegalOneController {
             enrichAssetFromLegalOneUseCase.execute(id);
             
             // 3. Retorna uma resposta 202 (Accepted).
-            // Isto informa ao frontend que o pedido foi aceite e está a ser processado,
-            // mas que o trabalho ainda não terminou.
+            // Isto informa ao cliente que o pedido foi aceite e está a ser processado.
             return response.status(202).json({ 
                 message: 'Processo de enriquecimento de dados iniciado em segundo plano.' 
             });
 
         } catch (err: any) {
             console.error("❌ Erro ao iniciar o enriquecimento do ativo:", err.message);
-            return response.status(400).json({ error: err.message });
+            // Este erro só aconteceria se a chamada 'execute' em si falhasse, o que é raro.
+            return response.status(500).json({ error: 'Falha ao iniciar o processo de enriquecimento.' });
         }
     }
 }
 
 export { EnrichAssetFromLegalOneController };
+
