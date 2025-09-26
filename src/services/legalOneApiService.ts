@@ -87,6 +87,8 @@ class LegalOneApiService {
             }
         });
 
+        console.log(`[Legal One API Service] Resposta recebida para o processo: ${processNumber}`, response.data);
+
         const results = response.data.value;
         if (!results || results.length === 0) {
             throw new Error(`Nenhum processo encontrado no Legal One com o número: ${processNumber}`);

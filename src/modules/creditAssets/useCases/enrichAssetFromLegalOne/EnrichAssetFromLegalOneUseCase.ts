@@ -44,6 +44,7 @@ class EnrichAssetFromLegalOneUseCase {
             
             // A "tradução" dos dados para o nosso formato
             const mappedData = mapLegalOneDataToAsset(legalOneData);
+            console.log(`Dados mapeados para o ativo ${creditAssetId}:`, mappedData);
             
             await prisma.creditAsset.update({
                 where: { id: creditAssetId },
