@@ -83,7 +83,7 @@ class LegalOneApiService {
             params: {
                 '$filter': `identifierNumber eq '${processNumber}'`,
                 // Expandimos os participantes e o contato dentro deles para já termos o nome
-                '$expand': 'participants($expand=contact)'
+                '$expand': 'participants'
             }
         });
 
