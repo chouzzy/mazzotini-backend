@@ -65,6 +65,8 @@ class EnrichAssetFromLegalOneUseCase {
             
             // Passo 2: Usa o ID do processo para buscar os andamentos
             const updatesData = await legalOneApiService.getProcessUpdates(lawsuitData.id);
+            console.log(`[Enrich] Encontrados ${updatesData.length} andamentos para o processo ${asset.processNumber}`);
+            console.log('Updates:', updatesData);
             
             // Passo 3: "Traduz" os dados combinados para o nosso formato
             const mappedData = await mapLegalOneDataToAsset(lawsuitData, updatesData);
