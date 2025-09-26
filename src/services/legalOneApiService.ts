@@ -1,39 +1,51 @@
 import axios from 'axios';
 
 // ============================================================================
-//  1. INTERFACES DA RESPOSTA REAL (BASEADO NO SCHEMA)
+//  INTERFACES DA RESPOSTA REAL (BASEADO NO SCHEMA)
 // ============================================================================
-// Tipagem para um participante, como definido no schema
+
 export interface LegalOneParticipant {
     type: "Customer" | "PersonInCharge" | "OtherParty" | "Party" | "Other" | "LawyerOfOtherParty" | "Requester";
     contactId: number;
-    contact?: { // Supondo que podemos expandir o contato
-        name: string;
-    };
-    // ... outros campos de participante
 }
 
-// Tipagem para o objeto Lawsuit, agora 100% alinhada com o schema
 export interface LegalOneLawsuit {
     id: number;
     folder: string;
     title: string;
-    identifierNumber: string; // Este é o nosso "processNumber"
+    identifierNumber: string;
     monetaryAmount?: { Value: number; Code: string };
-    courtId?: number;
-    justiceId?: number;
     participants: LegalOneParticipant[];
-    // Adicione outros campos do schema que forem necessários
+    // ... outros campos do Lawsuit que possamos precisar
 }
 
-// A resposta da API é uma coleção
-export interface LegalOneApiResponse {
+export interface LegalOneLawsuitApiResponse {
     value: LegalOneLawsuit[];
 }
 
+// NOVA INTERFACE para os Andamentos (Updates)
+export interface LegalOneUpdate {
+    id: number;
+    description: string;
+    notes: string; // Onde provavelmente estará a informação que precisamos
+    date: string;
+    typeId: number; // O tipo de andamento
+    // ... outros campos do andamento
+}
+
+export interface LegalOneUpdatesApiResponse {
+    value: LegalOneUpdate[];
+}
+
+
+// NOVA INTERFACE para a resposta de /Contacts/{id}
+export interface LegalOneContact {
+    id: number;
+    name: string;
+}
 
 // ============================================================================
-//  2. LÓGICA DE SERVIÇO DA API (ATUALIZADA)
+//  LÓGICA DE SERVIÇO DA API
 // ============================================================================
 class LegalOneApiService {
     private accessToken: string | null = null;
@@ -63,7 +75,7 @@ class LegalOneApiService {
         const { access_token, expires_in } = response.data;
         
         this.accessToken = access_token;
-        this.tokenExpiresAt = Date.now() + (expires_in - 60) * 1000;
+        this.tokenExpiresAt = Date.now() + (expires_in - 60) * 1000; 
 
         console.log("[Legal One API Service] Novo token obtido com sucesso.");
         return this.accessToken as string;
@@ -71,23 +83,16 @@ class LegalOneApiService {
 
     public async getProcessDetails(processNumber: string): Promise<LegalOneLawsuit> {
         const token = await this.getAccessToken();
-        const apiBaseUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const requestUrl = `${apiRestUrl}/Lawsuits`;
 
-        console.log(`[Legal One API Service] Buscando dados para o processo: ${processNumber}`);
-        
-        const response = await axios.get<LegalOneApiResponse>(`${apiBaseUrl}/Lawsuits`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
+        const response = await axios.get<LegalOneLawsuitApiResponse>(requestUrl, {
+            headers: { 'Authorization': `Bearer ${token}` },
             params: {
                 '$filter': `identifierNumber eq '${processNumber}'`,
-                // Expandimos os participantes e o contato dentro deles para já termos o nome
                 '$expand': 'participants'
             }
         });
-
-        console.log(`[Legal One API Service] Resposta recebida para o processo: ${processNumber}`, response.data);
 
         const results = response.data.value;
         if (!results || results.length === 0) {
@@ -95,6 +100,40 @@ class LegalOneApiService {
         }
 
         return results[0];
+    }
+
+    // NOVA FUNÇÃO para buscar os andamentos de um processo
+    public async getProcessUpdates(lawsuitId: number): Promise<LegalOneUpdate[]> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const requestUrl = `${apiRestUrl}/Updates`;
+
+        console.log(`[Legal One API Service] Buscando andamentos para o Lawsuit ID: ${lawsuitId}`);
+
+        const response = await axios.get<LegalOneUpdatesApiResponse>(requestUrl, {
+            headers: { 'Authorization': `Bearer ${token}` },
+            params: {
+                // Filtra os 'updates' que têm uma relação com um 'Litigation' com o ID do nosso processo
+                '$filter': `relationships/any(r: r/linkType eq 'Litigation' and r/linkId eq ${lawsuitId})`,
+                '$orderby': 'date desc' // Pega os mais recentes primeiro
+            }
+        });
+
+        return response.data.value || [];
+    }
+    
+    public async getContactDetails(contactId: number): Promise<LegalOneContact> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const requestUrl = `${apiRestUrl}/Contacts/${contactId}`;
+
+        console.log(`[Legal One API Service] Buscando detalhes do contato ID: ${contactId}`);
+        
+        const response = await axios.get<LegalOneContact>(requestUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        return response.data;
     }
 }
 
