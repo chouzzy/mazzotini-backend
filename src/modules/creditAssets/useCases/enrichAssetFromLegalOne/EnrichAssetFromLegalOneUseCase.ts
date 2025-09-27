@@ -4,50 +4,51 @@ import { legalOneApiService, LegalOneLawsuit, LegalOneUpdate } from "../../../..
 const prisma = new PrismaClient();
 
 // ============================================================================
-//  FUNÇÃO "TRADUTORA" (MAPEADORA DE DADOS) ATUALIZADA
+//  FUNÇÕES "TRADUTORAS" (MAPEADORAS DE DADOS)
 // ============================================================================
-const mapLegalOneDataToAsset = async (lawsuit: LegalOneLawsuit, updates: LegalOneUpdate[]) => {
-    let originalCreditorName = 'Não identificado';
 
-    // 1. Encontra o participante que é a "outra parte" (o credor)
+/**
+ * Tenta extrair um valor monetário de uma string de anotações.
+ * Hipótese: o formato será "Valor: R$ 12.345,67".
+ */
+const parseValueFromNotes = (notes: string | null): number | null => {
+    if (!notes) return null;
+    
+    const valueMatch = notes.match(/Valor:\s*R\$\s*([\d.,]+)/i);
+    if (valueMatch && valueMatch[1]) {
+        // Converte o formato brasileiro (1.234,56) para um número
+        const numericString = valueMatch[1].replace(/\./g, '').replace(',', '.');
+        return parseFloat(numericString);
+    }
+    return null;
+};
+
+/**
+ * Mapeia os dados principais do processo.
+ */
+const mapLawsuitData = async (lawsuit: LegalOneLawsuit) => {
+    let originalCreditorName = 'Não identificado';
     const creditorParticipant = lawsuit.participants?.find(p => p.type === 'OtherParty');
     
-    // 2. Se encontrou, busca o nome real dele na API
     if (creditorParticipant?.contactId) {
         try {
             const contactDetails = await legalOneApiService.getContactDetails(creditorParticipant.contactId);
             originalCreditorName = contactDetails.name;
         } catch (error) {
             console.error(`[MAP] Erro ao buscar nome do credor para o contactId: ${creditorParticipant.contactId}`, error);
-            originalCreditorName = `Erro ao buscar Contato ID: ${creditorParticipant.contactId}`;
         }
-    }
-    
-    // Lógica para encontrar a atualização de crédito
-    // Hipótese: o andamento manual terá "crédito" na descrição e o valor em 'notes'.
-    const creditUpdate = updates.find(upd => upd.description.toLowerCase().includes('crédito'));
-    
-    // Extrai o valor do andamento, se encontrado. Se não, usa o valor da causa.
-    let currentValue = lawsuit.monetaryAmount?.Value || 0;
-    if (creditUpdate && creditUpdate.notes) {
-         // Hipótese: o valor está em 'notes' como "Valor: R$ 12345.67".
-         // Esta lógica precisará ser ajustada para o formato real.
-         const valueMatch = creditUpdate.notes.match(/Valor: R\$ ([\d,.]+)/);
-         if (valueMatch && valueMatch[1]) {
-            currentValue = parseFloat(valueMatch[1].replace('.', '').replace(',', '.'));
-         }
     }
 
     return {
         originalCreditor: originalCreditorName,
         originalValue: lawsuit.monetaryAmount?.Value || 0,
-        currentValue: currentValue, // Valor atualizado a partir do andamento
-        // ... outros campos
+        // Adicionaremos mais mapeamentos aqui conforme necessário
     };
 };
 
+
 // ============================================================================
-//  O USE CASE REATORADO
+//  O USE CASE REATORADO (COM LÓGICA DE SINCRONIZAÇÃO DE ANDAMENTOS)
 // ============================================================================
 class EnrichAssetFromLegalOneUseCase {
     async execute(creditAssetId: string): Promise<void> {
@@ -60,26 +61,52 @@ class EnrichAssetFromLegalOneUseCase {
         }
 
         try {
-            // Passo 1: Busca os dados principais do processo
+            // Passo 1: Busca os dados principais e os andamentos em paralelo
             const lawsuitData = await legalOneApiService.getProcessDetails(asset.processNumber);
-            
-            // Passo 2: Usa o ID do processo para buscar os andamentos
             const updatesData = await legalOneApiService.getProcessUpdates(lawsuitData.id);
-            console.log(`[Enrich] Encontrados ${updatesData.length} andamentos para o processo ${asset.processNumber}`);
-            console.log('Updates:', updatesData);
             
-            // Passo 3: "Traduz" os dados combinados para o nosso formato
-            const mappedData = await mapLegalOneDataToAsset(lawsuitData, updatesData);
-            
-            await prisma.creditAsset.update({
-                where: { id: creditAssetId },
-                data: {
-                    ...mappedData,
-                    status: 'Ativo',
-                },
+            // Passo 2: Mapeia os dados principais do processo
+            const mappedLawsuitData = await mapLawsuitData(lawsuitData);
+
+            // Filtra apenas os andamentos manuais que nos interessam
+            const manualUpdates = updatesData.filter(upd => upd.originType === 'Manual');
+
+            let latestCurrentValue = asset.currentValue;
+
+            // Inicia uma transação para garantir que tudo seja salvo de uma vez
+            await prisma.$transaction(async (tx) => {
+                // Passo 3: Cria um registo de AssetUpdate para cada andamento manual
+                for (const update of manualUpdates) {
+                    const extractedValue = parseValueFromNotes(update.notes);
+                    
+                    // Se este andamento tiver um valor, ele se torna o novo valor atual
+                    if (extractedValue !== null) {
+                        latestCurrentValue = extractedValue;
+                    }
+
+                    await tx.assetUpdate.create({
+                        data: {
+                            assetId: creditAssetId,
+                            date: new Date(update.date),
+                            description: update.description,
+                            updatedValue: extractedValue || latestCurrentValue, // Usa o valor extraído ou o último conhecido
+                            source: 'Legal One - Manual',
+                        }
+                    });
+                }
+
+                // Passo 4: Atualiza o ativo principal com os dados enriquecidos e o valor mais recente
+                await tx.creditAsset.update({
+                    where: { id: creditAssetId },
+                    data: {
+                        ...mappedLawsuitData,
+                        currentValue: latestCurrentValue,
+                        status: 'Ativo',
+                    },
+                });
             });
 
-            console.log(`✅ Ativo ${creditAssetId} enriquecido com sucesso, incluindo andamentos!`);
+            console.log(`✅ Ativo ${creditAssetId} enriquecido e ${manualUpdates.length} andamentos sincronizados!`);
 
         } catch (error: any) {
             console.error(`❌ Erro ao enriquecer o ativo ${creditAssetId}:`, error.response?.data || error.message);

@@ -26,10 +26,16 @@ export interface LegalOneLawsuitApiResponse {
 // NOVA INTERFACE para os Andamentos (Updates)
 export interface LegalOneUpdate {
     id: number;
+    typeId: number;
+    originType: string;
+    isSubType: boolean;
+    actExecutorId: number | null;
+    contactCreatorId: number | null;
     description: string;
-    notes: string; // Onde provavelmente estará a informação que precisamos
+    notes: string | null;
+    isConfidential: boolean;
     date: string;
-    typeId: number; // O tipo de andamento
+    creationDate: string;
     // ... outros campos do andamento
 }
 

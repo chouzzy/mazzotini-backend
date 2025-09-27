@@ -1,54 +1,50 @@
-// src/routes/creditAsset.routes.ts
-
+// /src/routes/creditAsset.routes.ts
 import { Router } from 'express';
+import { checkJwt } from '../middleware/auth';
+import { checkRole } from '../middleware/checkRole';
 
-// --- Middlewares ---
-import { checkJwt } from '../middleware/auth'; // O nosso "segurança" da API
-
-// --- Controllers ---
 import { CreateCreditAssetController } from '../modules/creditAssets/useCases/createCreditAsset/CreateCreditAssetController';
-// 1. Importa o novo controller de enriquecimento
 import { EnrichAssetFromLegalOneController } from '../modules/creditAssets/useCases/enrichAssetFromLegalOne/EnrichAssetFromLegalOneController';
 import { GetAssetByProcessNumberController } from '../modules/creditAssets/useCases/getAssetByProcessNumber/GetAssetByProcessNumberController';
+import { SyncSingleAssetController } from '../modules/creditAssets/useCases/syncSingleAsset/SyncSingleAssetController';
+import { ListAllAssetsController } from '../modules/creditAssets/useCases/listAllAssets/ListAllAssetsController';
 
-// --- Inicialização ---
 const creditAssetRoutes = Router();
 
-// Cria instâncias dos nossos controllers
 const createCreditAssetController = new CreateCreditAssetController();
 const enrichAssetFromLegalOneController = new EnrichAssetFromLegalOneController();
 const getAssetByProcessNumberController = new GetAssetByProcessNumberController();
-// ============================================================================
-//   DEFINIÇÃO DAS ROTAS DE ATIVOS DE CRÉDITO
-// ============================================================================
+const syncSingleAssetController = new SyncSingleAssetController();
+const listAllAssetsController = new ListAllAssetsController();
 
 /**
  * @route   POST /api/assets
- * @desc    Cria um novo "esqueleto" de ativo e dispara o enriquecimento de dados.
- * @access  Privado (Requer token JWT válido)
+ * @desc    Cria um novo ativo de crédito.
+ * @access  Privado (OPERATOR, ADMIN)
  */
 creditAssetRoutes.post(
     '/api/assets',
     checkJwt,
+    checkRole(['OPERATOR', 'ADMIN']),
     createCreditAssetController.handle
 );
 
 /**
- * @route   POST /api/assets/:id/enrich
- * @desc    Aciona manualmente o processo de enriquecimento de dados para um ativo específico.
- * @access  Privado (Requer token JWT válido)
+ * @route   GET /api/assets
+ * @desc    Busca um resumo de todos os ativos de crédito.
+ * @access  Privado (OPERATOR, ADMIN)
  */
-creditAssetRoutes.post(
-    '/api/assets/:id/enrich', // A rota inclui o ID do ativo
+creditAssetRoutes.get(
+    '/api/assets',
     checkJwt,
-    enrichAssetFromLegalOneController.handle
+    checkRole(['OPERATOR', 'ADMIN']),
+    listAllAssetsController.handle
 );
 
-
 /**
- * @route   GET /api/assets/:processNumber
- * @desc    Busca os detalhes completos de um ativo de crédito específico.
- * @access  Privado (Requer token JWT válido)
+ * @route   GET /api/assets/:processNumber
+ * @desc    Busca os detalhes completos de um ativo de crédito específico.
+ * @access  Privado (Todos os autenticados)
  */
 creditAssetRoutes.get(
     '/api/assets/:processNumber',
@@ -56,8 +52,17 @@ creditAssetRoutes.get(
     getAssetByProcessNumberController.handle
 );
 
-// Adicione aqui outras rotas para o CRUD de ativos no futuro
-// Ex: creditAssetRoutes.get('/api/assets', checkJwt, listAssetsController.handle);
-// Ex: creditAssetRoutes.put('/api/assets/:id', checkJwt, updateAssetController.handle);
+/**
+ * @route   POST /api/assets/:processNumber/sync
+ * @desc    Aciona manualmente a sincronização de andamentos para um ativo específico.
+ * @access  Privado (OPERATOR, ADMIN)
+ */
+creditAssetRoutes.post(
+    '/api/assets/:processNumber/sync',
+    checkJwt,
+    checkRole(['OPERATOR', 'ADMIN']),
+    syncSingleAssetController.handle
+);
 
 export { creditAssetRoutes };
+

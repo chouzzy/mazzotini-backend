@@ -589,6 +589,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/node-cron@npm:^3.0.11":
+  version: 3.0.11
+  resolution: "@types/node-cron@npm:3.0.11"
+  checksum: a73f69bcca52a5f3b1671cfb00a8e4a1d150d0aef36a611564a2f94e66b6981bade577e267ceeeca6fcee241768902d55eb8cf3a81f9ef4ed767a23112fdb16d
+  languageName: node
+  linkType: hard
+
 "@types/node@npm:*, @types/node@npm:>=8.1.0":
   version: 24.2.0
   resolution: "@types/node@npm:24.2.0"
@@ -4089,6 +4096,7 @@ __metadata:
     "@types/formidable": ^3.4.5
     "@types/jsonwebtoken": ^8.5.9
     "@types/multer": ^1.4.7
+    "@types/node-cron": ^3.0.11
     "@types/swagger-jsdoc": ^6.0.4
     "@types/swagger-ui-express": ^4.1.3
     "@types/uuid": ^8.3.4
@@ -4120,6 +4128,7 @@ __metadata:
     import: ^0.0.6
     jsonwebtoken: ^8.5.1
     multer: ^1.4.5-lts.1
+    node-cron: ^4.2.1
     pg: ^8.8.0
     prettier: ^2.7.1
     prisma: 5
@@ -4418,6 +4427,13 @@ __metadata:
   version: 1.0.0
   resolution: "negotiator@npm:1.0.0"
   checksum: 20ebfe79b2d2e7cf9cbc8239a72662b584f71164096e6e8896c8325055497c96f6b80cd22c258e8a2f2aa382a787795ec3ee8b37b422a302c7d4381b0d5ecfbb
+  languageName: node
+  linkType: hard
+
+"node-cron@npm:^4.2.1":
+  version: 4.2.1
+  resolution: "node-cron@npm:4.2.1"
+  checksum: 961e18a452f2d0cd12cde1dfa5897d788ebbba259861ceca6b717ab80a0962f916be10584381647d6e20415620c17bbdc9238b3d601c7675afcb6c157fed9d97
   languageName: node
   linkType: hard
 
