@@ -56,6 +56,7 @@ class SyncSingleAssetUseCase {
 
                 for (const update of sortedNewUpdates) {
                     const allValues = extractAllValues(update.description);
+                    console.log('Valores extraídos:', allValues);
                     const updateText = extractFreeText(update.description);
 
                     if (allValues.valorDaCausa !== null) {
@@ -78,7 +79,7 @@ class SyncSingleAssetUseCase {
                         }
                     });
                 }
-
+                console.log('Valores finais do ativo após atualizações:', currentAssetValues);
                 await tx.creditAsset.update({
                     where: { id: asset.id },
                     data: {
