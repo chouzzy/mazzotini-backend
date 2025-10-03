@@ -10,21 +10,22 @@ const prisma = new PrismaClient();
 const extractAllValues = (text: string | null | undefined) => {
     if (!text) return { valorDaCausa: null, valorDaCompra: null, valorAtualizado: null };
 
-    const parse = (match: RegExpMatchArray | null) => {
+    const parse = (match: RegExpMatchArray | null, truncate = false) => {
         if (match && match[1]) {
             const numericString = match[1].replace(/\./g, '').replace(',', '.');
-            return parseFloat(numericString);
+            const value = parseFloat(numericString);
+            return truncate ? Math.trunc(value) : value;
         }
         return null;
     };
 
-    const valorDaCausa = text.match(/Valor da causa:\s*R\$\s*([\d.,]+)/i);
-    const valorDaCompra = text.match(/Valor da compra:\s*R\$\s*([\d.,]+)/i);
-    const valorAtualizado = text.match(/Valor atualizado:\s*R\$\s*([\d.,]+)/i);
+    const valorDaCausa = text.match(/Valor da Causa:\s*R\$\s*([\d.,]+)/i);
+    const valorDaCompra = text.match(/Valor da Compra:\s*R\$\s*([\d.,]+)/i);
+    const valorAtualizado = text.match(/Valor Atualizado:\s*R\$\s*([\d.,]+)/i);
 
     return {
         valorDaCausa: parse(valorDaCausa),
-        valorDaCompra: parse(valorDaCompra),
+        valorDaCompra: parse(valorDaCompra, true), 
         valorAtualizado: parse(valorAtualizado),
     };
 };
@@ -42,7 +43,6 @@ const extractFreeText = (description: string | null | undefined): string => {
     if (textStartIndex === -1) return "Atualização de valores do processo";
     return description.substring(textStartIndex).trim();
 };
-
 
 class SyncProcessUpdatesUseCase {
     async execute(): Promise<void> {
@@ -65,6 +65,8 @@ class SyncProcessUpdatesUseCase {
                 if (!lawsuitData) continue;
 
                 const legalOneUpdates = await legalOneApiService.getProcessUpdates(lawsuitData.id);
+                
+                // LÓGICA DE DUPLICIDADE (sem o legalOneUpdateId)
                 const existingUpdates = new Set(asset.updates.map(u => `${u.description}-${new Date(u.date).toISOString()}`));
                 
                 const newUpdates = legalOneUpdates.filter(update => {
@@ -78,48 +80,47 @@ class SyncProcessUpdatesUseCase {
                 }
 
                 console.log(`[CRON JOB] Processo ${asset.processNumber}: ${newUpdates.length} novo(s) andamento(s) encontrado(s)!`);
-
-                // Inicializa com os valores atuais do nosso banco
-                let latestValues = {
-                    currentValue: asset.currentValue,
-                    originalValue: asset.originalValue,
-                    acquisitionValue: asset.acquisitionValue,
-                };
+                
+                const sortedNewUpdates = newUpdates.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
                 await prisma.$transaction(async (tx) => {
-                    for (const update of newUpdates) {
-                        const allValues = extractAllValues(update.fullDescription || update.description);
-                        const updateText = extractFreeText(update.fullDescription || update.description);
+                    let currentAssetValues = {
+                        originalValue: asset.originalValue,
+                        acquisitionValue: asset.acquisitionValue,
+                        currentValue: asset.currentValue,
+                    };
 
-                        // LÓGICA DE ATUALIZAÇÃO SEGURA: Só atualiza o que encontrar
-                        if (allValues.valorAtualizado !== null) {
-                            latestValues.currentValue = allValues.valorAtualizado;
-                        }
+                    for (const update of sortedNewUpdates) {
+                        const allValues = extractAllValues(update.description);
+                        const updateText = extractFreeText(update.description);
+
                         if (allValues.valorDaCausa !== null) {
-                            latestValues.originalValue = allValues.valorDaCausa;
+                            currentAssetValues.originalValue = allValues.valorDaCausa;
                         }
                         if (allValues.valorDaCompra !== null) {
-                            latestValues.acquisitionValue = allValues.valorDaCompra;
+                            currentAssetValues.acquisitionValue = allValues.valorDaCompra;
+                        }
+                        if (allValues.valorAtualizado !== null) {
+                            currentAssetValues.currentValue = allValues.valorAtualizado;
                         }
 
                         await tx.assetUpdate.create({
                             data: {
                                 assetId: asset.id,
                                 date: new Date(update.date),
-                                description: (update.fullDescription || update.description),
-                                updatedValue: allValues.valorAtualizado || latestValues.currentValue,
+                                description: updateText, // Salva o texto limpo
+                                updatedValue: allValues.valorAtualizado ?? currentAssetValues.currentValue,
                                 source: `Legal One - ${update.originType}`,
                             }
                         });
                     }
 
-                    // Atualiza o ativo principal com os valores mais recentes, preservando os que não foram encontrados
                     await tx.creditAsset.update({
                         where: { id: asset.id },
                         data: {
-                            originalValue: latestValues.originalValue,
-                            acquisitionValue: latestValues.acquisitionValue,
-                            currentValue: latestValues.currentValue,
+                            originalValue: currentAssetValues.originalValue,
+                            acquisitionValue: currentAssetValues.acquisitionValue,
+                            currentValue: currentAssetValues.currentValue,
                         }
                     });
                 });
