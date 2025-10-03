@@ -1,45 +1,49 @@
+// /src/modules/creditAssets/useCases/syncProcessUpdates/SyncProcessUpdatesUseCase.ts
 import { PrismaClient } from "@prisma/client";
 import { legalOneApiService, LegalOneUpdate } from "../../../../services/legalOneApiService";
 
 const prisma = new PrismaClient();
 
 /**
- * Tenta extrair um valor monetário de uma string de anotações.
- * Hipótese: o formato será "Valor: R$ 12.345,67".
+ * Extrai múltiplos valores e o texto livre de uma string de anotações
+ * que segue o padrão #SM.
  */
-const parseValueFromNotes = (notes: string | null): number | null => {
-    if (!notes) return null;
-    const valueMatch = notes.match(/Valor:\s*R\$\s*([\d.,]+)/i);
-    if (valueMatch && valueMatch[1]) {
-        // Converte o formato brasileiro (1.234,56) para um número
-        const numericString = valueMatch[1].replace(/\./g, '').replace(',', '.');
-        return parseFloat(numericString);
+const parseAllValuesFromNotes = (notes: string | null): Partial<{ originalValue: number, acquisitionValue: number, currentValue: number, updateText: string }> => {
+    if (!notes || !notes.includes('#SM')) {
+        return {};
     }
-    return null;
+
+    const parseValue = (key: string): number | undefined => {
+        const regex = new RegExp(`${key}:\\s*R\\$\\s*([\\d.,]+)`, 'i');
+        const match = notes.match(regex);
+        if (match && match[1]) {
+            const numericString = match[1].replace(/\./g, '').replace(',', '.');
+            return parseFloat(numericString);
+        }
+        return undefined;
+    };
+
+    // Extrai o texto livre que vem depois dos campos de valor
+    // A lógica assume que o texto livre começa após a última linha de valor.
+    const textStartIndex = notes.lastIndexOf('R$');
+    const updateText = textStartIndex !== -1 ? notes.substring(notes.indexOf('\n', textStartIndex)).trim() : '';
+
+    return {
+        originalValue: parseValue('Valor da Causa'),
+        acquisitionValue: parseValue('Valor da Compra'),
+        currentValue: parseValue('Valor Atualizado'),
+        updateText: updateText,
+    };
 };
 
-/**
- * @class SyncProcessUpdatesUseCase
- * @description Lógica de negócio para buscar e sincronizar novos andamentos para todos os ativos ativos.
- */
+
 class SyncProcessUpdatesUseCase {
     async execute(): Promise<void> {
         console.log(`[CRON JOB] Iniciando a sincronização de andamentos...`);
 
-        // 1. Busca todos os ativos que não estão liquidados ou com falha.
         const activeAssets = await prisma.creditAsset.findMany({
-            where: {
-                status: 'Ativo' // Ou poderíamos incluir 'Em Negociação', etc.
-            },
-            include: {
-                // Incluímos os updates existentes para evitar duplicatas
-                updates: {
-                    select: {
-                        description: true,
-                        date: true,
-                    }
-                }
-            }
+            where: { status: 'Ativo' },
+            include: { updates: { select: { description: true, date: true } } }
         });
 
         if (activeAssets.length === 0) {
@@ -47,21 +51,17 @@ class SyncProcessUpdatesUseCase {
             return;
         }
 
-        console.log(`[CRON JOB] ${activeAssets.length} ativos encontrados para verificação.`);
+        console.log(`[CRON JOB] ${activeAssets.length} ativos encontrados.`);
 
-        // 2. Itera sobre cada ativo para verificar por novas atualizações.
         for (const asset of activeAssets) {
             try {
-                // Busca o ID do Lawsuit no Legal One para poder buscar os andamentos
                 const lawsuitData = await legalOneApiService.getProcessDetails(asset.processNumber);
                 if (!lawsuitData) continue;
 
                 const legalOneUpdates = await legalOneApiService.getProcessUpdates(lawsuitData.id);
 
-                // Criamos um "carimbo" único para cada andamento já salvo, para evitar duplicatas
                 const existingUpdates = new Set(asset.updates.map(u => `${u.description}-${new Date(u.date).toISOString()}`));
                 
-                // Filtramos a lista do Legal One, pegando apenas os que não temos no nosso banco
                 const newUpdates = legalOneUpdates.filter(update => 
                     !existingUpdates.has(`${update.description}-${new Date(update.date).toISOString()}`)
                 );
@@ -70,41 +70,59 @@ class SyncProcessUpdatesUseCase {
                     console.log(`[CRON JOB] Processo ${asset.processNumber}: Nenhum novo andamento encontrado.`);
                     continue;
                 }
+                
+                // Filtra para processar apenas os andamentos que contêm nossa tag
+                const updatesToSync = newUpdates.filter(upd => upd.notes?.includes('#SM'));
+                
+                if(updatesToSync.length === 0) {
+                    console.log(`[CRON JOB] Processo ${asset.processNumber}: Novos andamentos encontrados, mas nenhum com a tag #SM.`);
+                    continue;
+                }
 
-                console.log(`[CRON JOB] Processo ${asset.processNumber}: ${newUpdates.length} novo(s) andamento(s) encontrado(s)!`);
+                console.log(`[CRON JOB] Processo ${asset.processNumber}: ${updatesToSync.length} novo(s) andamento(s) com a tag #SM encontrado(s)!`);
 
-                let latestCurrentValue = asset.currentValue;
+                await prisma.$transaction(async (tx) => {
+                    // Pega os valores atuais como base
+                    let latestCurrentValue = asset.currentValue;
+                    let latestAcquisitionValue = asset.acquisitionValue;
+                    let latestOriginalValue = asset.originalValue;
 
-                // Salva os novos andamentos no nosso banco
-                for (const update of newUpdates) {
-                     const extractedValue = parseValueFromNotes(update.notes);
-                    
-                    if (extractedValue !== null) {
-                        latestCurrentValue = extractedValue;
+                    // Ordena os andamentos a sincronizar do mais antigo para o mais recente
+                    updatesToSync.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+                    for (const update of updatesToSync) {
+                        const parsedData = parseAllValuesFromNotes(update.notes);
+                        
+                        // Atualiza os valores mais recentes a cada iteração
+                        if (parsedData.currentValue !== undefined) latestCurrentValue = parsedData.currentValue;
+                        if (parsedData.acquisitionValue !== undefined) latestAcquisitionValue = parsedData.acquisitionValue;
+                        if (parsedData.originalValue !== undefined) latestOriginalValue = parsedData.originalValue;
+
+                        // Cria o registo de atualização no nosso sistema
+                        await tx.assetUpdate.create({
+                            data: {
+                                assetId: asset.id,
+                                date: new Date(update.date),
+                                description: parsedData.updateText || update.description, // Prioriza o texto livre extraído
+                                updatedValue: parsedData.currentValue || latestCurrentValue,
+                                source: `Legal One - ${update.originType}`,
+                            }
+                        });
                     }
-
-                    await prisma.assetUpdate.create({
-                        data: {
-                            assetId: asset.id,
-                            date: new Date(update.date),
-                            description: update.description,
-                            updatedValue: extractedValue || latestCurrentValue, // Usa o valor extraído ou o último conhecido
-                            source: `Legal One - ${update.originType}`,
+                    
+                    // Atualiza o ativo principal com os valores do último andamento processado
+                    await tx.creditAsset.update({
+                        where: { id: asset.id },
+                        data: { 
+                            currentValue: latestCurrentValue,
+                            acquisitionValue: latestAcquisitionValue,
+                            originalValue: latestOriginalValue
                         }
                     });
-                }
-                
-                // Atualiza o valor atual do ativo se um novo valor foi encontrado
-                if (latestCurrentValue !== asset.currentValue) {
-                    await prisma.creditAsset.update({
-                        where: { id: asset.id },
-                        data: { currentValue: latestCurrentValue }
-                    });
-                }
+                });
 
             } catch (error: any) {
                 console.error(`[CRON JOB] Erro ao sincronizar o processo ${asset.processNumber}:`, error.message);
-                // Continua para o próximo ativo em caso de erro em um
                 continue;
             }
         }
