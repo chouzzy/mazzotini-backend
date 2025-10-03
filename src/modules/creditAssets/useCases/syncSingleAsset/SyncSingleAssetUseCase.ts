@@ -4,6 +4,9 @@ import { legalOneApiService } from "../../../../services/legalOneApiService";
 
 const prisma = new PrismaClient();
 
+// As funções auxiliares extractAllValues e extractFreeText são mantidas
+// para a lógica de extração de dados dos andamentos.
+
 /**
  * Tenta extrair todos os valores monetários de uma string de texto.
  */
@@ -25,13 +28,13 @@ const extractAllValues = (text: string | null | undefined) => {
 
     return {
         valorDaCausa: parse(valorDaCausa),
-        valorDaCompra: parse(valorDaCompra, true),
+        valorDaCompra: parse(valorDaCompra, true), 
         valorAtualizado: parse(valorAtualizado),
     };
 };
 
 /**
- * Extrai apenas o texto descritivo do andamento, ignorando a tag e os campos de valor.
+ * Extrai apenas o texto descritivo do andamento, ignorando a tag #SM e os campos de valor.
  */
 const extractFreeText = (description: string | null | undefined): string => {
     if (!description || !description.includes('#SM')) {
@@ -43,6 +46,7 @@ const extractFreeText = (description: string | null | undefined): string => {
     if (textStartIndex === -1) return "Atualização de valores do processo";
     return description.substring(textStartIndex).trim();
 };
+
 
 class SyncSingleAssetUseCase {
     async execute(processNumber: string): Promise<void> {
@@ -62,11 +66,14 @@ class SyncSingleAssetUseCase {
 
         try {
             const lawsuitData = await legalOneApiService.getProcessDetails(asset.processNumber);
+            console.log(`[SYNC MANUAL] Processo ${asset.processNumber} encontrado no Legal One: ID ${lawsuitData.id}`);
 
             const [legalOneUpdates, legalOneDocuments] = await Promise.all([
                 legalOneApiService.getProcessUpdates(lawsuitData.id),
                 legalOneApiService.getProcessDocuments(lawsuitData.id)
             ]);
+            
+            console.log(`[SYNC MANUAL] ${legalOneUpdates.length} andamentos e ${legalOneDocuments.length} documentos encontrados no Legal One.`);
 
             const existingUpdateIds = new Set(asset.updates.map(u => u.legalOneUpdateId).filter(id => id !== null));
             const newUpdates = legalOneUpdates.filter(update => !existingUpdateIds.has(update.id));
@@ -78,19 +85,9 @@ class SyncSingleAssetUseCase {
                 console.log(`[SYNC MANUAL] Processo ${asset.processNumber}: Nenhuma novidade encontrada.`);
                 return;
             }
-
-            // --- OTIMIZAÇÃO: BUSCAR TODAS AS URLs ANTES DA TRANSAÇÃO ---
-            console.log(`[SYNC MANUAL] Buscando URLs de download para ${newDocuments.length} novo(s) documento(s)...`);
-            const documentPromises = newDocuments.map(doc =>
-                legalOneApiService.getDocumentDownloadUrl(doc.id).then(url => ({ ...doc, downloadUrl: url }))
-            );
-            const documentsWithUrls = await Promise.all(documentPromises);
-            console.log(`[SYNC MANUAL] URLs de download obtidas com sucesso.`);
-            // -----------------------------------------------------------
-
+            
             const sortedNewUpdates = newUpdates.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-            // Aumentamos o timeout da transação por segurança, embora a otimização deva resolver
             await prisma.$transaction(async (tx) => {
                 let currentAssetValues = {
                     originalValue: asset.originalValue,
@@ -101,20 +98,36 @@ class SyncSingleAssetUseCase {
                 if (sortedNewUpdates.length > 0) {
                     console.log(`[SYNC MANUAL] Salvando ${sortedNewUpdates.length} novo(s) andamento(s)...`);
                     for (const update of sortedNewUpdates) {
-                        // ... (lógica de extrair e atualizar valores - sem alterações)
+                        const allValues = extractAllValues(update.description);
+                        const updateText = extractFreeText(update.description);
+
+                        if (allValues.valorDaCausa !== null) currentAssetValues.originalValue = allValues.valorDaCausa;
+                        if (allValues.valorDaCompra !== null) currentAssetValues.acquisitionValue = allValues.valorDaCompra;
+                        if (allValues.valorAtualizado !== null) currentAssetValues.currentValue = allValues.valorAtualizado;
+
+                        await tx.assetUpdate.create({
+                            data: {
+                                assetId: asset.id,
+                                legalOneUpdateId: update.id,
+                                date: new Date(update.date),
+                                description: update.description,
+                                updatedValue: allValues.valorAtualizado ?? currentAssetValues.currentValue,
+                                source: `Legal One - ${update.originType}`,
+                            }
+                        });
                     }
                 }
 
-                if (documentsWithUrls.length > 0) {
-                    console.log(`[SYNC MANUAL] Salvando ${documentsWithUrls.length} novo(s) documento(s)...`);
-                    for (const doc of documentsWithUrls) {
+                if (newDocuments.length > 0) {
+                    console.log(`[SYNC MANUAL] Salvando metadados de ${newDocuments.length} novo(s) documento(s)...`);
+                    for (const doc of newDocuments) {
                         await tx.document.create({
                             data: {
                                 assetId: asset.id,
                                 legalOneDocumentId: doc.id,
                                 name: doc.archive,
                                 category: doc.type || 'Indefinido',
-                                url: doc.downloadUrl, // Usa a URL que já buscamos
+                                url: '', // A URL será gerada sob demanda pelo frontend
                             }
                         });
                     }
@@ -128,10 +141,6 @@ class SyncSingleAssetUseCase {
                         currentValue: currentAssetValues.currentValue,
                     }
                 });
-            }, {
-                // Aumenta o timeout desta transação específica para 30 segundos por segurança
-                maxWait: 30000,
-                timeout: 30000,
             });
 
             console.log(`✅ Ativo ${asset.id} (manual) sincronizado com sucesso!`);
