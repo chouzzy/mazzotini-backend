@@ -132,8 +132,6 @@ class LegalOneApiService {
                 '$orderby': 'date desc'
             }
         });
-        console.log(`response.data:`, response.data);
-        console.log(`[Legal One API Service] ${response.data.value.length} andamentos encontrados para o Lawsuit ID: ${lawsuitId}`);
 
         return response.data.value || [];
     }
