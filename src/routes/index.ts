@@ -4,6 +4,7 @@ import { checkJwt } from "../middleware/auth"; // Importa o "segurança"
 import { creditAssetRoutes } from "./creditAsset.routes";
 import { userRoutes } from "./users.routes";
 import { investmentRoutes } from "./investment.routes";
+import { documentRoutes } from "./document.routes";
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.get('/', (req, res) => res.json({ message: 'API Base está online!' }));
 router.use(creditAssetRoutes);
 router.use(userRoutes);
 router.use(investmentRoutes);
+router.use(documentRoutes);
 
 export { router };
