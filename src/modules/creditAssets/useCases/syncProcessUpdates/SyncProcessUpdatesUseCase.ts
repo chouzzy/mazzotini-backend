@@ -5,35 +5,42 @@ import { legalOneApiService, LegalOneUpdate } from "../../../../services/legalOn
 const prisma = new PrismaClient();
 
 /**
- * Extrai múltiplos valores e o texto livre de uma string de anotações
- * que segue o padrão #SM.
+ * Tenta extrair todos os valores monetários de uma string de texto.
  */
-const parseAllValuesFromNotes = (notes: string | null): Partial<{ originalValue: number, acquisitionValue: number, currentValue: number, updateText: string }> => {
-    if (!notes || !notes.includes('#SM')) {
-        return {};
-    }
+const extractAllValues = (text: string | null | undefined) => {
+    if (!text) return { valorDaCausa: null, valorDaCompra: null, valorAtualizado: null };
 
-    const parseValue = (key: string): number | undefined => {
-        const regex = new RegExp(`${key}:\\s*R\\$\\s*([\\d.,]+)`, 'i');
-        const match = notes.match(regex);
+    const parse = (match: RegExpMatchArray | null) => {
         if (match && match[1]) {
             const numericString = match[1].replace(/\./g, '').replace(',', '.');
             return parseFloat(numericString);
         }
-        return undefined;
+        return null;
     };
 
-    // Extrai o texto livre que vem depois dos campos de valor
-    // A lógica assume que o texto livre começa após a última linha de valor.
-    const textStartIndex = notes.lastIndexOf('R$');
-    const updateText = textStartIndex !== -1 ? notes.substring(notes.indexOf('\n', textStartIndex)).trim() : '';
+    const valorDaCausa = text.match(/Valor da causa:\s*R\$\s*([\d.,]+)/i);
+    const valorDaCompra = text.match(/Valor da compra:\s*R\$\s*([\d.,]+)/i);
+    const valorAtualizado = text.match(/Valor atualizado:\s*R\$\s*([\d.,]+)/i);
 
     return {
-        originalValue: parseValue('Valor da Causa'),
-        acquisitionValue: parseValue('Valor da Compra'),
-        currentValue: parseValue('Valor Atualizado'),
-        updateText: updateText,
+        valorDaCausa: parse(valorDaCausa),
+        valorDaCompra: parse(valorDaCompra),
+        valorAtualizado: parse(valorAtualizado),
     };
+};
+
+/**
+ * Extrai apenas o texto descritivo do andamento, ignorando a tag #SM e os campos de valor.
+ */
+const extractFreeText = (description: string | null | undefined): string => {
+    if (!description || !description.includes('#SM')) {
+        return description || "Atualização de Valor";
+    }
+    const lastValueIndex = description.lastIndexOf('R$');
+    if (lastValueIndex === -1) return description.substring(description.indexOf('#SM') + 3).trim();
+    const textStartIndex = description.indexOf('\n', lastValueIndex);
+    if (textStartIndex === -1) return "Atualização de valores do processo";
+    return description.substring(textStartIndex).trim();
 };
 
 
@@ -50,8 +57,7 @@ class SyncProcessUpdatesUseCase {
             console.log("[CRON JOB] Nenhum ativo ativo encontrado para sincronizar.");
             return;
         }
-
-        console.log(`[CRON JOB] ${activeAssets.length} ativos encontrados.`);
+        console.log(`[CRON JOB] ${activeAssets.length} ativos encontrados para verificação.`);
 
         for (const asset of activeAssets) {
             try {
@@ -59,67 +65,66 @@ class SyncProcessUpdatesUseCase {
                 if (!lawsuitData) continue;
 
                 const legalOneUpdates = await legalOneApiService.getProcessUpdates(lawsuitData.id);
-
                 const existingUpdates = new Set(asset.updates.map(u => `${u.description}-${new Date(u.date).toISOString()}`));
                 
-                const newUpdates = legalOneUpdates.filter(update => 
-                    !existingUpdates.has(`${update.description}-${new Date(update.date).toISOString()}`)
-                );
+                const newUpdates = legalOneUpdates.filter(update => {
+                    const uniqueKey = `${update.description}-${new Date(update.date).toISOString()}`;
+                    return !existingUpdates.has(uniqueKey);
+                });
 
                 if (newUpdates.length === 0) {
                     console.log(`[CRON JOB] Processo ${asset.processNumber}: Nenhum novo andamento encontrado.`);
                     continue;
                 }
-                
-                // Filtra para processar apenas os andamentos que contêm nossa tag
-                const updatesToSync = newUpdates.filter(upd => upd.notes?.includes('#SM'));
-                
-                if(updatesToSync.length === 0) {
-                    console.log(`[CRON JOB] Processo ${asset.processNumber}: Novos andamentos encontrados, mas nenhum com a tag #SM.`);
-                    continue;
-                }
 
-                console.log(`[CRON JOB] Processo ${asset.processNumber}: ${updatesToSync.length} novo(s) andamento(s) com a tag #SM encontrado(s)!`);
+                console.log(`[CRON JOB] Processo ${asset.processNumber}: ${newUpdates.length} novo(s) andamento(s) encontrado(s)!`);
+
+                // Inicializa com os valores atuais do nosso banco
+                let latestValues = {
+                    currentValue: asset.currentValue,
+                    originalValue: asset.originalValue,
+                    acquisitionValue: asset.acquisitionValue,
+                };
 
                 await prisma.$transaction(async (tx) => {
-                    // Pega os valores atuais como base
-                    let latestCurrentValue = asset.currentValue;
-                    let latestAcquisitionValue = asset.acquisitionValue;
-                    let latestOriginalValue = asset.originalValue;
+                    for (const update of newUpdates) {
+                        const allValues = extractAllValues(update.fullDescription || update.description);
+                        const updateText = extractFreeText(update.fullDescription || update.description);
 
-                    // Ordena os andamentos a sincronizar do mais antigo para o mais recente
-                    updatesToSync.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                        // LÓGICA DE ATUALIZAÇÃO SEGURA: Só atualiza o que encontrar
+                        if (allValues.valorAtualizado !== null) {
+                            latestValues.currentValue = allValues.valorAtualizado;
+                        }
+                        if (allValues.valorDaCausa !== null) {
+                            latestValues.originalValue = allValues.valorDaCausa;
+                        }
+                        if (allValues.valorDaCompra !== null) {
+                            latestValues.acquisitionValue = allValues.valorDaCompra;
+                        }
 
-                    for (const update of updatesToSync) {
-                        const parsedData = parseAllValuesFromNotes(update.notes);
-                        
-                        // Atualiza os valores mais recentes a cada iteração
-                        if (parsedData.currentValue !== undefined) latestCurrentValue = parsedData.currentValue;
-                        if (parsedData.acquisitionValue !== undefined) latestAcquisitionValue = parsedData.acquisitionValue;
-                        if (parsedData.originalValue !== undefined) latestOriginalValue = parsedData.originalValue;
-
-                        // Cria o registo de atualização no nosso sistema
                         await tx.assetUpdate.create({
                             data: {
                                 assetId: asset.id,
                                 date: new Date(update.date),
-                                description: parsedData.updateText || update.description, // Prioriza o texto livre extraído
-                                updatedValue: parsedData.currentValue || latestCurrentValue,
+                                description: (update.fullDescription || update.description),
+                                updatedValue: allValues.valorAtualizado || latestValues.currentValue,
                                 source: `Legal One - ${update.originType}`,
                             }
                         });
                     }
-                    
-                    // Atualiza o ativo principal com os valores do último andamento processado
+
+                    // Atualiza o ativo principal com os valores mais recentes, preservando os que não foram encontrados
                     await tx.creditAsset.update({
                         where: { id: asset.id },
-                        data: { 
-                            currentValue: latestCurrentValue,
-                            acquisitionValue: latestAcquisitionValue,
-                            originalValue: latestOriginalValue
+                        data: {
+                            originalValue: latestValues.originalValue,
+                            acquisitionValue: latestValues.acquisitionValue,
+                            currentValue: latestValues.currentValue,
                         }
                     });
                 });
+
+                console.log(`✅ Ativo ${asset.id} sincronizado com ${newUpdates.length} novos andamentos!`);
 
             } catch (error: any) {
                 console.error(`[CRON JOB] Erro ao sincronizar o processo ${asset.processNumber}:`, error.message);

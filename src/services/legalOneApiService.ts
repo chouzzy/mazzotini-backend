@@ -36,6 +36,7 @@ export interface LegalOneUpdate {
     isConfidential: boolean;
     date: string;
     creationDate: string;
+    fullDescription: string | null;
     // ... outros campos do andamento
 }
 
