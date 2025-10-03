@@ -28,7 +28,7 @@ const extractAllValues = (text: string | null | undefined) => {
 
     return {
         valorDaCausa: parse(valorDaCausa),
-        valorDaCompra: parse(valorDaCompra, true), 
+        valorDaCompra: parse(valorDaCompra, true),
         valorAtualizado: parse(valorAtualizado),
     };
 };
@@ -72,7 +72,7 @@ class SyncSingleAssetUseCase {
                 legalOneApiService.getProcessUpdates(lawsuitData.id),
                 legalOneApiService.getProcessDocuments(lawsuitData.id)
             ]);
-            
+
             console.log(`[SYNC MANUAL] ${legalOneUpdates.length} andamentos e ${legalOneDocuments.length} documentos encontrados no Legal One.`);
 
             const existingUpdateIds = new Set(asset.updates.map(u => u.legalOneUpdateId).filter(id => id !== null));
@@ -85,7 +85,7 @@ class SyncSingleAssetUseCase {
                 console.log(`[SYNC MANUAL] Processo ${asset.processNumber}: Nenhuma novidade encontrada.`);
                 return;
             }
-            
+
             const sortedNewUpdates = newUpdates.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
             await prisma.$transaction(async (tx) => {
@@ -141,6 +141,10 @@ class SyncSingleAssetUseCase {
                         currentValue: currentAssetValues.currentValue,
                     }
                 });
+            }, {
+                // Aumenta o timeout desta transação específica para 30 segundos por segurança
+                maxWait: 30000,
+                timeout: 30000,
             });
 
             console.log(`✅ Ativo ${asset.id} (manual) sincronizado com sucesso!`);
