@@ -62,11 +62,15 @@ class SyncSingleAssetUseCase {
 
         try {
             const lawsuitData = await legalOneApiService.getProcessDetails(asset.processNumber);
+
+            console.log(`[SYNC MANUAL] Processo ${asset.processNumber} encontrado no Legal One: ID ${lawsuitData.id}`);
             
             const [legalOneUpdates, legalOneDocuments] = await Promise.all([
                 legalOneApiService.getProcessUpdates(lawsuitData.id),
                 legalOneApiService.getProcessDocuments(lawsuitData.id)
             ]);
+
+            console.log(`[SYNC MANUAL] ${legalOneUpdates.length} andamentos e ${legalOneDocuments.length} documentos encontrados no Legal One.`);
 
             const existingUpdateIds = new Set(asset.updates.map(u => u.legalOneUpdateId).filter(id => id !== null));
             const newUpdates = legalOneUpdates.filter(update => !existingUpdateIds.has(update.id));
