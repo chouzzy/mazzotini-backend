@@ -73,7 +73,7 @@ class SyncSingleAssetUseCase {
                         data: {
                             assetId: asset.id,
                             date: new Date(update.date),
-                            description: updateText,
+                            description: update.description,
                             updatedValue: allValues.valorAtualizado ?? currentAssetValues.currentValue,
                             source: `Legal One - ${update.originType}`,
                         }
