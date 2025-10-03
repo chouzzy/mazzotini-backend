@@ -160,6 +160,10 @@ class LegalOneApiService {
 
         const response = await axios.get<LegalOneDocumentsApiResponse>(requestUrl, {
             headers: { 'Authorization': `Bearer ${token}` },
+            params: {
+                // A CORREÇÃO ESTÁ AQUI: Usando a sintaxe de filtro correta
+                '$filter': `relationships/any(r: r/Link eq 'Litigation' and r/LinkItem/Id eq ${lawsuitId})`,
+            }
         });
         console.log(`response.data:`, response.data);
         console.log(`[Legal One API Service] ${response.data.value.length} documentos encontrados para o Lawsuit ID: ${lawsuitId}`);
