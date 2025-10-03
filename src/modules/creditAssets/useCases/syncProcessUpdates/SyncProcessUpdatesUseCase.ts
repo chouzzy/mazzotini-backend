@@ -140,6 +140,10 @@ class SyncProcessUpdatesUseCase {
                             currentValue: currentAssetValues.currentValue,
                         }
                     });
+                }, {
+                    // Aumenta o timeout desta transação específica para 30 segundos por segurança
+                    maxWait: 30000,
+                    timeout: 30000,
                 });
 
                 console.log(`✅ Ativo ${asset.id} sincronizado!`);
