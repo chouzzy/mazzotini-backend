@@ -71,7 +71,7 @@ class LegalOneApiService {
         if (this.accessToken && this.tokenExpiresAt && Date.now() < this.tokenExpiresAt) {
             return this.accessToken;
         }
-        
+
         console.log("[Legal One API Service] Obtendo novo token de acesso...");
 
         const key = process.env.LEGAL_ONE_CONSUMER_KEY;
@@ -81,7 +81,7 @@ class LegalOneApiService {
         if (!key || !secret || !baseUrl) {
             throw new Error("Credenciais ou URL Base da API do Legal One não configuradas.");
         }
-        
+
         const tokenUrl = `${baseUrl}/oauth?grant_type=client_credentials`;
 
         const response = await axios.get(tokenUrl, {
@@ -89,9 +89,9 @@ class LegalOneApiService {
         });
 
         const { access_token, expires_in } = response.data;
-        
+
         this.accessToken = access_token;
-        this.tokenExpiresAt = Date.now() + (expires_in - 60) * 1000; 
+        this.tokenExpiresAt = Date.now() + (expires_in - 60) * 1000;
 
         console.log("[Legal One API Service] Novo token obtido com sucesso.");
         return this.accessToken as string;
@@ -132,17 +132,19 @@ class LegalOneApiService {
                 '$orderby': 'date desc'
             }
         });
+        console.log(`response.data:`, response.data);
+        console.log(`[Legal One API Service] ${response.data.value.length} andamentos encontrados para o Lawsuit ID: ${lawsuitId}`);
 
         return response.data.value || [];
     }
-    
+
     public async getContactDetails(contactId: number): Promise<LegalOneContact> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/Contacts/${contactId}`;
 
         console.log(`[Legal One API Service] Buscando detalhes do contato ID: ${contactId}`);
-        
+
         const response = await axios.get<LegalOneContact>(requestUrl, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -164,6 +166,8 @@ class LegalOneApiService {
                 '$filter': `relationships/any(r: r/linkType eq 'Litigation' and r/linkId eq ${lawsuitId})`,
             }
         });
+        console.log(`response.data:`, response.data);
+        console.log(`[Legal One API Service] ${response.data.value.length} documentos encontrados para o Lawsuit ID: ${lawsuitId}`);
 
         return response.data.value || [];
     }
