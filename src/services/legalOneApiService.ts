@@ -1,3 +1,4 @@
+// /src/services/legalOneApiService.ts
 import axios from 'axios';
 
 // ============================================================================
@@ -16,40 +17,48 @@ export interface LegalOneLawsuit {
     identifierNumber: string;
     monetaryAmount?: { Value: number; Code: string };
     participants: LegalOneParticipant[];
-    // ... outros campos do Lawsuit que possamos precisar
+    // ... outros campos
 }
 
 export interface LegalOneLawsuitApiResponse {
     value: LegalOneLawsuit[];
 }
 
-// NOVA INTERFACE para os Andamentos (Updates)
 export interface LegalOneUpdate {
     id: number;
-    typeId: number;
-    originType: string;
-    isSubType: boolean;
-    actExecutorId: number | null;
-    contactCreatorId: number | null;
     description: string;
     notes: string | null;
-    isConfidential: boolean;
     date: string;
-    creationDate: string;
-    fullDescription: string | null;
-    // ... outros campos do andamento
+    typeId: number;
+    originType: 'Manual' | 'OfficialJournalsCrawler' | string;
 }
 
 export interface LegalOneUpdatesApiResponse {
     value: LegalOneUpdate[];
 }
 
-
-// NOVA INTERFACE para a resposta de /Contacts/{id}
 export interface LegalOneContact {
     id: number;
     name: string;
 }
+
+// NOVA INTERFACE para os Documentos
+export interface LegalOneDocument {
+    id: number;
+    archive: string; // Nome do ficheiro
+    type: string; // Categoria
+}
+
+export interface LegalOneDocumentsApiResponse {
+    value: LegalOneDocument[];
+}
+
+// NOVA INTERFACE para o link de download
+export interface LegalOneDocumentDownload {
+    id: number;
+    url: string;
+}
+
 
 // ============================================================================
 //  LÓGICA DE SERVIÇO DA API
@@ -109,7 +118,6 @@ class LegalOneApiService {
         return results[0];
     }
 
-    // NOVA FUNÇÃO para buscar os andamentos de um processo
     public async getProcessUpdates(lawsuitId: number): Promise<LegalOneUpdate[]> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
@@ -120,9 +128,8 @@ class LegalOneApiService {
         const response = await axios.get<LegalOneUpdatesApiResponse>(requestUrl, {
             headers: { 'Authorization': `Bearer ${token}` },
             params: {
-                // Filtra os 'updates' que têm uma relação com um 'Litigation' com o ID do nosso processo
                 '$filter': `relationships/any(r: r/linkType eq 'Litigation' and r/linkId eq ${lawsuitId})`,
-                '$orderby': 'date desc' // Pega os mais recentes primeiro
+                '$orderby': 'date desc'
             }
         });
 
@@ -142,7 +149,40 @@ class LegalOneApiService {
 
         return response.data;
     }
+
+    // NOVA FUNÇÃO para buscar os documentos de um processo
+    public async getProcessDocuments(lawsuitId: number): Promise<LegalOneDocument[]> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const requestUrl = `${apiRestUrl}/Documents`;
+
+        console.log(`[Legal One API Service] Buscando documentos para o Lawsuit ID: ${lawsuitId}`);
+
+        const response = await axios.get<LegalOneDocumentsApiResponse>(requestUrl, {
+            headers: { 'Authorization': `Bearer ${token}` },
+            params: {
+                '$filter': `relationships/any(r: r/linkType eq 'Litigation' and r/linkId eq ${lawsuitId})`,
+            }
+        });
+
+        return response.data.value || [];
+    }
+
+    // NOVA FUNÇÃO para obter a URL de download de um documento
+    public async getDocumentDownloadUrl(documentId: number): Promise<string> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        // Endpoint especial para gerar a URL de download
+        const requestUrl = `${apiRestUrl}/Documents/UrlDownload(key=${documentId})`;
+
+        console.log(`[Legal One API Service] Gerando URL de download para o Documento ID: ${documentId}`);
+
+        const response = await axios.get<LegalOneDocumentDownload>(requestUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        return response.data.url;
+    }
 }
 
 export const legalOneApiService = new LegalOneApiService();
-

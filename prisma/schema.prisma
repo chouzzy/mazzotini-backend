@@ -86,7 +86,9 @@ model CreditAsset {
 // Registra o histórico de atualizações do valor do crédito, vindo do Legal One ou inserido manualmente.
 // Este modelo unifica 'AssetUpdate' e 'MonthlyUpdate'.
 model AssetUpdate {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  id               String @id @default(auto()) @map("_id") @db.ObjectId
+  legalOneUpdateId Int?   @unique // NOVO CAMPO: ID original do "Update" do Legal One
+
   date         DateTime @default(now()) // Data em que a atualização foi registrada.
   updatedValue Float // O novo valor do ativo após esta atualização.
   description  String? // Descrição/observação sobre a atualização.
@@ -113,7 +115,9 @@ model Investment {
 // --- Modelo de Documento ---
 // Para gerenciar contratos e outros arquivos associados ao crédito.
 model Document {
-  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  id                 String @id @default(auto()) @map("_id") @db.ObjectId
+  legalOneDocumentId Int?   @unique // NOVO CAMPO: ID original do Legal One
+
   name     String
   url      String // URL do arquivo (ex: S3, Google Cloud Storage).
   category String // Ex: "Cessão de Crédito", "Sentença Judicial".
