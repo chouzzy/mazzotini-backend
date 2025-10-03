@@ -23,6 +23,8 @@ const extractAllValues = (text: string | null | undefined) => {
     const valorDaCompra = text.match(/Valor da Compra:\s*R\$\s*([\d.,]+)/i);
     const valorAtualizado = text.match(/Valor Atualizado:\s*R\$\s*([\d.,]+)/i);
 
+    console.log('Extraído:', { valorDaCausa, valorDaCompra, valorAtualizado });
+
     return {
         valorDaCausa: parse(valorDaCausa),
         valorDaCompra: parse(valorDaCompra, true), 
@@ -94,6 +96,8 @@ class SyncProcessUpdatesUseCase {
                         const allValues = extractAllValues(update.description);
                         const updateText = extractFreeText(update.description);
 
+                        console.log(`All values extracted from update:`, allValues);
+                        
                         if (allValues.valorDaCausa !== null) {
                             currentAssetValues.originalValue = allValues.valorDaCausa;
                         }
