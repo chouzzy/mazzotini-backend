@@ -5,6 +5,7 @@ import { creditAssetRoutes } from "./creditAsset.routes";
 import { userRoutes } from "./users.routes";
 import { investmentRoutes } from "./investment.routes";
 import { documentRoutes } from "./document.routes";
+import { managementRoutes } from "./management.routes";
 
 const router = Router();
 
@@ -18,5 +19,7 @@ router.use(creditAssetRoutes);
 router.use(userRoutes);
 router.use(investmentRoutes);
 router.use(documentRoutes);
+router.use(managementRoutes);
+
 
 export { router };
