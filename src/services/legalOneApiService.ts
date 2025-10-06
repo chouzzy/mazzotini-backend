@@ -165,7 +165,6 @@ class LegalOneApiService {
                 '$filter': `relationships/any(r: r/Link eq 'Litigation' and r/LinkItem/Id eq ${lawsuitId})`,
             }
         });
-        console.log(`response.data:`, response.data);
         console.log(`[Legal One API Service] ${response.data.value.length} documentos encontrados para o Lawsuit ID: ${lawsuitId}`);
 
         return response.data.value || [];
@@ -178,7 +177,7 @@ class LegalOneApiService {
         // Endpoint especial para gerar a URL de download
         const requestUrl = `${apiRestUrl}/Documents/UrlDownload(key=${documentId})`;
 
-        console.log(`[Legal One API Service] Gerando URL de download para o Documento ID: ${documentId}`);
+        console.log(`[Legal One API Service] Gerando URL de download para o Document ID: ${documentId}`);
 
         const response = await axios.get<LegalOneDocumentDownload>(requestUrl, {
             headers: { 'Authorization': `Bearer ${token}` }
