@@ -1,5 +1,5 @@
 // /src/services/auth0ManagementService.ts
-import { ManagementClient } from 'auth0';
+import { ApiResponse, GetOrganizationMemberRoles200ResponseOneOfInner, ManagementClient, RoleCreate } from 'auth0';
 
 // Validação das variáveis de ambiente
 const auth0Domain = process.env.AUTH0_MGMT_DOMAIN;
@@ -10,7 +10,6 @@ if (!auth0Domain || !clientId || !clientSecret) {
     throw new Error("As credenciais da API de Gestão do Auth0 não estão configuradas no ambiente.");
 }
 
-// Instancia o cliente de gestão. A biblioteca lida com a obtenção do token automaticamente.
 const managementClient = new ManagementClient({
     domain: auth0Domain,
     clientId: clientId,
@@ -29,7 +28,6 @@ class Auth0ManagementService {
         console.log("[Auth0 Mgmt] A buscar a lista de todos os utilizadores...");
         const users = await managementClient.users.getAll();
 
-        // Para cada utilizador, buscamos as suas roles em paralelo para otimizar.
         const usersWithRolesPromises = users.data.map(async (user) => {
             if (!user.user_id) {
                 return { ...user, roles: [] };
@@ -37,7 +35,7 @@ class Auth0ManagementService {
             const rolesResponse = await managementClient.users.getRoles({ id: user.user_id });
             return {
                 ...user,
-                roles: rolesResponse.data.map(role => role.name) || [], // Retorna apenas os nomes das roles
+                roles: rolesResponse.data.map(role => role.name) || [],
             };
         });
 
@@ -48,13 +46,48 @@ class Auth0ManagementService {
     }
 
     /**
-     * Atualiza as roles de um utilizador específico.
-     * (Esta função será usada no futuro quando construirmos a edição).
+     * Busca todas as roles disponíveis no Auth0.
      */
-    async updateUserRoles(auth0UserId: string, roleIds: string[]) {
-        console.log(`[Auth0 Mgmt] A atualizar roles para o utilizador ${auth0UserId}...`);
-        await managementClient.users.assignRoles({ id: auth0UserId }, { roles: roleIds });
-        console.log(`[Auth0 Mgmt] Roles atualizadas com sucesso.`);
+    async getAllRoles(): Promise<ApiResponse<GetOrganizationMemberRoles200ResponseOneOfInner[]>["data"]> {
+        console.log("[Auth0 Mgmt] A buscar todas as roles disponíveis...");
+        const roles = await managementClient.roles.getAll();
+        console.log(`[Auth0 Mgmt] ${roles.data.length} roles encontradas.`);
+        return roles.data;
+    }
+
+    /**
+     * Atualiza as roles de um utilizador específico, recebendo os NOMES das roles.
+     */
+    async updateUserRoles(auth0UserId: string, newRoleNames: string[]): Promise<void> {
+        console.log(`[Auth0 Mgmt] A atualizar roles para o utilizador ${auth0UserId} para [${newRoleNames.join(', ')}]`);
+
+        // Passo 1: Buscar todas as roles disponíveis para criar um mapa de Nome -> ID.
+        const allRoles = await this.getAllRoles();
+        const roleMap = new Map(allRoles.map(role => [role.name, role.id]));
+
+        // Passo 2: Converter os nomes das novas roles para os seus IDs correspondentes.
+        const newRoleIds = newRoleNames.map(name => {
+            const roleId = roleMap.get(name);
+            if (!roleId) {
+                throw new Error(`A role "${name}" não foi encontrada no Auth0.`);
+            }
+            return roleId;
+        });
+
+        // Passo 3: Buscar as roles atuais do utilizador para saber o que remover.
+        const currentRolesResponse = await managementClient.users.getRoles({ id: auth0UserId });
+        const currentRoleIds = currentRolesResponse.data.map(role => role.id!);
+
+        // Passo 4: Atribuir as novas roles e remover as antigas numa única operação.
+        await managementClient.users.assignRoles({ id: auth0UserId }, { roles: newRoleIds });
+        
+        // Determina quais roles antigas não estão na nova lista para serem removidas.
+        const rolesToRemove = currentRoleIds.filter(id => !newRoleIds.includes(id));
+        if(rolesToRemove.length > 0) {
+            await managementClient.users.deleteRoles({ id: auth0UserId }, { roles: rolesToRemove });
+        }
+
+        console.log(`[Auth0 Mgmt] Roles para ${auth0UserId} atualizadas com sucesso.`);
     }
 }
 
