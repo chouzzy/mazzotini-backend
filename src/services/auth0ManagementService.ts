@@ -41,7 +41,7 @@ class Auth0ManagementService {
 
         const usersWithRoles = await Promise.all(usersWithRolesPromises);
         console.log(`[Auth0 Mgmt] ${usersWithRoles.length} utilizadores encontrados.`);
-        
+
         return usersWithRoles;
     }
 
@@ -82,9 +82,9 @@ class Auth0ManagementService {
         if (newRoleIds.length > 0) {
             await managementClient.users.assignRoles({ id: auth0UserId }, { roles: newRoleIds });
         }
-        
+
         const rolesToRemove = currentRoleIds.filter(id => !newRoleIds.includes(id));
-        if(rolesToRemove.length > 0) {
+        if (rolesToRemove.length > 0) {
             await managementClient.users.deleteRoles({ id: auth0UserId }, { roles: rolesToRemove });
         }
 
@@ -100,6 +100,7 @@ class Auth0ManagementService {
             email,
             name,
             connection: 'Username-Password-Authentication', // A sua conexão de base de dados padrão
+            password: 'mazzotini123*', // 3. ADICIONA A SENHA TEMPORÁRIA AO PEDIDO
             email_verified: false, // O e-mail de verificação funcionará como o convite
             verify_email: true,    // Garante que o e-mail seja enviado
         });
