@@ -88,11 +88,12 @@ class Auth0ManagementService {
         console.log(`[Auth0 Mgmt] A criar um novo utilizador para ${email}...`);
 
         // 1. Cria o utilizador SEM senha, mas pede o envio do e-mail de verificação.
+        const password = `${email.split('@')[0]}@1234`;
         const newUserResponse = await managementClient.users.create({
             email,
             name,
             connection: 'Username-Password-Authentication',
-            password: 'temp-password@123', // Defina uma senha temporária
+            password: password, // Defina uma senha temporária
             email_verified: false, // O e-mail de verificação é um passo importante
             verify_email: true,
         });
