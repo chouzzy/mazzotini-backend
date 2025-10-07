@@ -1,5 +1,6 @@
 // /src/services/auth0ManagementService.ts
-import { GetOrganizationMemberRoles200ResponseOneOfInner, GetUsers200ResponseOneOfInner, ManagementClient, } from 'auth0';
+import { GetOrganizationMemberRoles200ResponseOneOfInner, GetUsers200ResponseOneOfInner, ManagementClient} from 'auth0';
+import { randomBytes } from 'crypto';
 
 // Validação das variáveis de ambiente
 const auth0Domain = process.env.AUTH0_MGMT_DOMAIN;
@@ -21,7 +22,6 @@ const managementClient = new ManagementClient({
  * @description Encapsula toda a comunicação com a API de Gestão do Auth0.
  */
 class Auth0ManagementService {
-    // ... (os métodos getUsersWithRoles, getAllRoles, updateUserRoles permanecem os mesmos) ...
     async getUsersWithRoles() {
         console.log("[Auth0 Mgmt] A buscar a lista de todos os utilizadores...");
         const users = await managementClient.users.getAll();
@@ -79,22 +79,22 @@ class Auth0ManagementService {
         console.log(`[Auth0 Mgmt] Roles para ${auth0UserId} atualizadas com sucesso.`);
     }
 
-
     /**
      * Cria um novo utilizador no Auth0 e gera um link de "Crie a sua Senha".
      * @returns Um objeto com os dados do novo utilizador e o link para criar a senha.
      */
-    async createUserAndGenerateInvite(email: string, name: string): Promise<{ newUser: GetUsers200ResponseOneOfInner, ticketUrl: string }> {
+    async createUserAndGenerateInvite(email: string, name: string): Promise<{ newUser:GetUsers200ResponseOneOfInner , ticketUrl: string }> {
         console.log(`[Auth0 Mgmt] A criar um novo utilizador para ${email}...`);
 
-        // 1. Cria o utilizador SEM senha, mas pede o envio do e-mail de verificação.
-        const password = `${email.split('@')[0]}@1234`;
+        // Gera uma senha temporária e segura que nunca será usada pelo utilizador
+        const randomPassword = `${randomBytes(16).toString('hex')}A1!`;
+
         const newUserResponse = await managementClient.users.create({
             email,
             name,
             connection: 'Username-Password-Authentication',
-            password: password, // Defina uma senha temporária
-            email_verified: false, // O e-mail de verificação é um passo importante
+            password: randomPassword,
+            email_verified: false,
             verify_email: true,
         });
         
@@ -105,10 +105,10 @@ class Auth0ManagementService {
 
         console.log(`[Auth0 Mgmt] Utilizador ${email} criado. A gerar link de criação de senha...`);
 
-        // 2. Gera um "ticket" para que o utilizador crie a sua primeira senha.
+        // Gera um "ticket" para que o utilizador crie a sua primeira senha.
         const ticketResponse = await managementClient.tickets.changePassword({
             user_id: newUser.user_id,
-            // Podemos adicionar o nosso URL aqui para uma experiência mais integrada
+            // Opcional: para onde redirecionar o utilizador após criar a senha
             // result_url: 'http://mazzotini.awer.co/dashboard', 
         });
 
@@ -119,3 +119,4 @@ class Auth0ManagementService {
 }
 
 export const auth0ManagementService = new Auth0ManagementService();
+
