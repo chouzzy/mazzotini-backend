@@ -100,6 +100,7 @@ class Auth0ManagementService {
             email,
             name,
             connection: 'Username-Password-Authentication', // A conexão padrão de e-mail/senha
+            password: 'temp-password@123', // Defina uma senha temporária
             email_verified: false, // O e-mail de verificação ainda é importante
         });
         
