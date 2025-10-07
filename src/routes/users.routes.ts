@@ -9,6 +9,7 @@ import { checkJwt } from '../middleware/auth';
 // --- Controllers ---
 import { CreateUserController } from '../modules/users/useCases/createUser/CreateUserController';
 import { ListUsersController } from '../modules/users/useCases/listUsers/ListUsersController'; // 2. Importa o novo controller de listagem
+import { UpdateMyProfileController } from '../modules/users/useCases/updateMyProfile/UpdateMyProfileController';
 
 // --- Inicialização ---
 const userRoutes = Router();
@@ -16,6 +17,7 @@ const userRoutes = Router();
 // Cria instâncias dos nossos controllers
 const createUserController = new CreateUserController();
 const listUsersController = new ListUsersController(); // 3. Cria a instância do novo controller
+const updateMyProfileController = new UpdateMyProfileController(); // 2. CRIE A INSTÂNCIA
 
 // ============================================================================
 //   DEFINIÇÃO DAS ROTAS DE UTILIZADOR
@@ -42,5 +44,18 @@ userRoutes.get(
     // checkRole(['ADMIN', 'OPERATOR']), // Depois, garante que tem a role correta
     listUsersController.handle // Se tudo estiver OK, processa a requisição
 );
+
+
+/**
+ * @route   PATCH /api/users/me/profile
+ * @desc    Permite que o utilizador autenticado atualize o seu próprio perfil.
+ * @access  Privado (Requer token JWT válido)
+ */
+userRoutes.patch(
+    '/api/users/me/profile',
+    checkJwt,
+    updateMyProfileController.handle
+);
+
 
 export { userRoutes };

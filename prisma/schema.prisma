@@ -23,6 +23,8 @@ model User {
   auth0UserId String @unique // Ligação com o sistema de autenticação Auth0
   name        String // Nome completo do investidor ou operador.
 
+  profileCompleted Boolean @default(false) // Sinalizador do onboarding
+
   // --- Informações Cadastrais (Opcionais) ---
   cpfOrCnpj     String? // CPF ou CNPJ do investidor.
   phone         String? // Telefone principal.
