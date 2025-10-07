@@ -1,6 +1,6 @@
 // /src/modules/management/useCases/listUsers/ListManagementUsersUseCase.ts
 
-import { auth0ManagementService } from "../../../services/auth0ManagementService";
+import { auth0ManagementService } from "../../../../services/auth0ManagementService";
 
 
 // Tipagem para o formato que enviaremos ao frontend

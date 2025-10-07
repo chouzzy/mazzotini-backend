@@ -1,6 +1,6 @@
 // /src/modules/management/useCases/updateUserRoles/UpdateUserRolesUseCase.ts
 
-import { auth0ManagementService } from "../../../services/auth0ManagementService";
+import { auth0ManagementService } from "../../../../services/auth0ManagementService";
 
 
 interface IRequest {

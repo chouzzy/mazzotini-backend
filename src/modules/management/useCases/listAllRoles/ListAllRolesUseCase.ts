@@ -2,7 +2,7 @@
 
 
 import { GetOrganizationMemberRoles200ResponseOneOfInner } from "auth0";
-import { auth0ManagementService } from "../../../services/auth0ManagementService";
+import { auth0ManagementService } from "../../../../services/auth0ManagementService";
 
 /**
  * @class ListAllRolesUseCase

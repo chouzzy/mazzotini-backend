@@ -1,5 +1,5 @@
 // /src/services/auth0ManagementService.ts
-import { ApiResponse, GetOrganizationMemberRoles200ResponseOneOfInner, ManagementClient, RoleCreate } from 'auth0';
+import { GetOrganizationMemberRoles200ResponseOneOfInner, GetUsers200ResponseOneOfInner, ManagementClient } from 'auth0';
 
 // Validação das variáveis de ambiente
 const auth0Domain = process.env.AUTH0_MGMT_DOMAIN;
@@ -48,7 +48,7 @@ class Auth0ManagementService {
     /**
      * Busca todas as roles disponíveis no Auth0.
      */
-    async getAllRoles(): Promise<ApiResponse<GetOrganizationMemberRoles200ResponseOneOfInner[]>["data"]> {
+    async getAllRoles(): Promise<GetOrganizationMemberRoles200ResponseOneOfInner[]> {
         console.log("[Auth0 Mgmt] A buscar todas as roles disponíveis...");
         const roles = await managementClient.roles.getAll();
         console.log(`[Auth0 Mgmt] ${roles.data.length} roles encontradas.`);
@@ -79,9 +79,10 @@ class Auth0ManagementService {
         const currentRoleIds = currentRolesResponse.data.map(role => role.id!);
 
         // Passo 4: Atribuir as novas roles e remover as antigas numa única operação.
-        await managementClient.users.assignRoles({ id: auth0UserId }, { roles: newRoleIds });
+        if (newRoleIds.length > 0) {
+            await managementClient.users.assignRoles({ id: auth0UserId }, { roles: newRoleIds });
+        }
         
-        // Determina quais roles antigas não estão na nova lista para serem removidas.
         const rolesToRemove = currentRoleIds.filter(id => !newRoleIds.includes(id));
         if(rolesToRemove.length > 0) {
             await managementClient.users.deleteRoles({ id: auth0UserId }, { roles: rolesToRemove });
@@ -89,6 +90,23 @@ class Auth0ManagementService {
 
         console.log(`[Auth0 Mgmt] Roles para ${auth0UserId} atualizadas com sucesso.`);
     }
+
+    /**
+     * Cria um novo utilizador no Auth0.
+     */
+    async createUser(email: string, name: string): Promise<GetUsers200ResponseOneOfInner> {
+        console.log(`[Auth0 Mgmt] A criar um novo utilizador para ${email}...`);
+        const newUser = await managementClient.users.create({
+            email,
+            name,
+            connection: 'Username-Password-Authentication', // A sua conexão de base de dados padrão
+            email_verified: false, // O e-mail de verificação funcionará como o convite
+            verify_email: true,    // Garante que o e-mail seja enviado
+        });
+        console.log(`[Auth0 Mgmt] Utilizador ${email} criado com sucesso com o ID: ${newUser.data.user_id}`);
+        return newUser.data;
+    }
 }
 
 export const auth0ManagementService = new Auth0ManagementService();
+

@@ -2,15 +2,16 @@
 import { Router } from 'express';
 import { checkJwt } from '../middleware/auth';
 import { checkRole } from '../middleware/checkRole';
-import { ListAllRolesController } from '../modules/management/listAllRoles/ListAllRolesController';
-import { ListManagementUsersController } from '../modules/management/listUsers/ListManagementUsersController';
-import { UpdateUserRolesController } from '../modules/management/updateUserRoles/UpdateUserRolesController';
+import { ListManagementUsersController } from '../modules/management/useCases/listUsers/ListManagementUsersController';
+import { ListAllRolesController } from '../modules/management/useCases/listAllRoles/ListAllRolesController';
+import { UpdateUserRolesController } from '../modules/management/useCases/updateUserRoles/UpdateUserRolesController';
+import { InviteUserController } from '../modules/management/useCases/inviteUser/InviteUserController'; // 1. Importe o novo controller
 
 const managementRoutes = Router();
 const listManagementUsersController = new ListManagementUsersController();
 const listAllRolesController = new ListAllRolesController();
 const updateUserRolesController = new UpdateUserRolesController();
-
+const inviteUserController = new InviteUserController(); // 2. Crie a instância
 
 const ROLES = {
     ADMIN: process.env.ROLE_ADMIN || 'ADMIN',
@@ -52,5 +53,16 @@ managementRoutes.patch(
     updateUserRolesController.handle
 );
 
+/**
+ * @route   POST /api/management/invites
+ * @desc    Cria um novo utilizador e envia um convite (e-mail de verificação).
+ * @access  Privado (Apenas para ADMINs)
+ */
+managementRoutes.post(
+    '/api/management/invites',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    inviteUserController.handle
+);
 
 export { managementRoutes };
