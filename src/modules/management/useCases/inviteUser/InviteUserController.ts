@@ -22,8 +22,8 @@ class InviteUserController {
         const useCase = new InviteUserUseCase();
 
         try {
-            await useCase.execute({ email, name, initialRole });
-            return response.status(201).json({ message: `Convite enviado com sucesso para ${email}.` });
+            const ticketUrl = await useCase.execute({ email, name, initialRole });
+            return response.status(201).json({ message: `Convite enviado com sucesso para ${email}.`, ticketUrl });
         } catch (err: any) {
             console.error("[INVITE USER] Erro ao processar convite:", err.message);
             return response.status(500).json({ error: err.message });
