@@ -10,14 +10,16 @@ import { checkJwt } from '../middleware/auth';
 import { CreateUserController } from '../modules/users/useCases/createUser/CreateUserController';
 import { ListUsersController } from '../modules/users/useCases/listUsers/ListUsersController'; // 2. Importa o novo controller de listagem
 import { UpdateMyProfileController } from '../modules/users/useCases/updateMyProfile/UpdateMyProfileController';
+import { GetMyProfileController } from '../modules/users/useCases/getMyProfile/GetMyProfileController';
 
 // --- Inicialização ---
 const userRoutes = Router();
 
 // Cria instâncias dos nossos controllers
 const createUserController = new CreateUserController();
-const listUsersController = new ListUsersController(); // 3. Cria a instância do novo controller
-const updateMyProfileController = new UpdateMyProfileController(); // 2. CRIE A INSTÂNCIA
+const listUsersController = new ListUsersController();
+const updateMyProfileController = new UpdateMyProfileController();
+const getMyProfileController = new GetMyProfileController();
 
 // ============================================================================
 //   DEFINIÇÃO DAS ROTAS DE UTILIZADOR
@@ -45,6 +47,16 @@ userRoutes.get(
     listUsersController.handle // Se tudo estiver OK, processa a requisição
 );
 
+/**
+ * @route   GET /api/users/me
+ * @desc    Busca os dados do utilizador autenticado a partir da nossa base de dados.
+ * @access  Privado (Requer token JWT válido)
+ */
+userRoutes.get(
+    '/api/users/me',
+    checkJwt,
+    getMyProfileController.handle
+);
 
 /**
  * @route   PATCH /api/users/me/profile
