@@ -1,5 +1,6 @@
 // /src/services/auth0ManagementService.ts
 import { GetOrganizationMemberRoles200ResponseOneOfInner, GetUsers200ResponseOneOfInner, ManagementClient } from 'auth0';
+import { randomBytes } from 'crypto'; // 1. Importe o módulo 'crypto' do Node.js
 
 // Validação das variáveis de ambiente
 const auth0Domain = process.env.AUTH0_MGMT_DOMAIN;
@@ -91,16 +92,15 @@ class Auth0ManagementService {
         console.log(`[Auth0 Mgmt] Roles para ${auth0UserId} atualizadas com sucesso.`);
     }
 
-    /**
-     * Cria um novo utilizador no Auth0.
-     */
+    
     async createUser(email: string, name: string): Promise<GetUsers200ResponseOneOfInner> {
         console.log(`[Auth0 Mgmt] A criar um novo utilizador para ${email}...`);
+        const randomPassword = `${randomBytes(16).toString('hex')}A1!`;
         const newUser = await managementClient.users.create({
             email,
             name,
             connection: 'Username-Password-Authentication', // A sua conexão de base de dados padrão
-            password: 'mazzotini123*', // 3. ADICIONA A SENHA TEMPORÁRIA AO PEDIDO
+            password: randomPassword, // 3. ADICIONA A SENHA TEMPORÁRIA AO PEDIDO
             email_verified: false, // O e-mail de verificação funcionará como o convite
             verify_email: true,    // Garante que o e-mail seja enviado
         });
