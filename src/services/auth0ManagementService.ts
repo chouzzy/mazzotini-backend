@@ -1,5 +1,5 @@
 // /src/services/auth0ManagementService.ts
-import { GetOrganizationMemberRoles200ResponseOneOfInner, GetUsers200ResponseOneOfInner, ManagementClient, } from 'auth0';
+import { AuthenticationClient, GetOrganizationMemberRoles200ResponseOneOfInner, GetUsers200ResponseOneOfInner, ManagementClient} from 'auth0';
 
 // Validação das variáveis de ambiente
 const auth0Domain = process.env.AUTH0_MGMT_DOMAIN;
@@ -15,6 +15,14 @@ const managementClient = new ManagementClient({
     clientId: clientId,
     clientSecret: clientSecret,
 });
+
+// 2. INSTANCIE o novo "Rececionista": para fluxos de autenticação
+const authenticationClient = new AuthenticationClient({
+    domain: auth0Domain,
+    clientId: clientId,
+    clientSecret: clientSecret,
+});
+
 
 /**
  * @class Auth0ManagementService
@@ -81,20 +89,18 @@ class Auth0ManagementService {
 
 
     /**
-     * Cria um novo utilizador no Auth0 e gera um link de "Crie a sua Senha".
-     * @returns Um objeto com os dados do novo utilizador e o link para criar a senha.
+     * Cria um novo utilizador e pede ao Auth0 para enviar um e-mail de "Login por Link Mágico".
+     * @returns O objeto do novo utilizador criado.
      */
-    async createUserAndGenerateInvite(email: string, name: string): Promise<{ newUser: GetUsers200ResponseOneOfInner, ticketUrl: string }> {
+    async createUserAndSendMagicLink(email: string, name: string): Promise<GetUsers200ResponseOneOfInner> {
         console.log(`[Auth0 Mgmt] A criar um novo utilizador para ${email}...`);
 
-        // 1. Cria o utilizador SEM senha, mas pede o envio do e-mail de verificação.
+        // 1. Cria o utilizador SEM senha.
         const newUserResponse = await managementClient.users.create({
             email,
             name,
-            connection: 'Username-Password-Authentication',
-            password: 'temp-password@123', // Defina uma senha temporária
-            email_verified: false, // O e-mail de verificação é um passo importante
-            verify_email: true,
+            connection: 'Username-Password-Authentication', // A conexão padrão de e-mail/senha
+            email_verified: false, // O e-mail de verificação ainda é importante
         });
         
         const newUser = newUserResponse.data;
@@ -102,18 +108,23 @@ class Auth0ManagementService {
             throw new Error('Falha ao criar o utilizador no Auth0.');
         }
 
-        console.log(`[Auth0 Mgmt] Utilizador ${email} criado. A gerar link de criação de senha...`);
+        console.log(`[Auth0 Mgmt] Utilizador ${email} criado. A solicitar envio de Link Mágico...`);
 
-        // 2. Gera um "ticket" para que o utilizador crie a sua primeira senha.
-        const ticketResponse = await managementClient.tickets.changePassword({
-            user_id: newUser.user_id,
-            // Podemos adicionar o nosso URL aqui para uma experiência mais integrada
-            // result_url: 'http://mazzotini.awer.co/dashboard', 
+        // 2. O "Rececionista" envia o e-mail de login sem senha
+        await authenticationClient.passwordless.sendEmail({
+            email,
+            send: 'link',
+            authParams: {
+                redirect_uri: process.env.FRONT_END_URL,
+                audience: process.env.AUTH0_AUDIENCE,
+                scope: 'openid profile email',
+                response_type: 'code',
+            },
         });
 
-        console.log(`[Auth0 Mgmt] Link de criação de senha gerado para ${email}.`);
+        console.log(`[Auth0 Mgmt] Pedido de Link Mágico para ${email} enviado com sucesso.`);
         
-        return { newUser, ticketUrl: ticketResponse.data.ticket };
+        return newUser;
     }
 }
 
