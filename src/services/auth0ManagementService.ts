@@ -92,7 +92,7 @@ class Auth0ManagementService {
             email,
             name,
             connection: 'Username-Password-Authentication',
-            password: 'temp-password', // Defina uma senha temporária
+            password: 'temp-password@123', // Defina uma senha temporária
             email_verified: false, // O e-mail de verificação é um passo importante
             verify_email: true,
         });
