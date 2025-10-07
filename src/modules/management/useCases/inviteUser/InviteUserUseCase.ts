@@ -15,7 +15,9 @@ class InviteUserUseCase {
     async execute({ email, name, initialRole }: IRequest): Promise<void> {
         // Passo 1: Cria o utilizador no Auth0.
         // O Auth0 tratará de enviar o e-mail de verificação, que serve como convite.
-        const newUser = await auth0ManagementService.createUser(email, name);
+        const { newUser, ticketUrl } = await auth0ManagementService.createUserAndGenerateInvite(email, name);
+
+        console.log(`[INVITE USER] Link de criação de senha para ${email}: ${ticketUrl}`);
 
         if (!newUser.user_id) {
             throw new Error("Falha ao criar o utilizador no Auth0. O ID do utilizador não foi retornado.");
