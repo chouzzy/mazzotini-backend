@@ -11,6 +11,7 @@ import { CreateUserController } from '../modules/users/useCases/createUser/Creat
 import { ListUsersController } from '../modules/users/useCases/listUsers/ListUsersController'; // 2. Importa o novo controller de listagem
 import { UpdateMyProfileController } from '../modules/users/useCases/updateMyProfile/UpdateMyProfileController';
 import { GetMyProfileController } from '../modules/users/useCases/getMyProfile/GetMyProfileController';
+import { ResendVerificationEmailController } from '../modules/users/useCases/resendVerificationEmail/ResendVerificationEmailController';
 
 // --- Inicialização ---
 const userRoutes = Router();
@@ -20,6 +21,7 @@ const createUserController = new CreateUserController();
 const listUsersController = new ListUsersController();
 const updateMyProfileController = new UpdateMyProfileController();
 const getMyProfileController = new GetMyProfileController();
+const resendVerificationEmailController = new ResendVerificationEmailController();
 
 // ============================================================================
 //   DEFINIÇÃO DAS ROTAS DE UTILIZADOR
@@ -69,5 +71,15 @@ userRoutes.patch(
     updateMyProfileController.handle
 );
 
+/**
+ * @route   POST /api/users/me/resend-verification
+ * @desc    Aciona o reenvio do e-mail de verificação para o utilizador autenticado.
+ * @access  Privado (Requer token JWT válido)
+ */
+userRoutes.post(
+    '/api/users/me/resend-verification',
+    checkJwt,
+    resendVerificationEmailController.handle
+);
 
 export { userRoutes };

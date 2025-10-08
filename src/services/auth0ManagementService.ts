@@ -1,5 +1,5 @@
 // /src/services/auth0ManagementService.ts
-import { GetOrganizationMemberRoles200ResponseOneOfInner, GetUsers200ResponseOneOfInner, ManagementClient} from 'auth0';
+import { GetOrganizationMemberRoles200ResponseOneOfInner, GetUsers200ResponseOneOfInner, ManagementClient } from 'auth0';
 import { randomBytes } from 'crypto';
 
 // Validação das variáveis de ambiente
@@ -39,7 +39,7 @@ class Auth0ManagementService {
 
         const usersWithRoles = await Promise.all(usersWithRolesPromises);
         console.log(`[Auth0 Mgmt] ${usersWithRoles.length} utilizadores encontrados.`);
-        
+
         return usersWithRoles;
     }
 
@@ -70,9 +70,9 @@ class Auth0ManagementService {
         if (newRoleIds.length > 0) {
             await managementClient.users.assignRoles({ id: auth0UserId }, { roles: newRoleIds });
         }
-        
+
         const rolesToRemove = currentRoleIds.filter(id => !newRoleIds.includes(id));
-        if(rolesToRemove.length > 0) {
+        if (rolesToRemove.length > 0) {
             await managementClient.users.deleteRoles({ id: auth0UserId }, { roles: rolesToRemove });
         }
 
@@ -83,7 +83,7 @@ class Auth0ManagementService {
      * Cria um novo utilizador no Auth0 e gera um link de "Crie a sua Senha".
      * @returns Um objeto com os dados do novo utilizador e o link para criar a senha.
      */
-    async createUserAndGenerateInvite(email: string, name: string): Promise<{ newUser:GetUsers200ResponseOneOfInner , ticketUrl: string }> {
+    async createUserAndGenerateInvite(email: string, name: string): Promise<{ newUser: GetUsers200ResponseOneOfInner, ticketUrl: string }> {
         console.log(`[Auth0 Mgmt] A criar um novo utilizador para ${email}...`);
 
         // Gera uma senha temporária e segura que nunca será usada pelo utilizador
@@ -97,7 +97,7 @@ class Auth0ManagementService {
             email_verified: false,
             verify_email: true,
         });
-        
+
         const newUser = newUserResponse.data;
         if (!newUser.user_id) {
             throw new Error('Falha ao criar o utilizador no Auth0.');
@@ -113,10 +113,28 @@ class Auth0ManagementService {
         });
 
         console.log(`[Auth0 Mgmt] Link de criação de senha gerado para ${email}.`);
-        
+
         return { newUser, ticketUrl: ticketResponse.data.ticket };
     }
+
+    /**
+ * Pede ao Auth0 para reenviar o e-mail de verificação para um utilizador.
+ */
+    async resendVerificationEmail(auth0UserId: string): Promise<void> {
+        console.log(`[Auth0 Mgmt] A solicitar reenvio de e-mail de verificação para ${auth0UserId}...`);
+
+        await managementClient.jobs.verifyEmail({
+            user_id: auth0UserId,
+        });
+
+        console.log(`[Auth0 Mgmt] Pedido de reenvio para ${auth0UserId} enviado com sucesso.`);
+    }
+
+
 }
 
 export const auth0ManagementService = new Auth0ManagementService();
+
+
+
 
