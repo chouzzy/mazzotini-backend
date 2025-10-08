@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 interface IRequest {
     auth0UserId: string;
     data: {
+        name?: string;
         cpfOrCnpj?: string;
         phone?: string;
         cellPhone?: string;
