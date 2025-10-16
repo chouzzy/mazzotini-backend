@@ -1,4 +1,4 @@
-// prisma/schema.prisma
+// /prisma/schema.prisma
 
 // Define o gerador de cliente do Prisma.
 generator client {
@@ -16,38 +16,63 @@ datasource db {
 // ============================================================================
 
 // --- Modelo de Usuário ---
-// Armazena todos os usuários do sistema: Admins, Operadores e Investidores.
 model User {
-  id          String @id @default(auto()) @map("_id") @db.ObjectId
-  email       String @unique
-  auth0UserId String @unique // Ligação com o sistema de autenticação Auth0
-  name        String // Nome completo do investidor ou operador.
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  email            String    @unique
+  auth0UserId      String    @unique
+  name             String
+  profileCompleted Boolean   @default(false)
 
-  profileCompleted Boolean @default(false) // Sinalizador do onboarding
+  // --- NOVOS CAMPOS CADASTRAIS ---
+  rg                  String?
+  birthDate           DateTime?
+  profession          String?   // Atividade (profissão)
+  contactPreference   String?   // "email", "whatsapp", ou "both"
+  infoEmail           String?   // Email secundário para informações
 
-  // --- Informações Cadastrais (Opcionais) ---
-  cpfOrCnpj     String? // CPF ou CNPJ do investidor.
-  phone         String? // Telefone principal.
-  cellPhone     String? // Telefone celular.
-  address       String? // Endereço.
-  nationality   String? // Nacionalidade.
-  maritalStatus String? // Estado Civil.
-  indication    String? // Como conheceu a Mazzotini.
+  // Endereço Residencial (Estruturado)
+  residentialCep         String?
+  residentialStreet      String?
+  residentialNumber      String?
+  residentialComplement  String?
+  residentialNeighborhood String?
+  residentialCity        String?
+  residentialState       String?
 
-  // Relações
-  investments      Investment[] // Lista de investimentos que este usuário (se investidor) fez.
+  // Endereço Comercial (Estruturado)
+  commercialCep         String?
+  commercialStreet      String?
+  commercialNumber      String?
+  commercialComplement  String?
+  commercialNeighborhood String?
+  commercialCity        String?
+  commercialState       String?
+
+  // Documentos (armazenaremos as URLs de um serviço de storage no futuro)
+  personalDocumentUrls String[]
+
+  // --- Campos Antigos (alguns serão migrados/depreciados) ---
+  cpfOrCnpj       String?
+  phone           String?
+  cellPhone       String?
+  address         String? // Este campo será substituído pelos endereços estruturados
+  nationality     String?
+  maritalStatus   String?
+  indication      String?
+
+  // --- Relações ---
+  investments      Investment[]
   associatedAssets CreditAsset[] @relation("AssociatedAssets")
 
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  CreditAsset CreditAsset[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // --- Modelo de Ativo de Crédito ---
 // A entidade central do sistema, representando um crédito judicial adquirido.
 model CreditAsset {
-  id               String @id @default(auto()) @map("_id") @db.ObjectId
-  processNumber    String @unique // Número único do processo judicial.
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  processNumber    String    @unique // Número único do processo judicial.
   origemProcesso   String // Descrição da origem. Ex: "1ª Vara Cível do Foro Central da Comarca de SP".
   originalCreditor String // Nome da empresa devedora.
 
@@ -57,44 +82,42 @@ model CreditAsset {
   currentValue     Float // O valor mais recente do ativo, atualizado mensalmente.
 
   // --- Datas ---
-  acquisitionDate DateTime // Data em que o crédito foi adquirido.
+  acquisitionDate DateTime  // Data em que o crédito foi adquirido.
   settlementDate  DateTime? // Data em que o crédito foi liquidado/pago.
 
   // --- Índices e Informações Adicionais ---
-  contractualIndexRate Float? // Taxa de juros estabelecida em contrato (ex: 2.0 para 2%).
-  updateIndexType      String? // Índice de atualização monetária (ex: "SELIC", "IPCA").
-  informacaoExtra      String? // Campo de texto livre para observações importantes.
+  contractualIndexRate Float?    // Taxa de juros estabelecida em contrato (ex: 2.0 para 2%).
+  updateIndexType      String?   // Índice de atualização monetária (ex: "SELIC", "IPCA").
+  informacaoExtra      String?   // Campo de texto livre para observações importantes.
 
   // --- Status e Gestão ---
-  status            String // Status atual do ativo (ex: "Ativo", "Liquidado", "Em Negociação").
-  lawsuitType       String? // Tipo de ação (ex: "Trabalhista", "Cível").
-  lawyerResponsible String? // Advogado da Mazzotini responsável pelo caso.
+  status            String    // Status atual do ativo (ex: "Ativo", "Liquidado", "Em Negociação").
+  lawsuitType       String?   // Tipo de ação (ex: "Trabalhista", "Cível").
+  lawyerResponsible String?   // Advogado da Mazzotini responsável pelo caso.
 
   // --- Relações com outras tabelas ---
   updates   AssetUpdate[] // Histórico de todas as atualizações do ativo.
-  investors Investment[] // Lista de investidores neste ativo.
-  documents Document[] // Documentos associados ao ativo.
+  investors Investment[]  // Lista de investidores neste ativo.
+  documents Document[]    // Documentos associados ao ativo.
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  User        User?    @relation(fields: [userId], references: [id])
-  associateId String?  @db.ObjectId
-  associate   User?    @relation("AssociatedAssets", fields: [associateId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  userId String? @db.ObjectId
+  // Relação com o associado (User)
+  associateId String? @db.ObjectId
+  associate   User?   @relation("AssociatedAssets", fields: [associateId], references: [id])
 }
 
 // --- Modelo de Atualização do Ativo ---
 // Registra o histórico de atualizações do valor do crédito, vindo do Legal One ou inserido manualmente.
-// Este modelo unifica 'AssetUpdate' e 'MonthlyUpdate'.
 model AssetUpdate {
-  id               String @id @default(auto()) @map("_id") @db.ObjectId
-  legalOneUpdateId Int?   @unique // NOVO CAMPO: ID original do "Update" do Legal One
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  legalOneUpdateId Int?      @unique // ID original do "Update" do Legal One
 
-  date         DateTime @default(now()) // Data em que a atualização foi registrada.
-  updatedValue Float // O novo valor do ativo após esta atualização.
-  description  String? // Descrição/observação sobre a atualização.
-  source       String // De onde veio a informação (ex: "Legal One", "Ajuste Manual").
+  date          DateTime @default(now()) // Data em que a atualização foi registrada.
+  updatedValue  Float // O novo valor do ativo após esta atualização.
+  description   String? // Descrição/observação sobre a atualização.
+  source        String // De onde veio a informação (ex: "Legal One", "Ajuste Manual").
 
   assetId String      @db.ObjectId
   asset   CreditAsset @relation(fields: [assetId], references: [id])
@@ -118,7 +141,7 @@ model Investment {
 // Para gerenciar contratos e outros arquivos associados ao crédito.
 model Document {
   id                 String @id @default(auto()) @map("_id") @db.ObjectId
-  legalOneDocumentId Int?   @unique // NOVO CAMPO: ID original do Legal One
+  legalOneDocumentId Int?   @unique // ID original do Legal One
 
   name     String
   url      String // URL do arquivo (ex: S3, Google Cloud Storage).
@@ -129,3 +152,4 @@ model Document {
 
   uploadedAt DateTime @default(now())
 }
+
