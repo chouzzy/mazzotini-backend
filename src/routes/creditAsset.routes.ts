@@ -37,7 +37,7 @@ creditAssetRoutes.post(
 creditAssetRoutes.get(
     '/api/assets',
     checkJwt,
-    checkRole(['OPERATOR', 'ADMIN']),
+    checkRole(['OPERATOR', 'ADMIN', 'ASSOCIATE', 'INVESTOR']),
     listAllAssetsController.handle
 );
 
