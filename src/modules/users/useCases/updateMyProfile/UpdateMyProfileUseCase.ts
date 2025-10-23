@@ -52,16 +52,28 @@ class UpdateMyProfileUseCase {
         // O 'address' antigo é depreciado e não será usado.
         const { address, ...validData } = data as any;
 
-        await prisma.user.update({
+        const existingUser = await prisma.user.findUnique({
             where: { auth0UserId },
-            data: {
-                ...validData,
-                // Ao completar o perfil, o status muda para aguardar a revisão do Admin.
-                status: "PENDING_REVIEW", 
-            },
         });
 
-        console.log(`[PROFILE] Perfil de ${auth0UserId} atualizado e movido para 'PENDING_REVIEW'.`);
+        const updateData: any = {
+            ...validData,
+        };
+
+        if (!existingUser || existingUser.status !== "ACTIVE") {
+            // Ao completar o perfil, o status muda para aguardar a revisão do Admin.
+            updateData.status = "PENDING_REVIEW";
+        }
+
+        await prisma.user.update({
+            where: { auth0UserId },
+            data: updateData,
+        });
+
+        console.log(`[PROFILE] Perfil de ${auth0UserId} atualizado.`);
+        if (!existingUser || existingUser.status !== "ACTIVE") {
+            console.log(`[PROFILE] Perfil de ${auth0UserId} movido para 'PENDING_REVIEW'.`);
+        }
     }
 }
 
