@@ -6,7 +6,10 @@ class ListManagementUsersController {
     async handle(request: Request, response: Response): Promise<Response> {
         const useCase = new ListManagementUsersUseCase();
         try {
+            // Executa o UseCase que já construímos
             const users = await useCase.execute();
+            
+            // Retorna os dados formatados para o frontend
             return response.status(200).json(users);
         } catch (err: any) {
             console.error("[LIST MGMT USERS] Erro ao buscar utilizadores:", err.message);
