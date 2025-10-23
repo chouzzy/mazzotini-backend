@@ -1,6 +1,7 @@
 // /src/modules/users/useCases/uploadProfilePicture/UploadProfilePictureUseCase.ts
 import { PrismaClient } from "@prisma/client";
-import { fileUploadService } from "../../services/fileUploadService";
+import { fileUploadService } from "../../../../services/fileUploadService";
+
 
 const prisma = new PrismaClient();
 
