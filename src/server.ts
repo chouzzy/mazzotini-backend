@@ -1,5 +1,4 @@
-// src/server.ts
-
+// /src/server.ts
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -12,11 +11,36 @@ import { startScheduledJobs } from './cron';
 
 const app = express();
 
+// ============================================================================
+//  CONFIGURAÇÃO DE CORS (A SOLUÇÃO PROFISSIONAL)
+// ============================================================================
+// 1. Define uma "lista branca" de origens permitidas
+const allowedOrigins = [
+    'http://localhost:3000', // O seu ambiente de desenvolvimento
+    'https://mazzotini-frontend.vercel.app', // A sua URL de produção
+    // Adicione a sua URL de deploy da Vercel aqui (ex: https://mazzotini.vercel.app)
+];
+
 app.use(cors({
-    origin: '*',
-    methods: ['GET', 'PUT', 'POST', 'DELETE', 'PATCH'],
+    origin: function (origin, callback) {
+        // Permite requisições da nossa "lista branca" (ou sem origem, como o Postman)
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            console.warn(`[CORS] Origem bloqueada: ${origin}`);
+            callback(new Error('Origem não permitida pelo CORS'));
+        }
+    },
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'], // Permite todos os métodos
+    allowedHeaders: ['Content-Type', 'Authorization'], // 2. PERMITE O CABEÇALHO DE AUTORIZAÇÃO
     credentials: true,
 }));
+
+// 3. Habilita o "preflight" (OPTIONS) para TODAS as rotas
+// Isto responde automaticamente a todas as requisições OPTIONS
+app.options('*', cors());
+// ============================================================================
+
 
 app.use(express.json());
 
@@ -42,3 +66,4 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Servidor a rodar na porta ${PORT} e a ouvir em todas as interfaces.`);
     startScheduledJobs();
 });
+
