@@ -12,18 +12,16 @@ import { startScheduledJobs } from './cron';
 const app = express();
 
 // ============================================================================
-//  CONFIGURAÇÃO DE CORS (A SOLUÇÃO PROFISSIONAL)
+//  CONFIGURAÇÃO DE CORS
 // ============================================================================
-// 1. Define uma "lista branca" de origens permitidas
 const allowedOrigins = [
-    'http://localhost:3000', // O seu ambiente de desenvolvimento
-    'https://mazzotini-frontend.vercel.app', // A sua URL de produção
-    // Adicione a sua URL de deploy da Vercel aqui (ex: https://mazzotini.vercel.app)
+    'http://localhost:3000',
+    'https://www.mazzotini.awer.co',
+    // Adicione a sua URL de deploy da Vercel aqui
 ];
 
 app.use(cors({
     origin: function (origin, callback) {
-        // Permite requisições da nossa "lista branca" (ou sem origem, como o Postman)
         if (!origin || allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
@@ -31,18 +29,21 @@ app.use(cors({
             callback(new Error('Origem não permitida pelo CORS'));
         }
     },
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'], // Permite todos os métodos
-    allowedHeaders: ['Content-Type', 'Authorization'], // 2. PERMITE O CABEÇALHO DE AUTORIZAÇÃO
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
 }));
 
-// 3. Habilita o "preflight" (OPTIONS) para TODAS as rotas
-// Isto responde automaticamente a todas as requisições OPTIONS
 app.options('*', cors());
+
+// ============================================================================
+//  CORREÇÃO: Aumentar o Limite de Payload do Express
+// ============================================================================
+// Por padrão, o Express tem um limite de 100kb. Aumentamos para 50mb.
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // ============================================================================
 
-
-app.use(express.json());
 
 // Main
 app.use(router);
