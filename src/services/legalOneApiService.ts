@@ -331,9 +331,7 @@ class LegalOneApiService {
             console.log(`[Legal One API Service] Contato (Individual) criado com ID: ${response.data.id}`);
             return response.data;
         } catch (error:any) {
-            console.error(`[Legal One API Service] Erro ao criar contato (Individual):`, error);
-            console.error(`[Legal One API Service] Erro ao criar contato (Individual):`, error.data);
-            console.error(`[Legal One API Service] Erro ao criar contato (Individual):`, error.data.error);
+            console.error(`[Legal One API Service] Erro ao criar contato (Individual):`, error.response.data);
             throw new Error("Erro ao criar contato no Legal One."); 
         }
 
