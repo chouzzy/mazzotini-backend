@@ -1,5 +1,6 @@
 // /src/services/auth0ManagementService.ts
-import { GetOrganizationMemberRoles200ResponseOneOfInner, GetUsers200ResponseOneOfInner, ManagementClient } from 'auth0';
+import { User } from '@prisma/client';
+import { GetOrganizationMemberRoles200ResponseOneOfInner, GetRoleUser200ResponseOneOfInner, GetUsers200ResponseOneOfInner, ManagementClient } from 'auth0';
 import { randomBytes } from 'crypto';
 
 // Validação das variáveis de ambiente
@@ -130,6 +131,24 @@ class Auth0ManagementService {
         console.log(`[Auth0 Mgmt] Pedido de reenvio para ${auth0UserId} enviado com sucesso.`);
     }
 
+    async getUsersByRole(roleName: string): Promise<GetRoleUser200ResponseOneOfInner[]> {
+        console.log(`[Auth0 Mgmt] A buscar utilizadores com a role: ${roleName}`);
+
+        // 1. Primeiro, precisamos do ID da role
+        const allRoles = await this.getAllRoles();
+        const associateRole = allRoles.find(r => r.name === roleName);
+
+        if (!associateRole || !associateRole.id) {
+            console.warn(`[Auth0 Mgmt] A role ${roleName} não foi encontrada no Auth0.`);
+            return [];
+        }
+
+        // 2. Busca os utilizadores que têm esse ID de role
+        const usersResponse = await managementClient.roles.getUsers({ id: associateRole.id });
+        
+        console.log(`[Auth0 Mgmt] ${usersResponse.data.length} utilizadores encontrados com a role ${roleName}.`);
+        return usersResponse.data;
+    }
 
 }
 
