@@ -17,7 +17,6 @@ export interface LegalOneLawsuit {
     identifierNumber: string;
     monetaryAmount?: { Value: number; Code: string };
     participants: LegalOneParticipant[];
-    // ... outros campos
 }
 
 export interface LegalOneLawsuitApiResponse {
@@ -40,23 +39,45 @@ export interface LegalOneUpdatesApiResponse {
 export interface LegalOneContact {
     id: number;
     name: string;
+    email?: string;
+    documentNumber?: string;
 }
 
-// NOVA INTERFACE para os Documentos
+interface LegalOneCreateContactPayload {
+    name: string;
+    email: string;
+    documentNumber?: string;
+    contactType: 'Person';
+}
+
 export interface LegalOneDocument {
     id: number;
-    archive: string; // Nome do ficheiro
-    type: string; // Categoria
+    archive: string;
+    type: string;
 }
 
 export interface LegalOneDocumentsApiResponse {
     value: LegalOneDocument[];
 }
 
-// NOVA INTERFACE para o link de download
 export interface LegalOneDocumentDownload {
     id: number;
     url: string;
+}
+
+// Interfaces para UploadFromUrl
+interface RelationshipModel {
+    link: 'Contact' | 'Litigation';
+    linkItem: {
+        id: number;
+    };
+}
+
+interface UploadFromUrlPayload {
+    url: string;
+    archive: string;
+    type: string;
+    relationships: RelationshipModel[];
 }
 
 
@@ -71,7 +92,7 @@ class LegalOneApiService {
         if (this.accessToken && this.tokenExpiresAt && Date.now() < this.tokenExpiresAt) {
             return this.accessToken;
         }
-
+        
         console.log("[Legal One API Service] Obtendo novo token de acesso...");
 
         const key = process.env.LEGAL_ONE_CONSUMER_KEY;
@@ -81,7 +102,7 @@ class LegalOneApiService {
         if (!key || !secret || !baseUrl) {
             throw new Error("Credenciais ou URL Base da API do Legal One não configuradas.");
         }
-
+        
         const tokenUrl = `${baseUrl}/oauth?grant_type=client_credentials`;
 
         const response = await axios.get(tokenUrl, {
@@ -89,9 +110,9 @@ class LegalOneApiService {
         });
 
         const { access_token, expires_in } = response.data;
-
+        
         this.accessToken = access_token;
-        this.tokenExpiresAt = Date.now() + (expires_in - 60) * 1000;
+        this.tokenExpiresAt = Date.now() + (expires_in - 60) * 1000; 
 
         console.log("[Legal One API Service] Novo token obtido com sucesso.");
         return this.accessToken as string;
@@ -128,21 +149,21 @@ class LegalOneApiService {
         const response = await axios.get<LegalOneUpdatesApiResponse>(requestUrl, {
             headers: { 'Authorization': `Bearer ${token}` },
             params: {
-                '$filter': `relationships/any(r: r/linkType eq 'Litigation' and r/linkId eq ${lawsuitId})`,
+                '$filter': `relationships/any(r: r/Link eq 'Litigation' and r/LinkItem/Id eq ${lawsuitId})`,
                 '$orderby': 'date desc'
             }
         });
 
         return response.data.value || [];
     }
-
+    
     public async getContactDetails(contactId: number): Promise<LegalOneContact> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/Contacts/${contactId}`;
 
         console.log(`[Legal One API Service] Buscando detalhes do contato ID: ${contactId}`);
-
+        
         const response = await axios.get<LegalOneContact>(requestUrl, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -150,7 +171,29 @@ class LegalOneApiService {
         return response.data;
     }
 
-    // NOVA FUNÇÃO para buscar os documentos de um processo
+    public async createContact(name: string, email: string, cpfOrCnpj: string | null): Promise<LegalOneContact> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const requestUrl = `${apiRestUrl}/Contacts`;
+
+        console.log(`[Legal One API Service] A criar novo contato: ${name} (${email})`);
+
+        const payload: LegalOneCreateContactPayload = {
+            name: name,
+            email: email,
+            contactType: 'Person',
+            ...(cpfOrCnpj && { documentNumber: cpfOrCnpj })
+        };
+
+        const response = await axios.post<LegalOneContact>(requestUrl, payload, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        console.log(`[Legal One API Service] Contato criado com ID: ${response.data.id}`);
+        return response.data;
+    }
+
+
     public async getProcessDocuments(lawsuitId: number): Promise<LegalOneDocument[]> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
@@ -161,23 +204,19 @@ class LegalOneApiService {
         const response = await axios.get<LegalOneDocumentsApiResponse>(requestUrl, {
             headers: { 'Authorization': `Bearer ${token}` },
             params: {
-                // A CORREÇÃO ESTÁ AQUI: Usando a sintaxe de filtro correta
                 '$filter': `relationships/any(r: r/Link eq 'Litigation' and r/LinkItem/Id eq ${lawsuitId})`,
             }
         });
-        console.log(`[Legal One API Service] ${response.data.value.length} documentos encontrados para o Lawsuit ID: ${lawsuitId}`);
 
         return response.data.value || [];
     }
-
-    // NOVA FUNÇÃO para obter a URL de download de um documento
+    
     public async getDocumentDownloadUrl(documentId: number): Promise<string> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        // Endpoint especial para gerar a URL de download
         const requestUrl = `${apiRestUrl}/Documents/UrlDownload(key=${documentId})`;
 
-        console.log(`[Legal One API Service] Gerando URL de download para o Document ID: ${documentId}`);
+        console.log(`[Legal One API Service] Gerando URL de download para o Documento ID: ${documentId}`);
 
         const response = await axios.get<LegalOneDocumentDownload>(requestUrl, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -185,6 +224,36 @@ class LegalOneApiService {
 
         return response.data.url;
     }
+
+    public async uploadDocumentFromUrl(fileUrl: string, contactId: number): Promise<void> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const requestUrl = `${apiRestUrl}/Documents/UploadFromUrl`;
+
+        // Extrai o nome do ficheiro da URL
+        const fileName = fileUrl.split('/').pop()?.split('-').pop() || 'documento.pdf';
+
+        console.log(`[Legal One API Service] A anexar o documento ${fileName} ao Contato ID: ${contactId}`);
+
+        const payload: UploadFromUrlPayload = {
+            url: fileUrl,
+            archive: fileName,
+            type: "Documento Pessoal", // Categoria do documento no Legal One
+            relationships: [
+                {
+                    link: "Contact",
+                    linkItem: { id: contactId }
+                }
+            ]
+        };
+
+        await axios.post(requestUrl, payload, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        console.log(`[Legal One API Service] Documento ${fileName} anexado com sucesso.`);
+    }
 }
 
 export const legalOneApiService = new LegalOneApiService();
+
