@@ -73,11 +73,86 @@ interface RelationshipModel {
     };
 }
 
-interface UploadFromUrlPayload {
-    url: string;
+export interface LegalOneParticipant {
+    type: "Customer" | "PersonInCharge" | "OtherParty" | "Party" | "Other" | "LawyerOfOtherParty" | "Requester";
+    contactId: number;
+}
+export interface LegalOneLawsuit {
+    id: number;
+    folder: string;
+    title: string;
+    identifierNumber: string;
+    monetaryAmount?: { Value: number; Code: string };
+    participants: LegalOneParticipant[];
+}
+export interface LegalOneLawsuitApiResponse {
+    value: LegalOneLawsuit[];
+}
+export interface LegalOneUpdate {
+    id: number;
+    description: string;
+    notes: string | null;
+    date: string;
+    typeId: number;
+    originType: 'Manual' | 'OfficialJournalsCrawler' | string;
+}
+export interface LegalOneUpdatesApiResponse {
+    value: LegalOneUpdate[];
+}
+
+// Interface para um Contato (genérico)
+export interface LegalOneContact {
+    id: number;
+    name: string;
+    email?: string;
+    documentNumber?: string;
+}
+
+// Interface para o payload de criação de /individuals (Pessoa)
+// (Baseado no 'PersonModel' e 'ContactModel' do JSON)
+interface LegalOneCreatePersonPayload {
+    name: string;
+    emails: { email: string; isMainEmail: boolean; typeId: number }[];
+    identificationNumber?: string; // CPF
+    contactType: 'Person';
+}
+
+// Interface para o retorno de 'getcontainer'
+interface LegalOneUploadContainer {
+    id: number;
+    fileName: string;
+    externalId: string; // Esta é a URL para onde devemos enviar o PUT
+    uploadedFileSize: number;
+}
+
+// Interface para o payload de 'POST /documents' (finalização)
+interface LegalOneDocumentPayload {
+    archive: string; // O nome do ficheiro (ex: "rg.pdf")
+    typeId: string; // O tipo de documento (ex: "1-3")
+    fileName: string; // O 'fileName' retornado pelo getcontainer
+    relationships: {
+        link: 'Contact';
+        linkItem: { id: number };
+    }[];
+}
+
+export interface LegalOneDocument {
+    id: number;
     archive: string;
     type: string;
-    relationships: RelationshipModel[];
+}
+export interface LegalOneDocumentsApiResponse {
+    value: LegalOneDocument[];
+}
+export interface LegalOneDocumentDownload {
+    id: number;
+    url: string;
+}
+interface RelationshipModel {
+    link: 'Contact' | 'Litigation';
+    linkItem: {
+        id: number;
+    };
 }
 
 
@@ -92,7 +167,7 @@ class LegalOneApiService {
         if (this.accessToken && this.tokenExpiresAt && Date.now() < this.tokenExpiresAt) {
             return this.accessToken;
         }
-        
+
         console.log("[Legal One API Service] Obtendo novo token de acesso...");
 
         const key = process.env.LEGAL_ONE_CONSUMER_KEY;
@@ -102,7 +177,7 @@ class LegalOneApiService {
         if (!key || !secret || !baseUrl) {
             throw new Error("Credenciais ou URL Base da API do Legal One não configuradas.");
         }
-        
+
         const tokenUrl = `${baseUrl}/oauth?grant_type=client_credentials`;
 
         const response = await axios.get(tokenUrl, {
@@ -110,9 +185,9 @@ class LegalOneApiService {
         });
 
         const { access_token, expires_in } = response.data;
-        
+
         this.accessToken = access_token;
-        this.tokenExpiresAt = Date.now() + (expires_in - 60) * 1000; 
+        this.tokenExpiresAt = Date.now() + (expires_in - 60) * 1000;
 
         console.log("[Legal One API Service] Novo token obtido com sucesso.");
         return this.accessToken as string;
@@ -156,14 +231,14 @@ class LegalOneApiService {
 
         return response.data.value || [];
     }
-    
+
     public async getContactDetails(contactId: number): Promise<LegalOneContact> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/Contacts/${contactId}`;
 
         console.log(`[Legal One API Service] Buscando detalhes do contato ID: ${contactId}`);
-        
+
         const response = await axios.get<LegalOneContact>(requestUrl, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -171,25 +246,34 @@ class LegalOneApiService {
         return response.data;
     }
 
+    /**
+    * CORREÇÃO: Cria um novo Contato (Pessoa) usando o endpoint POST /individuals.
+    */
     public async createContact(name: string, email: string, cpfOrCnpj: string | null): Promise<LegalOneContact> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/Contacts`;
+        const requestUrl = `${apiRestUrl}/individuals`; // Endpoint correto: /individuals
 
-        console.log(`[Legal One API Service] A criar novo contato: ${name} (${email})`);
+        console.log(`[Legal One API Service] A criar novo contato (Individual): ${name} (${email})`);
 
-        const payload: LegalOneCreateContactPayload = {
+        // O payload deve corresponder ao 'PersonModel'
+        const payload = {
             name: name,
-            email: email,
-            contactType: 'Person',
-            ...(cpfOrCnpj && { documentNumber: cpfOrCnpj })
+            identificationNumber: cpfOrCnpj || undefined, // CPF/CNPJ
+            emails: [
+                {
+                    email: email,
+                    isMainEmail: true,
+                    typeId: 1 // 1 = 'Pessoal' (Assumido, idealmente viria de GET /contactemailtypes)
+                }
+            ]
         };
 
         const response = await axios.post<LegalOneContact>(requestUrl, payload, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        console.log(`[Legal One API Service] Contato criado com ID: ${response.data.id}`);
+        console.log(`[Legal One API Service] Contato (Individual) criado com ID: ${response.data.id}`);
         return response.data;
     }
 
@@ -210,7 +294,7 @@ class LegalOneApiService {
 
         return response.data.value || [];
     }
-    
+
     public async getDocumentDownloadUrl(documentId: number): Promise<string> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
@@ -225,20 +309,56 @@ class LegalOneApiService {
         return response.data.url;
     }
 
-    public async uploadDocumentFromUrl(fileUrl: string, contactId: number): Promise<void> {
+    /**
+      * NOVO MÉTODO (Etapa 1 do Upload): Pede ao Legal One um "container" para o upload.
+      */
+    public async getUploadContainer(fileExtension: string): Promise<LegalOneUploadContainer> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/Documents/UploadFromUrl`;
+        const requestUrl = `${apiRestUrl}/documents/getcontainer(fileExtension='.${fileExtension}')`;
 
-        // Extrai o nome do ficheiro da URL
-        const fileName = fileUrl.split('/').pop()?.split('-').pop() || 'documento.pdf';
+        console.log(`[Legal One API Service] A pedir container para um ficheiro .${fileExtension}`);
 
-        console.log(`[Legal One API Service] A anexar o documento ${fileName} ao Contato ID: ${contactId}`);
+        const response = await axios.get<LegalOneUploadContainer>(requestUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
 
-        const payload: UploadFromUrlPayload = {
-            url: fileUrl,
-            archive: fileName,
-            type: "Documento Pessoal", // Categoria do documento no Legal One
+        return response.data;
+    }
+
+    /**
+     * NOVO MÉTODO (Etapa 2 do Upload): Envia o ficheiro para o Azure Storage do Legal One.
+     */
+    public async uploadFileToContainer(containerUrl: string, fileBuffer: Buffer, mimeType: string): Promise<void> {
+        console.log(`[Legal One API Service] A fazer upload do ficheiro para o container do Azure...`);
+
+        await axios.put(containerUrl, fileBuffer, {
+            headers: {
+                'x-ms-blob-type': 'BlockBlob',
+                'Content-Type': mimeType,
+            }
+        });
+        console.log(`[Legal One API Service] Upload para o container concluído.`);
+    }
+
+    /**
+     * NOVO MÉTODO (Etapa 3 do Upload): Finaliza o documento e anexa-o a um Contato.
+     */
+    public async finalizeDocument(
+        fileNameInContainer: string,
+        originalFileName: string,
+        contactId: number
+    ): Promise<void> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const requestUrl = `${apiRestUrl}/Documents`;
+
+        console.log(`[Legal One API Service] A finalizar e anexar o documento ${originalFileName} ao Contato ID: ${contactId}`);
+
+        const payload: LegalOneDocumentPayload = {
+            archive: originalFileName,
+            typeId: "1-3", // Assumido "Documentos Gerais - Cópia" (idealmente buscar de GET /documenttypes)
+            fileName: fileNameInContainer, // O 'fileName' retornado pelo 'getcontainer'
             relationships: [
                 {
                     link: "Contact",
@@ -251,7 +371,7 @@ class LegalOneApiService {
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        console.log(`[Legal One API Service] Documento ${fileName} anexado com sucesso.`);
+        console.log(`[Legal One API Service] Documento ${originalFileName} anexado com sucesso.`);
     }
 }
 
