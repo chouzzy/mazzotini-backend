@@ -323,12 +323,19 @@ class LegalOneApiService {
             });
         }
 
-        const response = await axios.post<LegalOneContact>(requestUrl, payload, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        try {
+            const response = await axios.post<LegalOneContact>(requestUrl, payload, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
 
-        console.log(`[Legal One API Service] Contato (Individual) criado com ID: ${response.data.id}`);
-        return response.data;
+            console.log(`[Legal One API Service] Resposta: ${response.data}`);
+            console.log(`[Legal One API Service] Contato (Individual) criado com ID: ${response.data.id}`);
+            return response.data;
+        } catch (error) {
+            console.error(`[Legal One API Service] Erro ao criar contato (Individual):`, error);
+            throw new Error("Erro ao criar contato no Legal One."); 
+        }
+
     }
 
 
