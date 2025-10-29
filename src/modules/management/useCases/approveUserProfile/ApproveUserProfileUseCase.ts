@@ -13,27 +13,46 @@ class ApproveUserProfileUseCase {
             where: { id: userId }
         });
 
-        // Validação de segurança
+        // Validações de segurança
         if (!user.cpfOrCnpj || !user.email) {
             throw new Error("Perfil do utilizador está incompleto (sem CPF/CNPJ ou e-mail) e não pode ser aprovado.");
         }
         if (user.status !== 'PENDING_REVIEW') {
              throw new Error("Este utilizador não está pendente de revisão.");
         }
+        // Se o utilizador já tiver um ID do Legal One, apenas o ativa
+        if (user.legalOneContactId) {
+            console.warn(`[ADMIN] O utilizador ${userId} já possui um legalOneContactId (${user.legalOneContactId}). Apenas a mudar o status para ACTIVE.`);
+            await prisma.user.update({
+                where: { id: userId },
+                data: { status: "ACTIVE" }
+            });
+            return;
+        }
 
-        // 2. Tenta criar o Contato no Legal One (como a sua sócia pediu)
+        // 2. Tenta criar o Contato no Legal One
         const newContact = await legalOneApiService.createContact(
             user.name,
             user.email,
             user.cpfOrCnpj
         );
+        
+        // 3. VERIFICAÇÃO DE UNICIDADE (LÓGICA SÉNIOR)
+        // Antes de salvar, verifica se outro utilizador já foi sincronizado com este ID.
+        const existingUserWithThisId = await prisma.user.findFirst({
+            where: { legalOneContactId: newContact.id }
+        });
 
-        // 3. Anexa os documentos pessoais ao novo Contato no Legal One
+        if (existingUserWithThisId) {
+            // Se já existe, lança um erro para o Admin
+            throw new Error(`O ID de Contato do Legal One (${newContact.id}) já está em uso pelo utilizador ${existingUserWithThisId.email}.`);
+        }
+
+        // 4. Anexa os documentos pessoais ao novo Contato no Legal One
         if (user.personalDocumentUrls && user.personalDocumentUrls.length > 0) {
             console.log(`[ADMIN] Anexando ${user.personalDocumentUrls.length} documento(s) ao novo Contato ID: ${newContact.id}...`);
             for (const docUrl of user.personalDocumentUrls) {
                 try {
-                    // Usa o nosso service para enviar a URL
                     await legalOneApiService.uploadDocumentFromUrl(docUrl, newContact.id);
                 } catch (docError: any) {
                     console.error(`[ADMIN] Falha ao anexar o documento ${docUrl} ao Contato ${newContact.id}. Erro: ${docError.message}`);
@@ -42,11 +61,12 @@ class ApproveUserProfileUseCase {
             }
         }
         
-        // 4. Atualiza o nosso banco de dados com o status "ACTIVE" e o ID do Legal One
+        // 5. Atualiza o nosso banco de dados
         await prisma.user.update({
             where: { id: userId },
             data: {
                 status: "ACTIVE",
+                legalOneContactId: newContact.id // Guarda o ID do Legal One
             }
         });
 
@@ -56,3 +76,4 @@ class ApproveUserProfileUseCase {
 }
 
 export { ApproveUserProfileUseCase };
+
