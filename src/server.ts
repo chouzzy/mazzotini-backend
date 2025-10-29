@@ -16,7 +16,7 @@ const app = express();
 // ============================================================================
 const allowedOrigins = [
     'http://localhost:3000',
-    'https://www.mazzotini.awer.co',
+    'https://mazzotini-frontend.vercel.app',
     // Adicione a sua URL de deploy da Vercel aqui
 ];
 
