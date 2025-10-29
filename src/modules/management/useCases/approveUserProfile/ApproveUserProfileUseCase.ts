@@ -1,6 +1,7 @@
 // /src/modules/management/useCases/approveUserProfile/ApproveUserProfileUseCase.ts
 import { PrismaClient } from "@prisma/client";
 import { legalOneApiService } from "../../../../services/legalOneApiService";
+import axios from 'axios'; // Precisamos do axios para baixar o ficheiro do nosso Space
 
 const prisma = new PrismaClient();
 
@@ -13,14 +14,14 @@ class ApproveUserProfileUseCase {
             where: { id: userId }
         });
 
-        // Validações de segurança
+        // Validação de segurança
         if (!user.cpfOrCnpj || !user.email) {
             throw new Error("Perfil do utilizador está incompleto (sem CPF/CNPJ ou e-mail) e não pode ser aprovado.");
         }
         if (user.status !== 'PENDING_REVIEW') {
              throw new Error("Este utilizador não está pendente de revisão.");
         }
-        // Se o utilizador já tiver um ID do Legal One, apenas o ativa
+        // Se o utilizador já tiver um ID do Legal One, não fazemos nada (já foi aprovado)
         if (user.legalOneContactId) {
             console.warn(`[ADMIN] O utilizador ${userId} já possui um legalOneContactId (${user.legalOneContactId}). Apenas a mudar o status para ACTIVE.`);
             await prisma.user.update({
@@ -30,38 +31,45 @@ class ApproveUserProfileUseCase {
             return;
         }
 
-        // 2. Tenta criar o Contato no Legal One
+        // 2. Tenta criar o Contato no Legal One (com o endpoint /individuals)
         const newContact = await legalOneApiService.createContact(
             user.name,
             user.email,
             user.cpfOrCnpj
         );
         
-        // 3. VERIFICAÇÃO DE UNICIDADE (LÓGICA SÉNIOR)
-        // Antes de salvar, verifica se outro utilizador já foi sincronizado com este ID.
-        const existingUserWithThisId = await prisma.user.findFirst({
-            where: { legalOneContactId: newContact.id }
-        });
-
-        if (existingUserWithThisId) {
-            // Se já existe, lança um erro para o Admin
-            throw new Error(`O ID de Contato do Legal One (${newContact.id}) já está em uso pelo utilizador ${existingUserWithThisId.email}.`);
-        }
-
-        // 4. Anexa os documentos pessoais ao novo Contato no Legal One
+        // 3. Anexa os documentos pessoais ao novo Contato no Legal One (FLUXO CORRIGIDO)
         if (user.personalDocumentUrls && user.personalDocumentUrls.length > 0) {
             console.log(`[ADMIN] Anexando ${user.personalDocumentUrls.length} documento(s) ao novo Contato ID: ${newContact.id}...`);
+            
             for (const docUrl of user.personalDocumentUrls) {
                 try {
-                    await legalOneApiService.uploadDocumentFromUrl(docUrl, newContact.id);
+                    // Etapa 3a: Fazer o download do ficheiro do nosso DO Spaces
+                    console.log(`[Upload] Baixando ficheiro de: ${docUrl}`);
+                    const fileResponse = await axios.get(docUrl, { responseType: 'arraybuffer' });
+                    const fileBuffer = Buffer.from(fileResponse.data);
+                    
+                    const originalFileName = decodeURIComponent(docUrl.split('/').pop()?.split('-').pop() || 'documento.pdf');
+                    const fileExtension = originalFileName.split('.').pop() || 'pdf';
+                    const mimeType = fileResponse.headers['content-type'] || 'application/octet-stream';
+
+                    // Etapa 3b: Pedir o container ao Legal One
+                    const container = await legalOneApiService.getUploadContainer(fileExtension);
+                    
+                    // Etapa 3c: Fazer o upload para o container (Azure) do Legal One
+                    await legalOneApiService.uploadFileToContainer(container.externalId, fileBuffer, mimeType);
+                    
+                    // Etapa 3d: Finalizar e anexar o documento no Legal One
+                    await legalOneApiService.finalizeDocument(container.fileName, originalFileName, newContact.id);
+
                 } catch (docError: any) {
-                    console.error(`[ADMIN] Falha ao anexar o documento ${docUrl} ao Contato ${newContact.id}. Erro: ${docError.message}`);
+                    console.error(`[ADMIN] Falha ao anexar o documento ${docUrl} ao Contato ${newContact.id}. Erro:`, docError.message);
                     // Não para o fluxo, apenas regista o erro
                 }
             }
         }
         
-        // 5. Atualiza o nosso banco de dados
+        // 4. Atualiza o nosso banco de dados
         await prisma.user.update({
             where: { id: userId },
             data: {
