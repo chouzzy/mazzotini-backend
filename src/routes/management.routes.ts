@@ -28,6 +28,42 @@ const ROLES = {
  * @desc    Busca a lista completa de utilizadores e suas roles a partir do Auth0.
  * @access  Privado (Apenas para ADMINs)
  */
+managementRoutes.get(
+    '/api/management/users',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    listManagementUsersController.handle
+);
+
+/**
+ * @route   GET /api/management/roles
+ * @desc    Busca a lista de todas as roles disponíveis no Auth0.
+ * @access  Privado (Apenas para ADMINs)
+ */
+managementRoutes.get(
+    '/api/management/roles',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    listAllRolesController.handle
+);
+
+/**
+ * @route   PATCH /api/management/users/:auth0UserId/roles
+ * @desc    Atualiza as roles de um utilizador específico.
+ * @access  Privado (Apenas para ADMINs)
+ */
+managementRoutes.patch(
+    '/api/management/users/:auth0UserId/roles',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    updateUserRolesController.handle
+);
+
+/**
+ * @route   POST /api/management/invites
+ * @desc    Cria um novo utilizador e envia um convite (e-mail de verificação).
+ * @access  Privado (Apenas para ADMINs)
+ */
 managementRoutes.post(
     '/api/management/invites',
     checkJwt,
