@@ -22,7 +22,7 @@ model User {
   auth0UserId String @unique
   name        String
 
-  legalOneContactId Int?
+  legalOneContactId Int? //test
 
   // --- FLUXO DE APROVAÇÃO ---
   // Substitui 'profileCompleted' para um status mais granular.
