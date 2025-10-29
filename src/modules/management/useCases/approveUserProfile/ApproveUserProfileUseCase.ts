@@ -1,7 +1,7 @@
 // /src/modules/management/useCases/approveUserProfile/ApproveUserProfileUseCase.ts
 import { PrismaClient } from "@prisma/client";
 import { legalOneApiService } from "../../../../services/legalOneApiService";
-import axios from 'axios'; // Precisamos do axios para baixar o ficheiro do nosso Space
+import axios from 'axios';
 
 const prisma = new PrismaClient();
 
@@ -16,12 +16,11 @@ class ApproveUserProfileUseCase {
 
         // Validação de segurança
         if (!user.cpfOrCnpj || !user.email) {
-            throw new Error("Perfil do utilizador está incompleto (sem CPF/CNPJ ou e-mail) e não pode ser aprovado.");
+            throw new Error("Perfil do utilizador está incompleto e não pode ser aprovado.");
         }
         if (user.status !== 'PENDING_REVIEW') {
              throw new Error("Este utilizador não está pendente de revisão.");
         }
-        // Se o utilizador já tiver um ID do Legal One, não fazemos nada (já foi aprovado)
         if (user.legalOneContactId) {
             console.warn(`[ADMIN] O utilizador ${userId} já possui um legalOneContactId (${user.legalOneContactId}). Apenas a mudar o status para ACTIVE.`);
             await prisma.user.update({
@@ -31,12 +30,8 @@ class ApproveUserProfileUseCase {
             return;
         }
 
-        // 2. Tenta criar o Contato no Legal One (com o endpoint /individuals)
-        const newContact = await legalOneApiService.createContact(
-            user.name,
-            user.email,
-            user.cpfOrCnpj
-        );
+        // 2. Tenta criar o Contato no Legal One (passando o objeto 'user' completo)
+        const newContact = await legalOneApiService.createContact(user);
         
         // 3. Anexa os documentos pessoais ao novo Contato no Legal One (FLUXO CORRIGIDO)
         if (user.personalDocumentUrls && user.personalDocumentUrls.length > 0) {

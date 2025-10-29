@@ -1,4 +1,5 @@
 // /src/services/legalOneApiService.ts
+import { User } from '@prisma/client';
 import axios from 'axios';
 
 // ============================================================================
@@ -107,16 +108,6 @@ export interface LegalOneContact {
     email?: string;
     documentNumber?: string;
 }
-
-// Interface para o payload de criação de /individuals (Pessoa)
-// (Baseado no 'PersonModel' e 'ContactModel' do JSON)
-interface LegalOneCreatePersonPayload {
-    name: string;
-    emails: { email: string; isMainEmail: boolean; typeId: number }[];
-    identificationNumber?: string; // CPF
-    contactType: 'Person';
-}
-
 // Interface para o retorno de 'getcontainer'
 interface LegalOneUploadContainer {
     id: number;
@@ -155,6 +146,26 @@ interface RelationshipModel {
     };
 }
 
+// Interface para o payload de criação de /individuals (Pessoa)
+// (Baseado no 'PersonModel' e 'ContactModel' do JSON)
+interface LegalOneCreatePersonPayload {
+    name: string;
+    identificationNumber?: string; // CPF
+    country?: { id: number }; 
+    birthDate?: string;
+    gender?: 'Male' | 'Female' | 'Other';
+    emails: { email: string; isMainEmail: boolean; typeId: number }[];
+    phones?: { number: string; isMainPhone: boolean; typeId: number }[];
+    addresses?: {
+        type: 'Residential' | 'Comercial';
+        addressLine1: string; // Rua
+        addressNumber: string;
+        addressLine2?: string; // Complemento
+        neighborhood: string;
+        cityId: number; // TODO: Precisamos de um "de-para" de Nome de Cidade para ID
+        isMainAddress: boolean;
+    }[];
+}
 
 // ============================================================================
 //  LÓGICA DE SERVIÇO DA API
@@ -247,27 +258,70 @@ class LegalOneApiService {
     }
 
     /**
-    * CORREÇÃO: Cria um novo Contato (Pessoa) usando o endpoint POST /individuals.
-    */
-    public async createContact(name: string, email: string, cpfOrCnpj: string | null): Promise<LegalOneContact> {
+      * CORREÇÃO: Cria um novo Contato (Pessoa) usando o endpoint POST /individuals
+      * e o payload completo do 'PersonModel'.
+      */
+    public async createContact(user: User): Promise<LegalOneContact> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/individuals`; // Endpoint correto: /individuals
 
-        console.log(`[Legal One API Service] A criar novo contato (Individual): ${name} (${email})`);
+        console.log(`[Legal One API Service] A criar novo contato (Individual): ${user.name} (${user.email})`);
 
-        // O payload deve corresponder ao 'PersonModel'
-        const payload = {
-            name: name,
-            identificationNumber: cpfOrCnpj || undefined, // CPF/CNPJ
+        // Mapeia os dados do nosso 'User' para o 'PersonModel' do Legal One
+        const payload: LegalOneCreatePersonPayload = {
+            name: user.name,
+            identificationNumber: user.cpfOrCnpj || undefined,
+            birthDate: user.birthDate ? new Date(user.birthDate).toISOString() : undefined,
+            gender: 'Other', // TODO: Adicionar 'gender' ao nosso formulário
+            country: {
+                id: 1 // Assumimos 1 como o ID para "Brasil"
+            },
             emails: [
                 {
-                    email: email,
+                    email: user.email,
                     isMainEmail: true,
-                    typeId: 1 // 1 = 'Pessoal' (Assumido, idealmente viria de GET /contactemailtypes)
+                    typeId: 1 // Assumido 1 = 'Pessoal' (idealmente viria de GET /contactemailtypes)
                 }
-            ]
+            ],
+            phones: [],
+            addresses: [],
         };
+
+        // Adiciona o telemóvel se existir
+        if (user.cellPhone) {
+            payload.phones?.push({
+                number: user.cellPhone,
+                isMainPhone: true,
+                typeId: 1 // Assumido 1 = 'Celular' (idealmente viria de GET /contactphonetypes)
+            });
+        }
+
+        // Adiciona o endereço residencial se existir
+        if (user.residentialCep && user.residentialStreet) {
+            payload.addresses?.push({
+                type: 'Residential',
+                addressLine1: user.residentialStreet,
+                addressNumber: user.residentialNumber || 'S/N',
+                addressLine2: user.residentialComplement || undefined,
+                neighborhood: user.residentialNeighborhood || 'N/A',
+                cityId: 1, // TODO: Precisamos de um "de-para" de /cities (ex: 'São Paulo' -> 1)
+                isMainAddress: user.correspondenceAddress === 'residential',
+            });
+        }
+
+        // Adiciona o endereço comercial se existir
+        if (user.commercialCep && user.commercialStreet) {
+            payload.addresses?.push({
+                type: 'Comercial',
+                addressLine1: user.commercialStreet,
+                addressNumber: user.commercialNumber || 'S/N',
+                addressLine2: user.commercialComplement || undefined,
+                neighborhood: user.commercialNeighborhood || 'N/A',
+                cityId: 1, // TODO: Precisamos de um "de-para"
+                isMainAddress: user.correspondenceAddress === 'commercial',
+            });
+        }
 
         const response = await axios.post<LegalOneContact>(requestUrl, payload, {
             headers: { 'Authorization': `Bearer ${token}` }
