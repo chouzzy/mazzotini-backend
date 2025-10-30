@@ -31,13 +31,14 @@ model User {
   // REJECTED: Rejeitado pela Mazzotini.
   status String @default("PENDING_REVIEW")
 
-  // --- NOVOS CAMPOS CADASTRAIS (Conforme solicitado) ---
+  // --- NOVOS CAMPOS CADASTRAIS ---
   rg                String?
   birthDate         DateTime?
   profession        String? // Atividade (profissão)
   contactPreference String? // "email", "whatsapp", ou "both"
   infoEmail         String? // Email secundário para informações
   profilePictureUrl String? // URL da foto de perfil (Cloudinary, S3, etc.)
+  gender            String? // "Male" ou "Female", conforme API Legal One
 
   // Endereço Residencial (Estruturado)
   residentialCep          String?
