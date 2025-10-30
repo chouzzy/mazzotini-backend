@@ -153,7 +153,7 @@ interface LegalOneCreatePersonPayload {
     country?: { id: number };
     birthDate?: string;
     gender?: 'Male' | 'Female'; // CORRIGIDO: Removido 'Other'
-    emails: { email: string; isMainEmail: boolean; typeId: number }[];
+    emails: { email: string; isMainEmail: boolean; typeId: number; isBillingEmail: boolean; isInvoicingEmail: boolean }[];
     phones?: { number: string; isMainPhone: boolean; typeId: number }[];
     addresses?: {
         type: 'Residential' | 'Comercial';
@@ -163,6 +163,8 @@ interface LegalOneCreatePersonPayload {
         neighborhood: string;
         cityId: number; // TODO: Precisamos de um "de-para" de Nome de Cidade para ID
         isMainAddress: boolean;
+        isBillingAddress: boolean;
+        isInvoicingAddress: boolean;
     }[];
 }
 
@@ -270,7 +272,7 @@ class LegalOneApiService {
         // Mapeia os dados do nosso 'User' para o 'PersonModel' do Legal One
         const payload: LegalOneCreatePersonPayload = {
             name: user.name,
-            identificationNumber: user.cpfOrCnpj || undefined,
+            identificationNumber: user.rg || undefined,
             birthDate: user.birthDate ? new Date(user.birthDate).toISOString() : undefined,
             gender: 'Male', // TODO: Adicionar 'gender' ao nosso formulário
             country: {
@@ -280,6 +282,8 @@ class LegalOneApiService {
                 {
                     email: user.email,
                     isMainEmail: true,
+                    isBillingEmail: true,
+                    isInvoicingEmail: true,
                     typeId: 1 // Assumido 1 = 'Pessoal' (idealmente viria de GET /contactemailtypes)
                 }
             ],
@@ -306,6 +310,8 @@ class LegalOneApiService {
                 neighborhood: user.residentialNeighborhood || 'N/A',
                 cityId: 1, // TODO: Precisamos de um "de-para" de /cities (ex: 'São Paulo' -> 1)
                 isMainAddress: user.correspondenceAddress === 'residential',
+                isBillingAddress: true,
+                isInvoicingAddress: true,
             });
         }
 
@@ -319,6 +325,8 @@ class LegalOneApiService {
                 neighborhood: user.commercialNeighborhood || 'N/A',
                 cityId: 1, // TODO: Precisamos de um "de-para"
                 isMainAddress: user.correspondenceAddress === 'commercial',
+                isBillingAddress: true,
+                isInvoicingAddress: true,
             });
         }
 
