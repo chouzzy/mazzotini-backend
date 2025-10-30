@@ -149,7 +149,7 @@ interface RelationshipModel {
 // Interface para o payload de criação de /individuals (Pessoa)
 interface LegalOneCreatePersonPayload {
     name: string;
-    identificationNumber?: string; // CPF
+    personStateIdentificationNumber?: string; // RG
     country?: { id: number };
     birthDate?: string;
     gender?: 'Male' | 'Female'; // CORRIGIDO: Removido 'Other'
@@ -272,7 +272,7 @@ class LegalOneApiService {
         // Mapeia os dados do nosso 'User' para o 'PersonModel' do Legal One
         const payload: LegalOneCreatePersonPayload = {
             name: user.name,
-            identificationNumber: user.rg || undefined,
+            personStateIdentificationNumber: user.rg || undefined,
             birthDate: user.birthDate ? new Date(user.birthDate).toISOString() : undefined,
             gender: 'Male', // TODO: Adicionar 'gender' ao nosso formulário
             country: {
