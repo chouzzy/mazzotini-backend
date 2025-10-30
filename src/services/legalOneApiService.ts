@@ -150,7 +150,7 @@ interface RelationshipModel {
 interface LegalOneCreatePersonPayload {
     name: string;
     identificationNumber?: string; // CPF
-    country?: { id: number }; 
+    country?: { id: number };
     birthDate?: string;
     gender?: 'Male' | 'Female'; // CORRIGIDO: Removido 'Other'
     emails: { email: string; isMainEmail: boolean; typeId: number }[];
@@ -330,10 +330,9 @@ class LegalOneApiService {
             console.log(`[Legal One API Service] Resposta: ${response.data}`);
             console.log(`[Legal One API Service] Contato (Individual) criado com ID: ${response.data.id}`);
             return response.data;
-        } catch (error:any) {
-            console.error(`[Legal One API Service] Erro ao criar contato (Individual):`, error.response.data);
-            console.error(`[Legal One API Service] Erro ao criar contato (Individual) DETAILS:`, error.response.data.details);
-            throw new Error("Erro ao criar contato no Legal One."); 
+        } catch (error: any) {
+            console.log('[Legal One API Service] Erro detalhado:', JSON.stringify(error.response.data, null, 2));
+            throw new Error("Erro ao criar contato no Legal One.");
         }
 
     }
