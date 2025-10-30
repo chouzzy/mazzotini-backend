@@ -148,6 +148,15 @@ export interface LegalOneDocumentDownload {
     url: string;
 }
 
+interface LegalOneState {
+    id: number;
+    name: string;
+    stateCode: string;
+}
+interface LegalOneStateApiResponse {
+    value: LegalOneState[];
+}
+
 interface LegalOneCountry {
     id: number;
     name: string;
@@ -244,7 +253,84 @@ class LegalOneApiService {
     }
 
 
-    // --- NOVOS MÉTODOS DE CACHE E LOOKUP ---
+    // --- NOVOS MÉTODOS DE LOOKUP (SOB-DEMANDA) ---
+
+    /**
+     * Busca o ID de um país pelo nome (ex: "Brasil").
+     * API: GET /countries?$filter=name eq 'Brasil'
+     */
+    private async getCountryIdByName(name: string): Promise<number | null> {
+        console.log(`[Legal One Lookup] Buscando ID para o País: "${name}"`);
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const requestUrl = `${apiRestUrl}/countries`;
+
+        try {
+            const response = await axios.get<LegalOneCountryApiResponse>(requestUrl, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                params: {
+                    '$filter': `name eq '${name}'`
+                }
+            });
+            const country = response.data.value?.[0];
+            return country ? country.id : null;
+        } catch (error: any) {
+            console.error(`[Legal One Lookup] Erro ao buscar País "${name}":`, error.message);
+            return null;
+        }
+    }
+
+    /**
+    * Busca o ID de um estado pela sigla/UF (ex: "SP").
+    * API: GET /states?$filter=stateCode eq 'SP'
+    */
+    private async getStateIdByCode(stateCode: string): Promise<number | null> {
+        console.log(`[Legal One Lookup] Buscando ID para o Estado (UF): "${stateCode}"`);
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const requestUrl = `${apiRestUrl}/states`;
+
+        try {
+            const response = await axios.get<LegalOneStateApiResponse>(requestUrl, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                params: {
+                    '$filter': `stateCode eq '${stateCode}'`
+                }
+            });
+            const state = response.data.value?.[0];
+            return state ? state.id : null;
+        } catch (error: any) {
+            console.error(`[Legal One Lookup] Erro ao buscar Estado "${stateCode}":`, error.message);
+            return null;
+        }
+    }
+
+    /**
+     * Busca o ID de uma cidade pelo nome E ID do estado.
+     * API: GET /cities?$filter=name eq 'São Paulo' and state/id eq 1
+     */
+    private async getCityIdByNameAndState(cityName: string, stateId: number): Promise<number | null> {
+        console.log(`[Legal One Lookup] Buscando ID para Cidade: "${cityName}" no Estado ID: ${stateId}`);
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const requestUrl = `${apiRestUrl}/cities`;
+
+        try {
+            const response = await axios.get<LegalOneCityApiResponse>(requestUrl, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                params: {
+                    '$filter': `name eq '${cityName}' and state/id eq ${stateId}`
+                }
+            });
+            const city = response.data.value?.[0];
+            return city ? city.id : null;
+        } catch (error: any) {
+            console.error(`[Legal One Lookup] Erro ao buscar Cidade "${cityName}":`, error.message);
+            return null;
+        }
+    }
+
+
 
     /**
      * Inicializa os mapas de Cidades e Países na memória.
@@ -314,6 +400,7 @@ class LegalOneApiService {
             const response: AxiosResponse<LegalOneCityApiResponse> = await axios.get<LegalOneCityApiResponse>(requestUrl, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+
 
             response.data.value.forEach(city => {
                 if (city.state && city.state.stateCode) {
@@ -404,56 +491,67 @@ class LegalOneApiService {
         return response.data;
     }
 
-    /**
-      * CORREÇÃO: Cria um novo Contato (Pessoa) usando o endpoint POST /individuals
-      * e o payload completo do 'PersonModel'.
-      */
     public async createContact(user: User): Promise<LegalOneContact> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/individuals`; // Endpoint correto: /individuals
+        const requestUrl = `${apiRestUrl}/individuals`;
 
         console.log(`[Legal One API Service] A criar novo contato (Individual): ${user.name} (${user.email})`);
 
         // --- LÓGICA DE LOOKUP ATIVADA ---
+        const DEFAULT_COUNTRY_ID = 1; // ID 1 (Brasil)
+        const DEFAULT_CITY_ID = 1; // ID 1 (Default/Não Encontrada)
+
         // 1. Busca ID do País (Default: 1 para "Brasil" se não achar)
         const countryName = (user.nationality === "Brasileira" || !user.nationality) ? "Brasil" : user.nationality;
-        const countryId = (await this.getCountryId(countryName)) || 1;
-        if (countryId === 1 && countryName.toUpperCase() !== "BRASIL") {
-            console.warn(`[Legal One Lookup] Nacionalidade "${countryName}" não encontrada. Usando ID 1 (Brasil) como padrão.`);
+        let countryId = await this.getCountryIdByName(countryName);
+        if (!countryId) {
+            console.warn(`[Legal One Lookup] Nacionalidade "${countryName}" não encontrada. Usando ID ${DEFAULT_COUNTRY_ID} (Brasil) como padrão.`);
+            countryId = DEFAULT_COUNTRY_ID;
         }
 
-        // 2. Busca ID da Cidade Residencial
-        let residentialCityId = 1; // ID Padrão (ex: "São Paulo")
+        // 2. Busca ID do Estado e Cidade Residenciais
+        let residentialCityId = DEFAULT_CITY_ID;
         if (user.residentialCity && user.residentialState) {
-            const foundCityId = await this.getCityId(user.residentialCity, user.residentialState);
-            if (foundCityId) {
-                residentialCityId = foundCityId;
+            const stateId = await this.getStateIdByCode(user.residentialState);
+            if (stateId) {
+                const cityId = await this.getCityIdByNameAndState(user.residentialCity, stateId);
+                if (cityId) {
+                    residentialCityId = cityId;
+                } else {
+                    console.warn(`[Legal One Lookup] Cidade Residencial "${user.residentialCity}" não encontrada no estado ${user.residentialState}. Usando ID ${DEFAULT_CITY_ID} como padrão.`);
+                }
             } else {
-                console.warn(`[Legal One Lookup] Cidade Residencial "${user.residentialCity}-${user.residentialState}" não encontrada. Usando ID 1 como padrão.`);
+                console.warn(`[Legal One Lookup] Estado Residencial "${user.residentialState}" não encontrado. Usando ID ${DEFAULT_CITY_ID} como padrão para a cidade.`);
             }
         }
 
-        // 3. Busca ID da Cidade Comercial (se aplicável)
-        let commercialCityId = 1;
-        if (user.commercialCep && user.commercialCity && user.commercialState) {
-            const foundCityId = await this.getCityId(user.commercialCity, user.commercialState);
-            if (foundCityId) {
-                commercialCityId = foundCityId;
+        // 3. Busca ID do Estado e Cidade Comerciais (se aplicável)
+        let commercialCityId = DEFAULT_CITY_ID;
+        if ( user.commercialCity && user.commercialState) {
+            const stateId = await this.getStateIdByCode(user.commercialState);
+            if (stateId) {
+                const cityId = await this.getCityIdByNameAndState(user.commercialCity, stateId);
+                if (cityId) {
+                    commercialCityId = cityId;
+                } else {
+                    console.warn(`[Legal One Lookup] Cidade Comercial "${user.commercialCity}" não encontrada no estado ${user.commercialState}. Usando ID ${DEFAULT_CITY_ID} como padrão.`);
+                }
             } else {
-                console.warn(`[Legal One Lookup] Cidade Comercial "${user.commercialCity}-${user.commercialState}" não encontrada. Usando ID 1 como padrão.`);
+                console.warn(`[Legal One Lookup] Estado Comercial "${user.commercialState}" não encontrado. Usando ID ${DEFAULT_CITY_ID} como padrão para a cidade.`);
             }
         }
         // --- FIM DA LÓGICA DE LOOKUP ---
+
 
         // Mapeia os dados do nosso 'User' para o 'PersonModel' do Legal One
         const payload: LegalOneCreatePersonPayload = {
             name: user.name,
             personStateIdentificationNumber: user.rg || undefined,
             birthDate: user.birthDate ? new Date(user.birthDate).toISOString() : undefined,
-            gender: 'Male', // TODO: Adicionar 'gender' ao nosso formulário
+            gender: user.gender as 'Male' | 'Female',
             country: {
-                id: 1 // Assumimos 1 como o ID para "Brasil"
+                id: countryId
             },
             emails: [
                 {
@@ -461,23 +559,40 @@ class LegalOneApiService {
                     isMainEmail: true,
                     isBillingEmail: true,
                     isInvoicingEmail: true,
-                    typeId: 1 // Assumido 1 = 'Pessoal' (idealmente viria de GET /contactemailtypes)
+                    typeId: 1 // TODO: Mapear tipo (ex: Pessoal)
                 }
             ],
             phones: [],
             addresses: [],
         };
 
-        // Adiciona o telemóvel se existir
+        // (Lógica de emails secundários e telefones inalterada)
+        if (user.infoEmail) {
+            payload.emails.push({
+                email: user.infoEmail,
+                isMainEmail: false,
+                isBillingEmail: false,
+                isInvoicingEmail: false,
+                typeId: 2 // Assumido 2 = 'Trabalho'
+            });
+        }
         if (user.cellPhone) {
             payload.phones?.push({
                 number: user.cellPhone,
                 isMainPhone: true,
-                typeId: 1 // Assumido 1 = 'Celular' (idealmente viria de GET /contactphonetypes)
+                typeId: 1 // Assumido 1 = 'Celular'
+            });
+        }
+        if (user.phone) {
+            payload.phones?.push({
+                number: user.phone,
+                isMainPhone: false,
+                typeId: 2 // Assumido 2 = 'Fixo'
             });
         }
 
-        // Adiciona o endereço residencial se existir
+
+        // Adiciona o endereço residencial (agora com cityId dinâmico)
         if (user.residentialCep && user.residentialStreet) {
             payload.addresses?.push({
                 type: 'Residential',
@@ -485,14 +600,14 @@ class LegalOneApiService {
                 addressNumber: user.residentialNumber || 'S/N',
                 addressLine2: user.residentialComplement || undefined,
                 neighborhood: user.residentialNeighborhood || 'N/A',
-                cityId: residentialCityId, // TODO: Precisamos de um "de-para" de /cities (ex: 'São Paulo' -> 1)
+                cityId: residentialCityId, // Mapeado (não mais fixo)
                 isMainAddress: user.correspondenceAddress === 'residential',
                 isBillingAddress: true,
                 isInvoicingAddress: true,
             });
         }
 
-        // Adiciona o endereço comercial se existir
+        // Adiciona o endereço comercial (agora com cityId dinâmico)
         if (user.commercialCep && user.commercialStreet) {
             payload.addresses?.push({
                 type: 'Comercial',
@@ -500,7 +615,7 @@ class LegalOneApiService {
                 addressNumber: user.commercialNumber || 'S/N',
                 addressLine2: user.commercialComplement || undefined,
                 neighborhood: user.commercialNeighborhood || 'N/A',
-                cityId: commercialCityId,
+                cityId: commercialCityId, // Mapeado (não mais fixo)
                 isMainAddress: user.correspondenceAddress === 'commercial',
                 isBillingAddress: true,
                 isInvoicingAddress: true,
@@ -513,13 +628,17 @@ class LegalOneApiService {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            console.log(`[Legal One API Service] Resposta: ${response.data}`);
+            console.log(`[Legal One API Service] Resposta:`, response.data);
             return response.data;
         } catch (error: any) {
-            console.log('[Legal One API Service] Erro detalhado:', JSON.stringify(error.response.data, null, 2));
+            // Log detalhado do erro da API
+            if (error.response && error.response.data) {
+                console.log('[Legal One API Service] Erro detalhado:', JSON.stringify(error.response.data, null, 2));
+            } else {
+                console.log('[Legal One API Service] Erro:', error.message);
+            }
             throw new Error("Erro ao criar contato no Legal One.");
         }
-
     }
 
 
