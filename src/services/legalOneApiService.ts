@@ -323,12 +323,12 @@ class LegalOneApiService {
         }
 
         try {
+            console.log(`[Legal One API Service] Payload para criação do contato: ${JSON.stringify(payload, null, 2)}`);
             const response = await axios.post<LegalOneContact>(requestUrl, payload, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
             console.log(`[Legal One API Service] Resposta: ${response.data}`);
-            console.log(`[Legal One API Service] Contato (Individual) criado com ID: ${response.data.id}`);
             return response.data;
         } catch (error: any) {
             console.log('[Legal One API Service] Erro detalhado:', JSON.stringify(error.response.data, null, 2));
