@@ -1,6 +1,6 @@
 // /src/services/legalOneApiService.ts
 import { User } from '@prisma/client';
-import axios from 'axios';
+import axios, { AxiosResponse } from 'axios';
 
 // ============================================================================
 //  INTERFACES DA RESPOSTA REAL (BASEADO NO SCHEMA)
@@ -127,6 +127,14 @@ interface LegalOneDocumentPayload {
     }[];
 }
 
+export interface LegalOneDocument { id: number; archive: string; type: string; }
+export interface LegalOneDocumentsApiResponse { value: LegalOneDocument[]; }
+export interface LegalOneDocumentDownload { id: number; url: string; }
+export interface LegalOneLawsuit { id: number; folder: string; title: string; identifierNumber: string; }
+export interface LegalOneLawsuitApiResponse { value: LegalOneLawsuit[]; }
+export interface LegalOneUpdate { id: number; description: string; notes: string | null; date: string; typeId: number; originType: string; }
+export interface LegalOneUpdatesApiResponse { value: LegalOneUpdate[]; }
+
 export interface LegalOneDocument {
     id: number;
     archive: string;
@@ -139,11 +147,31 @@ export interface LegalOneDocumentDownload {
     id: number;
     url: string;
 }
-interface RelationshipModel {
-    link: 'Contact' | 'Litigation';
-    linkItem: {
+
+interface LegalOneCountry {
+    id: number;
+    name: string;
+}
+interface LegalOneCountryApiResponse {
+    '@odata.nextLink'?: string;
+    value: LegalOneCountry[];
+}
+interface LegalOneCity {
+    id: number;
+    name: string;
+    state: {
         id: number;
+        name: string;
+        country: {
+            id: number;
+            name: string;
+        };
+        stateCode: string; // "SP", "RJ", etc.
     };
+}
+interface LegalOneCityApiResponse {
+    '@odata.nextLink'?: string;
+    value: LegalOneCity[];
 }
 
 // Interface para o payload de criação de /individuals (Pessoa)
@@ -175,6 +203,16 @@ class LegalOneApiService {
     private accessToken: string | null = null;
     private tokenExpiresAt: number | null = null;
 
+
+    // --- NOVO: Caching para Lookups ---
+    // Chave: "NOME DA CIDADE-UF" (ex: "SÃO PAULO-SP"), Valor: ID
+    private cityMap = new Map<string, number>();
+    // Chave: "NOME DO PAÍS" (ex: "BRASIL"), Valor: ID
+    private countryMap = new Map<string, number>();
+
+    private isCacheInitialized = false;
+    private isCacheInitializing = false; // Mutex simples para evitar corridas
+
     private async getAccessToken(): Promise<string> {
         if (this.accessToken && this.tokenExpiresAt && Date.now() < this.tokenExpiresAt) {
             return this.accessToken;
@@ -203,6 +241,114 @@ class LegalOneApiService {
 
         console.log("[Legal One API Service] Novo token obtido com sucesso.");
         return this.accessToken as string;
+    }
+
+
+    // --- NOVOS MÉTODOS DE CACHE E LOOKUP ---
+
+    /**
+     * Inicializa os mapas de Cidades e Países na memória.
+     * Será chamado automaticamente na primeira vez que um ID for solicitado.
+     */
+    private async initializeLookups(): Promise<void> {
+        if (this.isCacheInitialized || this.isCacheInitializing) {
+            // Se já estiver inicializado, retorna.
+            // Se estiver inicializando em outra chamada, espera um pouco.
+            if (this.isCacheInitializing) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                return;
+            }
+            if (this.isCacheInitialized) return;
+        }
+        this.isCacheInitializing = true;
+
+        try {
+            console.log("[Legal One Lookup] Inicializando cache de lookups (Países e Cidades)...");
+            await this.fetchCountries();
+            await this.fetchCities();
+            this.isCacheInitialized = true;
+            console.log(`[Legal One Lookup] Cache inicializado: ${this.countryMap.size} países, ${this.cityMap.size} cidades.`);
+        } catch (error: any) {
+            console.error("[Legal One Lookup] Falha ao inicializar o cache de lookups:", error.message);
+            // Permite tentar novamente na próxima chamada
+        } finally {
+            this.isCacheInitializing = false;
+        }
+    }
+
+    /**
+     * Busca todos os países (com paginação) e os armazena no `countryMap`.
+     */
+    private async fetchCountries(): Promise<void> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        let requestUrl: string | undefined = `${apiRestUrl}/countries`;
+
+        console.log("[Legal One Lookup] Buscando países...");
+
+        while (requestUrl) {
+            const response: AxiosResponse<LegalOneCountryApiResponse> = await axios.get<LegalOneCountryApiResponse>(requestUrl, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            response.data.value.forEach(country => {
+                this.countryMap.set(country.name.toUpperCase(), country.id);
+            });
+
+            requestUrl = response.data['@odata.nextLink'];
+        }
+    }
+
+    /**
+     * Busca todas as cidades (com paginação) e as armazena no `cityMap`.
+     */
+    private async fetchCities(): Promise<void> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        // Usamos $expand para pegar o 'stateCode' (UF) na mesma chamada
+        let requestUrl: string | undefined = `${apiRestUrl}/cities?$expand=state`;
+
+        console.log("[Legal One Lookup] Buscando cidades (isso pode levar um tempo)...");
+
+        while (requestUrl) {
+            const response: AxiosResponse<LegalOneCityApiResponse> = await axios.get<LegalOneCityApiResponse>(requestUrl, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            response.data.value.forEach(city => {
+                if (city.state && city.state.stateCode) {
+                    // Chave composta: "SÃO PAULO-SP"
+                    const key = `${city.name.toUpperCase()}-${city.state.stateCode.toUpperCase()}`;
+                    this.cityMap.set(key, city.id);
+                }
+            });
+
+            requestUrl = response.data['@odata.nextLink'];
+            if (requestUrl) {
+                console.log("[Legal One Lookup] Buscando próxima página de cidades...");
+            }
+        }
+    }
+
+    /**
+     * Busca o ID de um país pelo nome (ex: "Brasil").
+     */
+    public async getCountryId(name: string): Promise<number | undefined> {
+        if (!this.isCacheInitialized) {
+            await this.initializeLookups(); // Garante que o cache esteja pronto
+        }
+        return this.countryMap.get(name.toUpperCase());
+    }
+
+    /**
+     * Busca o ID de uma cidade pelo nome e UF (ex: "São Paulo", "SP").
+     */
+    public async getCityId(name: string, stateCode: string): Promise<number | undefined> {
+        if (!this.isCacheInitialized) {
+            await this.initializeLookups(); // Garante que o cache esteja pronto
+        }
+        const key = `${name.toUpperCase()}-${stateCode.toUpperCase()}`;
+        return this.cityMap.get(key);
     }
 
     public async getProcessDetails(processNumber: string): Promise<LegalOneLawsuit> {
@@ -269,6 +415,37 @@ class LegalOneApiService {
 
         console.log(`[Legal One API Service] A criar novo contato (Individual): ${user.name} (${user.email})`);
 
+        // --- LÓGICA DE LOOKUP ATIVADA ---
+        // 1. Busca ID do País (Default: 1 para "Brasil" se não achar)
+        const countryName = (user.nationality === "Brasileira" || !user.nationality) ? "Brasil" : user.nationality;
+        const countryId = (await this.getCountryId(countryName)) || 1;
+        if (countryId === 1 && countryName.toUpperCase() !== "BRASIL") {
+            console.warn(`[Legal One Lookup] Nacionalidade "${countryName}" não encontrada. Usando ID 1 (Brasil) como padrão.`);
+        }
+
+        // 2. Busca ID da Cidade Residencial
+        let residentialCityId = 1; // ID Padrão (ex: "São Paulo")
+        if (user.residentialCity && user.residentialState) {
+            const foundCityId = await this.getCityId(user.residentialCity, user.residentialState);
+            if (foundCityId) {
+                residentialCityId = foundCityId;
+            } else {
+                console.warn(`[Legal One Lookup] Cidade Residencial "${user.residentialCity}-${user.residentialState}" não encontrada. Usando ID 1 como padrão.`);
+            }
+        }
+
+        // 3. Busca ID da Cidade Comercial (se aplicável)
+        let commercialCityId = 1;
+        if (user.commercialCep && user.commercialCity && user.commercialState) {
+            const foundCityId = await this.getCityId(user.commercialCity, user.commercialState);
+            if (foundCityId) {
+                commercialCityId = foundCityId;
+            } else {
+                console.warn(`[Legal One Lookup] Cidade Comercial "${user.commercialCity}-${user.commercialState}" não encontrada. Usando ID 1 como padrão.`);
+            }
+        }
+        // --- FIM DA LÓGICA DE LOOKUP ---
+
         // Mapeia os dados do nosso 'User' para o 'PersonModel' do Legal One
         const payload: LegalOneCreatePersonPayload = {
             name: user.name,
@@ -308,7 +485,7 @@ class LegalOneApiService {
                 addressNumber: user.residentialNumber || 'S/N',
                 addressLine2: user.residentialComplement || undefined,
                 neighborhood: user.residentialNeighborhood || 'N/A',
-                cityId: 1, // TODO: Precisamos de um "de-para" de /cities (ex: 'São Paulo' -> 1)
+                cityId: residentialCityId, // TODO: Precisamos de um "de-para" de /cities (ex: 'São Paulo' -> 1)
                 isMainAddress: user.correspondenceAddress === 'residential',
                 isBillingAddress: true,
                 isInvoicingAddress: true,
@@ -323,7 +500,7 @@ class LegalOneApiService {
                 addressNumber: user.commercialNumber || 'S/N',
                 addressLine2: user.commercialComplement || undefined,
                 neighborhood: user.commercialNeighborhood || 'N/A',
-                cityId: 1, // TODO: Precisamos de um "de-para"
+                cityId: commercialCityId,
                 isMainAddress: user.correspondenceAddress === 'commercial',
                 isBillingAddress: true,
                 isInvoicingAddress: true,
