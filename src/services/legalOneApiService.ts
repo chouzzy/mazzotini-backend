@@ -602,8 +602,8 @@ class LegalOneApiService {
                 neighborhood: user.residentialNeighborhood || 'N/A',
                 cityId: residentialCityId, // Mapeado (não mais fixo)
                 isMainAddress: user.correspondenceAddress === 'residential',
-                isBillingAddress: true,
-                isInvoicingAddress: true,
+                isBillingAddress: (user.commercialCep && user.commercialStreet) ? false: true,
+                isInvoicingAddress: (user.commercialCep && user.commercialStreet) ? false : true,
             });
         }
 
