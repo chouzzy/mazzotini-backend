@@ -41,7 +41,7 @@ const mapLawsuitData = async (lawsuit: LegalOneLawsuit) => {
 
     return {
         originalCreditor: originalCreditorName,
-        originalValue: lawsuit.monetaryAmount?.Value || 0,
+        originalValue: lawsuit.monetaryAmount?.value || 0,
         // Adicionaremos mais mapeamentos aqui conforme necessário
     };
 };
