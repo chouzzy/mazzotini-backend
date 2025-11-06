@@ -1,4 +1,3 @@
-// /src/routes/creditAsset.routes.ts
 import { Router } from 'express';
 import { checkJwt } from '../middleware/auth';
 import { checkRole } from '../middleware/checkRole';
@@ -8,14 +7,18 @@ import { EnrichAssetFromLegalOneController } from '../modules/creditAssets/useCa
 import { GetAssetByProcessNumberController } from '../modules/creditAssets/useCases/getAssetByProcessNumber/GetAssetByProcessNumberController';
 import { SyncSingleAssetController } from '../modules/creditAssets/useCases/syncSingleAsset/SyncSingleAssetController';
 import { ListAllAssetsController } from '../modules/creditAssets/useCases/listAllAssets/ListAllAssetsController';
+import { LookupAssetFromLegalOneController } from '../modules/users/useCases/lookupAssetFromLegalOne/LookupAssetFromLegalOneController';
+
+
+
 
 const creditAssetRoutes = Router();
-
 const createCreditAssetController = new CreateCreditAssetController();
 const enrichAssetFromLegalOneController = new EnrichAssetFromLegalOneController();
 const getAssetByProcessNumberController = new GetAssetByProcessNumberController();
 const syncSingleAssetController = new SyncSingleAssetController();
 const listAllAssetsController = new ListAllAssetsController();
+const lookupAssetFromLegalOneController = new LookupAssetFromLegalOneController();
 
 /**
  * @route   POST /api/assets
@@ -32,7 +35,7 @@ creditAssetRoutes.post(
 /**
  * @route   GET /api/assets
  * @desc    Busca um resumo de todos os ativos de crédito.
- * @access  Privado (OPERATOR, ADMIN)
+ * @access  Privado (OPERATOR, ADMIN, ASSOCIATE, INVESTOR)
  */
 creditAssetRoutes.get(
     '/api/assets',
@@ -40,6 +43,21 @@ creditAssetRoutes.get(
     checkRole(['OPERATOR', 'ADMIN', 'ASSOCIATE', 'INVESTOR']),
     listAllAssetsController.handle
 );
+
+
+// --- NOVA ROTA DE BUSCA ---
+/**
+ * @route   GET /api/assets/lookup/:processNumber
+ * @desc    Busca dados de um processo no Legal One para pré-preenchimento.
+ * @access  Privado (Todos autenticados)
+ */
+creditAssetRoutes.get(
+    '/api/assets/lookup/:processNumber',
+    checkJwt, // Garante que o usuário está logado
+    lookupAssetFromLegalOneController.handle // 3. USAR O CONTROLLER
+);
+// --- FIM DA NOVA ROTA ---
+
 
 /**
  * @route   GET /api/assets/:processNumber
@@ -65,4 +83,3 @@ creditAssetRoutes.post(
 );
 
 export { creditAssetRoutes };
-
