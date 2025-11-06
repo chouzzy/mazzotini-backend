@@ -135,8 +135,8 @@ interface LegalOneDocumentPayload {
     phisicalLocalization: string | null;
     
     relationships: {
-        Link: 'Contact';
-        LinkItem: { Id: number, Description: string };
+        link: 'Contact';
+        linkItem: { id: number; description: string };
     }[];
 }
 
@@ -759,8 +759,8 @@ class LegalOneApiService {
             isModel: false,
             relationships: [
                 {
-                    Link: 'Contact',
-                    LinkItem: { Id: contactId, Description: originalFileName }
+                    link: 'Contact',
+                    linkItem: { id: contactId, description: originalFileName }
                 }
             ]
         };
