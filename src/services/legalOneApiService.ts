@@ -122,7 +122,6 @@ interface LegalOneDocumentPayload {
     typeId: string; // O tipo de documento (ex: "1-3")
     fileName: string; // O 'fileName' retornado pelo getcontainer
     description: string; // Descrição do documento
-    repository: string; // Ex: "Default"
     isModel: boolean;
     relationships: {
         link: 'Contact';
@@ -733,7 +732,6 @@ class LegalOneApiService {
             archive: originalFileName,
             description: originalFileName, // Usa o nome como descrição
             typeId: "1", // **CORREÇÃO (500):** Trocado de "1-3" para "1" (Tipo genérico)
-            repository: 'Default',
             fileName: fileNameInContainer, // O 'fileName' retornado pelo 'getcontainer'
             isModel: false,
             relationships: [
