@@ -128,10 +128,10 @@ interface LegalOneDocumentPayload {
     type: string; // Ex: "#SM Documento Pessoal"
     isPhysicallyStored: boolean;
     isModel: boolean;
-    relationships: {
-        Link: 'Contact';
-        LinkItem: { Id: number, Description: string };
-    }[];
+    // relationships: {
+    //     Link: 'Contact';
+    //     LinkItem: { Id: number, Description: string };
+    // }[];
 }
 
 export interface LegalOneDocument { id: number; archive: string; type: string; }
@@ -742,13 +742,7 @@ class LegalOneApiService {
             type: '#SM Documento Pessoal',
             typeId: "1-3",
             isPhysicallyStored: false,
-            isModel: false,
-            relationships: [
-                {
-                    Link: "Contact",
-                    LinkItem: { Id: contactId, Description: "#SM originalFileName" }
-                }
-            ]
+            isModel: false
         };
 
         console.log("[Legal One API Service] Payload de finalização:", JSON.stringify(payload, null, 2));
