@@ -727,23 +727,22 @@ class LegalOneApiService {
 
         console.log(`[Legal One API Service] A finalizar e anexar o documento ${originalFileName} ao Contato ID: ${contactId}`);
 
-        // **CORREÇÃO FINAL (500):** Baseado na sua investigação
-        // 1. typeId: null
-        // 2. relationships em PascalCase
+        // **CORREÇÃO (400):** Voltando o typeId para "1" (o valor genérico)
+        // A API reclamou de "untyped value" quando enviamos 'null'.
         const payload: LegalOneDocumentPayload = {
             archive: originalFileName,
             description: originalFileName,
-            typeId: null, // <--- CORREÇÃO 1
+            typeId: "1", // <--- CORREÇÃO
             fileName: fileNameInContainer,
             isModel: false,
             relationships: [
                 {
-                    Link: "Contact", // <--- CORREÇÃO 2 (PascalCase)
-                    LinkItem: { Id: contactId } // <--- CORREÇÃO 2 (PascalCase)
+                    Link: "Contact",
+                    LinkItem: { Id: contactId }
                 }
             ]
         };
-        
+
         console.log("[Legal One API Service] Payload de finalização:", JSON.stringify(payload, null, 2));
 
         try {
