@@ -119,7 +119,7 @@ interface LegalOneUploadContainer {
 // Interface para o payload de 'POST /documents' (finalização)
 interface LegalOneDocumentPayload {
     archive: string; // O nome do ficheiro (ex: "rg.pdf")
-    fileName: string; // O 'fileName' retornado pelo getcontainer
+    // fileName: string; // O 'fileName' retornado pelo getcontainer
     repository: string; // Ex: "LegalOne"
     description: string; // Descrição do documento
     typeId: string | null;
@@ -733,7 +733,6 @@ class LegalOneApiService {
         const payload: LegalOneDocumentPayload = {
             archive: originalFileName,
             description: originalFileName,
-            fileName: fileNameInContainer,
             // generateUrlDownload: `https://api.thomsonreuters.com/legalone/v1/api/rest/Documents/UrlDownload(key=${9998})`,
             repository: "LegalOne",
             type: '#SM Documento Pessoal',
