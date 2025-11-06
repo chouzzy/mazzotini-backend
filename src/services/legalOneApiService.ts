@@ -750,6 +750,32 @@ class LegalOneApiService {
 
         console.log(`[Legal One API Service] Documento ${originalFileName} anexado com sucesso.`);
     }
+
+    // ============================================================================
+    //  MÉTODO DE DEBUG (SPY)
+    // ============================================================================
+
+    /**
+     * [DEBUG] Busca o JSON completo de documentos associados a um processo.
+     * Usa 'any' para retornar a estrutura *exata* da API, não a nossa interface.
+     */
+    public async getRawDocuments(lawsuitId: number): Promise<any[]> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const requestUrl = `${apiRestUrl}/Documents`;
+
+        console.log(`[SPY Service] Buscando JSON bruto de documentos para o Lawsuit ID: ${lawsuitId}`);
+
+        const response = await axios.get(requestUrl, { // Retorno como 'any'
+            headers: { 'Authorization': `Bearer ${token}` },
+            params: {
+                '$filter': `relationships/any(r: r/Link eq 'Litigation' and r/LinkItem/Id eq ${lawsuitId})`,
+                '$expand': 'relationships,type' // Tenta expandir para ver mais dados
+            }
+        });
+
+        return response.data.value || [];
+    }
 }
 
 export const legalOneApiService = new LegalOneApiService();
