@@ -13,11 +13,72 @@ export interface LegalOneParticipant {
 
 export interface LegalOneLawsuit {
     id: number;
+    originOfficeId?: number;
+    natureId?: number;
+    phaseId?: number | null;
+    personIds?: number[];
+    monetaryAmountType?: 'Determined' | 'Undetermined' | string;
     folder: string;
     title: string;
+    type?: string;
     identifierNumber: string;
-    monetaryAmount?: { Value: number; Code: string };
-    participants: LegalOneParticipant[];
+    oldNumber?: string | null;
+    otherNumberTypeId?: number | null;
+    otherNumber?: string | null;
+    statusId?: number;
+    distributionDate?: string | null;
+    terminationDate?: string | null;
+    closingDate?: string | null;
+    closingReason?: string | null;
+    closed?: boolean;
+    responsibleOfficeId?: number | null;
+    actionTypeId?: number | null;
+    countryId?: number | null;
+    stateId?: number | null;
+    cityId?: number | null;
+    courtId?: number | null;
+    justiceId?: number | null;
+    levelId?: number | null;
+    jurisdictionId?: number | null;
+    jurisdictionComplementId?: number | null;
+    costsType?: string | null;
+    notes?: string | null;
+    creationDate?: string | null;
+    changeJustification?: string | null;
+    courtPanelNumber?: number | null;
+    courtPanelNumberText?: string | null;
+    contingency?: any | null;
+    probabilityType?: any | null;
+    resultDate?: string | null;
+    decisionDate?: string | null;
+    monetaryAmount?: {
+        value: number;
+        code: string | null;
+    } | null;
+    amountOfSettlementOrJudgment?: number | null;
+    amountOfLawyersFee?: number | null;
+    involvedAmount?: number | null;
+    costs?: number | null;
+    procedure?: {
+        id: number;
+        description: string;
+    } | null;
+    courtPanel?: {
+        id: number;
+        description: string;
+    } | null;
+    probability?: any | null;
+    risk?: any | null;
+    resultType?: any | null;
+    result?: any | null;
+    resultReason?: any | null;
+    participants: (LegalOneParticipant & {
+        id?: number;
+        contactId?: number;
+        contactName?: string;
+        positionId?: number | null;
+        isMainParticipant?: boolean;
+    })[];
 }
 
 export interface LegalOneLawsuitApiResponse {
@@ -78,14 +139,6 @@ export interface LegalOneParticipant {
     type: "Customer" | "PersonInCharge" | "OtherParty" | "Party" | "Other" | "LawyerOfOtherParty" | "Requester";
     contactId: number;
 }
-export interface LegalOneLawsuit {
-    id: number;
-    folder: string;
-    title: string;
-    identifierNumber: string;
-    monetaryAmount?: { Value: number; Code: string };
-    participants: LegalOneParticipant[];
-}
 export interface LegalOneLawsuitApiResponse {
     value: LegalOneLawsuit[];
 }
@@ -133,7 +186,7 @@ interface LegalOneDocumentPayload {
     endDate: string | null;
     notes: string | null;
     phisicalLocalization: string | null;
-    
+
     relationships: {
         link: 'Contact';
         linkItem: { id: number; description: string };
