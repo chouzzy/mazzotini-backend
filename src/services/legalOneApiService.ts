@@ -731,7 +731,7 @@ class LegalOneApiService {
         const payload: LegalOneDocumentPayload = {
             archive: originalFileName,
             description: originalFileName, // Usa o nome como descrição
-            typeId: "1", // **CORREÇÃO (500):** Trocado de "1-3" para "1" (Tipo genérico)
+            typeId: '1-3', // **CORREÇÃO (500):** Trocado de "1-3" para "1" (Tipo genérico)
             fileName: fileNameInContainer, // O 'fileName' retornado pelo 'getcontainer'
             isModel: false,
             relationships: [
