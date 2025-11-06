@@ -509,20 +509,50 @@ class LegalOneApiService {
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/Lawsuits`;
 
-        const response = await axios.get<LegalOneLawsuitApiResponse>(requestUrl, {
-            headers: { 'Authorization': `Bearer ${token}` },
-            params: {
-                '$filter': `identifierNumber eq '${processNumber}'`,
-                '$expand': 'participants'
-            }
-        });
+        // --- TENTATIVA 1: NÚMERO EXATO (COM PONTUAÇÃO) ---
+        try {
+            console.log(`[Legal One API Service] Tentativa 1: Buscando por "${processNumber}"`);
+            const response = await axios.get<LegalOneLawsuitApiResponse>(requestUrl, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                params: {
+                    '$filter': `identifierNumber eq '${processNumber}'`,
+                    '$expand': 'participants,courtPanel' // Adicionado courtPanel
+                }
+            });
 
-        const results = response.data.value;
-        if (!results || results.length === 0) {
-            throw new Error(`Nenhum processo encontrado no Legal One com o número: ${processNumber}`);
+            const results = response.data.value;
+            if (results && results.length > 0) {
+                return results[0];
+            }
+        } catch (error: any) {
+            console.warn(`[Legal One API Service] Tentativa 1 falhou: ${error.message}. Tentando busca limpa...`);
         }
 
-        return results[0];
+        // --- TENTATIVA 2: NÚMERO LIMPO (SEM PONTUAÇÃO) ---
+        // Se a primeira falhar (seja por 404 ou outro erro) ou não retornar resultados, tenta a 2ª.
+        const cleanProcessNumber = processNumber.replace(/[.-]/g, '');
+        console.log(`[Legal One API Service] Tentativa 2: Buscando por "${cleanProcessNumber}"`);
+
+        try {
+            const cleanResponse = await axios.get<LegalOneLawsuitApiResponse>(requestUrl, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                params: {
+                    '$filter': `identifierNumber eq '${cleanProcessNumber}'`,
+                    '$expand': 'participants,courtPanel'
+                }
+            });
+
+            const cleanResults = cleanResponse.data.value;
+            if (cleanResults && cleanResults.length > 0) {
+                return cleanResults[0];
+            }
+
+        } catch (error: any) {
+            console.error(`[Legal One API Service] Tentativa 2 (limpa) também falhou:`, error.message);
+        }
+
+        // Se ambas falharem
+        throw new Error(`Nenhum processo encontrado no Legal One com o número: ${processNumber} (ou ${cleanProcessNumber})`);
     }
 
     public async getProcessUpdates(lawsuitId: number): Promise<LegalOneUpdate[]> {
