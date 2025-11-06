@@ -118,8 +118,6 @@ managementRoutes.patch(
  */
 managementRoutes.get(
     '/api/management/spy-docs/:lawsuitId',
-    checkJwt,
-    checkRole([ROLES.ADMIN]),
     testGetDocumentsController.handle // 3. ADICIONAR A ROTA
 );
 
