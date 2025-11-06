@@ -733,7 +733,7 @@ class LegalOneApiService {
             archive: originalFileName,
             description: originalFileName, // Usa o nome como descrição
             typeId: "1", // **CORREÇÃO (500):** Trocado de "1-3" para "1" (Tipo genérico)
-            repository: 'LegalOne',
+            repository: 'Default',
             fileName: fileNameInContainer, // O 'fileName' retornado pelo 'getcontainer'
             isModel: false,
             relationships: [
