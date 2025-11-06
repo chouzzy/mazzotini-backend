@@ -746,7 +746,7 @@ class LegalOneApiService {
             description: `#SM ${originalFileName}`,
             generateUrlDownload: '',
             typeId: null,
-            type: 'Documento',
+            type: 'Documento / Guia',
             repository: "LegalOne",
             notes: null,
             phisicalLocalization: null,
