@@ -122,10 +122,12 @@ interface LegalOneDocumentPayload {
     fileName: string; // O 'fileName' retornado pelo getcontainer
     description: string; // Descrição do documento
     typeId: string | null;
+    type: string; // Ex: "#SM Documento Pessoal"
+    isPhysicallyStored: boolean;
     isModel: boolean;
     relationships: {
         Link: 'Contact';
-        LinkItem: { Id: number };
+        LinkItem: { Id: number, Description: string};
     }[];
 }
 
@@ -727,18 +729,18 @@ class LegalOneApiService {
 
         console.log(`[Legal One API Service] A finalizar e anexar o documento ${originalFileName} ao Contato ID: ${contactId}`);
 
-        // **CORREÇÃO (400):** Voltando o typeId para "1" (o valor genérico)
-        // A API reclamou de "untyped value" quando enviamos 'null'.
         const payload: LegalOneDocumentPayload = {
             archive: originalFileName,
             description: originalFileName,
-            typeId: "1", // <--- CORREÇÃO
             fileName: fileNameInContainer,
+            type: '#SM Documento Pessoal',
+            typeId: "1-3",
+            isPhysicallyStored: false,
             isModel: false,
             relationships: [
                 {
                     Link: "Contact",
-                    LinkItem: { Id: contactId }
+                    LinkItem: { Id: contactId, Description: "#SM originalFileName" }
                 }
             ]
         };
