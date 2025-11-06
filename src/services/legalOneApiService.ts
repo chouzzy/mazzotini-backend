@@ -679,7 +679,7 @@ class LegalOneApiService {
     public async getUploadContainer(fileExtension: string): Promise<LegalOneUploadContainer> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/documents/getcontainer(fileExtension='.${fileExtension}')`;
+        const requestUrl = `${apiRestUrl}/documents/getcontainer(fileExtension='${fileExtension}')`;
 
         console.log(`[Legal One API Service] A pedir container para um ficheiro .${fileExtension}`);
 
