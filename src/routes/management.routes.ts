@@ -9,6 +9,7 @@ import { InviteUserController } from '../modules/management/useCases/inviteUser/
 import { ApproveUserProfileController } from '../modules/management/useCases/approveUserProfile/ApproveUserProfileController';
 import { ListPendingUsersController } from '../modules/management/useCases/listPendingUsers/ListPendingUsersController';
 import { RejectUserProfileController } from '../modules/management/useCases/rejectUserProfile/RejectUserProfileController';
+import { TestGetDocumentsController } from '../modules/users/useCases/testGetDocuments/TestGetDocumentsController';
 
 const managementRoutes = Router();
 const listManagementUsersController = new ListManagementUsersController();
@@ -18,6 +19,8 @@ const inviteUserController = new InviteUserController(); // 2. Crie a instância
 const listPendingUsersController = new ListPendingUsersController();
 const approveUserProfileController = new ApproveUserProfileController();
 const rejectUserProfileController = new RejectUserProfileController();
+const testGetDocumentsController = new TestGetDocumentsController();
+
 
 const ROLES = {
     ADMIN: process.env.ROLE_ADMIN || 'ADMIN',
@@ -106,5 +109,19 @@ managementRoutes.patch(
     checkRole([ROLES.ADMIN]),
     rejectUserProfileController.handle
 );
+
+// --- ROTA DE ESPIONAGEM TEMPORÁRIA ---
+/**
+ * @route   GET /api/management/spy-docs/:lawsuitId
+ * @desc    [DEBUG] Retorna o JSON completo do primeiro documento de um processo.
+ * @access  Privado (Apenas para ADMINs)
+ */
+managementRoutes.get(
+    '/api/management/spy-docs/:lawsuitId',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    testGetDocumentsController.handle // 3. ADICIONAR A ROTA
+);
+
 
 export { managementRoutes };
