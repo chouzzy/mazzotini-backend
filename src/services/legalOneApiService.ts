@@ -121,6 +121,9 @@ interface LegalOneDocumentPayload {
     archive: string; // O nome do ficheiro (ex: "rg.pdf")
     typeId: string; // O tipo de documento (ex: "1-3")
     fileName: string; // O 'fileName' retornado pelo getcontainer
+    description: string; // Descrição do documento
+    repository: string; // Ex: "Default"
+    isModel: boolean;
     relationships: {
         link: 'Contact';
         linkItem: { id: number };
@@ -528,7 +531,7 @@ class LegalOneApiService {
 
         // 3. Busca ID do Estado e Cidade Comerciais (se aplicável)
         let commercialCityId = DEFAULT_CITY_ID;
-        if ( user.commercialCity && user.commercialState) {
+        if (user.commercialCity && user.commercialState) {
             const stateId = await this.getStateIdByCode(user.commercialState);
             if (stateId) {
                 const cityId = await this.getCityIdByNameAndState(user.commercialCity, stateId);
@@ -602,7 +605,7 @@ class LegalOneApiService {
                 neighborhood: user.residentialNeighborhood || 'N/A',
                 cityId: residentialCityId, // Mapeado (não mais fixo)
                 isMainAddress: user.correspondenceAddress === 'residential',
-                isBillingAddress: (user.commercialCep && user.commercialStreet) ? false: true,
+                isBillingAddress: (user.commercialCep && user.commercialStreet) ? false : true,
                 isInvoicingAddress: (user.commercialCep && user.commercialStreet) ? false : true,
             });
         }
@@ -673,15 +676,21 @@ class LegalOneApiService {
         return response.data.url;
     }
 
+    // ============================================================================
+    //  FLUXO DE UPLOAD DE DOCUMENTOS (Etapas 1, 2, 3)
+    // ============================================================================
+
     /**
-      * NOVO MÉTODO (Etapa 1 do Upload): Pede ao Legal One um "container" para o upload.
-      */
+     * Etapa 1 do Upload: Pede ao Legal One um "container" para o upload.
+     */
     public async getUploadContainer(fileExtension: string): Promise<LegalOneUploadContainer> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+
+        // **CORREÇÃO (404):** A API espera aspas simples, ex: fileExtension='pdf'
         const requestUrl = `${apiRestUrl}/documents/getcontainer(fileExtension='${fileExtension}')`;
 
-        console.log(`[Legal One API Service] A pedir container para um ficheiro .${fileExtension}`);
+        console.log(`[Legal One API Service] A pedir container para um ficheiro '${fileExtension}'`);
 
         const response = await axios.get<LegalOneUploadContainer>(requestUrl, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -691,7 +700,7 @@ class LegalOneApiService {
     }
 
     /**
-     * NOVO MÉTODO (Etapa 2 do Upload): Envia o ficheiro para o Azure Storage do Legal One.
+     * Etapa 2 do Upload: Envia o ficheiro para o Azure Storage do Legal One.
      */
     public async uploadFileToContainer(containerUrl: string, fileBuffer: Buffer, mimeType: string): Promise<void> {
         console.log(`[Legal One API Service] A fazer upload do ficheiro para o container do Azure...`);
@@ -706,7 +715,7 @@ class LegalOneApiService {
     }
 
     /**
-     * NOVO MÉTODO (Etapa 3 do Upload): Finaliza o documento e anexa-o a um Contato.
+     * Etapa 3 do Upload: Finaliza o documento e anexa-o a um Contato.
      */
     public async finalizeDocument(
         fileNameInContainer: string,
@@ -719,10 +728,14 @@ class LegalOneApiService {
 
         console.log(`[Legal One API Service] A finalizar e anexar o documento ${originalFileName} ao Contato ID: ${contactId}`);
 
+        // **CORREÇÃO (500):** Usando o payload completo que você encontrou.
         const payload: LegalOneDocumentPayload = {
             archive: originalFileName,
-            typeId: "1-3", // Assumido "Documentos Gerais - Cópia" (idealmente buscar de GET /documenttypes)
+            description: originalFileName, // Usa o nome como descrição
+            typeId: "1", // **CORREÇÃO (500):** Trocado de "1-3" para "1" (Tipo genérico)
+            repository: 'LegalOne',
             fileName: fileNameInContainer, // O 'fileName' retornado pelo 'getcontainer'
+            isModel: false,
             relationships: [
                 {
                     link: "Contact",
@@ -731,8 +744,10 @@ class LegalOneApiService {
             ]
         };
 
+        console.log("[Legal One API Service] Payload de finalização:", JSON.stringify(payload, null, 2));
+
         await axios.post(requestUrl, payload, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
         });
 
         console.log(`[Legal One API Service] Documento ${originalFileName} anexado com sucesso.`);
