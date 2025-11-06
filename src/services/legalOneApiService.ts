@@ -119,13 +119,13 @@ interface LegalOneUploadContainer {
 // Interface para o payload de 'POST /documents' (finalização)
 interface LegalOneDocumentPayload {
     archive: string; // O nome do ficheiro (ex: "rg.pdf")
-    typeId: string; // O tipo de documento (ex: "1-3")
     fileName: string; // O 'fileName' retornado pelo getcontainer
     description: string; // Descrição do documento
+    typeId: string | null;
     isModel: boolean;
     relationships: {
-        link: 'Contact';
-        linkItem: { id: number };
+        Link: 'Contact';
+        LinkItem: { Id: number };
     }[];
 }
 
@@ -727,28 +727,41 @@ class LegalOneApiService {
 
         console.log(`[Legal One API Service] A finalizar e anexar o documento ${originalFileName} ao Contato ID: ${contactId}`);
 
-        // **CORREÇÃO (500):** Usando o payload completo que você encontrou.
+        // **CORREÇÃO FINAL (500):** Baseado na sua investigação
+        // 1. typeId: null
+        // 2. relationships em PascalCase
         const payload: LegalOneDocumentPayload = {
             archive: originalFileName,
-            description: originalFileName, // Usa o nome como descrição
-            typeId: '1-3', // **CORREÇÃO (500):** Trocado de "1-3" para "1" (Tipo genérico)
-            fileName: fileNameInContainer, // O 'fileName' retornado pelo 'getcontainer'
+            description: originalFileName,
+            typeId: null, // <--- CORREÇÃO 1
+            fileName: fileNameInContainer,
             isModel: false,
             relationships: [
                 {
-                    link: "Contact",
-                    linkItem: { id: contactId }
+                    Link: "Contact", // <--- CORREÇÃO 2 (PascalCase)
+                    LinkItem: { Id: contactId } // <--- CORREÇÃO 2 (PascalCase)
                 }
             ]
         };
-
+        
         console.log("[Legal One API Service] Payload de finalização:", JSON.stringify(payload, null, 2));
 
-        await axios.post(requestUrl, payload, {
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-        });
+        try {
+            await axios.post(requestUrl, payload, {
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+            });
+            console.log(`[Legal One API Service] Documento ${originalFileName} anexado com sucesso.`);
 
-        console.log(`[Legal One API Service] Documento ${originalFileName} anexado com sucesso.`);
+        } catch (error: any) {
+            // Log de erro aprimorado
+            console.error(`[Legal One API Service] Falha ao finalizar o documento ${originalFileName}.`);
+            if (error.response) {
+                console.error("[Legal One API Service] Resposta de Erro:", JSON.stringify(error.response.data, null, 2));
+            } else {
+                console.error("[Legal One API Service] Erro:", error.message);
+            }
+            throw error; // Relança o erro para o UseCase
+        }
     }
 
     // ============================================================================
