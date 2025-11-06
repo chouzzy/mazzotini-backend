@@ -743,10 +743,10 @@ class LegalOneApiService {
 
         const payload: LegalOneDocumentPayload = {
             archive: originalFileName,
-            description: '#SM Documento Anexado via API',
+            description: `#SM ${originalFileName}`,
             generateUrlDownload: '',
             typeId: null,
-            type: 'Document',
+            type: 'Documento',
             repository: "LegalOne",
             notes: null,
             phisicalLocalization: null,
