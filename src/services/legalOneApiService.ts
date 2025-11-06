@@ -119,13 +119,21 @@ interface LegalOneUploadContainer {
 // Interface para o payload de 'POST /documents' (finalização)
 interface LegalOneDocumentPayload {
     archive: string; // O nome do ficheiro (ex: "rg.pdf")
-    // fileName: string; // O 'fileName' retornado pelo getcontainer
+    fileName: string; // O 'fileName' retornado pelo getcontainer
     repository: string; // Ex: "LegalOne"
     description: string; // Descrição do documento
+    generateUrlDownload: string; // Ex: ""  
     typeId: string | null;
+    author: string | null;
     type: string; // Ex: "#SM Documento Pessoal"
-    isPhysicallyStored: boolean;
-    isModel: boolean;
+    isPhysicallyStored: boolean | null;
+    isModel: boolean | null;
+    fileUploader: string | null;
+    beginDate: string | null;
+    endDate: string | null;
+    notes: string | null;
+    phisicalLocalization: string | null;
+    
     // relationships: {
     //     Link: 'Contact';
     //     LinkItem: { Id: number, Description: string };
@@ -707,12 +715,15 @@ class LegalOneApiService {
     public async uploadFileToContainer(containerUrl: string, fileBuffer: Buffer, mimeType: string): Promise<void> {
         console.log(`[Legal One API Service] A fazer upload do ficheiro para o container do Azure...`);
 
-        await axios.put(containerUrl, fileBuffer, {
+        const response = await axios.put(containerUrl, fileBuffer, {
             headers: {
                 'x-ms-blob-type': 'BlockBlob',
                 'Content-Type': mimeType,
             }
         });
+
+        console.log(`[Legal One API Service] data do upload:`, response.data);
+        console.log(`[Legal One API Service] Resposta do upload: ${response.status} ${response.statusText}`);
         console.log(`[Legal One API Service] Upload para o container concluído.`);
     }
 
@@ -733,10 +744,17 @@ class LegalOneApiService {
         const payload: LegalOneDocumentPayload = {
             archive: originalFileName,
             description: originalFileName,
-            // generateUrlDownload: `https://api.thomsonreuters.com/legalone/v1/api/rest/Documents/UrlDownload(key=${9998})`,
-            repository: "LegalOne",
+            generateUrlDownload: '',
+            typeId: null,
             type: '#SM Documento Pessoal',
-            typeId: "1-3",
+            repository: "LegalOne",
+            notes: null,
+            phisicalLocalization: null,
+            author: null,
+            beginDate: null,
+            endDate: null,
+            fileUploader: null,
+            fileName: fileNameInContainer,
             isPhysicallyStored: false,
             isModel: false
         };
