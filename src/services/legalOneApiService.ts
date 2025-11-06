@@ -134,10 +134,10 @@ interface LegalOneDocumentPayload {
     notes: string | null;
     phisicalLocalization: string | null;
     
-    // relationships: {
-    //     Link: 'Contact';
-    //     LinkItem: { Id: number, Description: string };
-    // }[];
+    relationships: {
+        Link: 'Contact';
+        LinkItem: { Id: number, Description: string };
+    }[];
 }
 
 export interface LegalOneDocument { id: number; archive: string; type: string; }
@@ -756,7 +756,13 @@ class LegalOneApiService {
             fileUploader: null,
             fileName: fileNameInContainer,
             isPhysicallyStored: false,
-            isModel: false
+            isModel: false,
+            relationships: [
+                {
+                    Link: 'Contact',
+                    LinkItem: { Id: contactId, Description: originalFileName }
+                }
+            ]
         };
 
         console.log("[Legal One API Service] Payload de finalização:", JSON.stringify(payload, null, 2));
