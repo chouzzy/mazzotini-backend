@@ -135,6 +135,26 @@ interface RelationshipModel {
     };
 }
 
+export interface LegalOneAppeal {
+    id: number;
+    folder: string;
+    title: string;
+    identifierNumber: string;
+    participants: LegalOneParticipant[]; // <-- Importante, já temos essa interface
+    courtPanel?: {
+        id: number;
+        description: string;
+    };
+    courtPanelNumberText?: string;
+    relatedLitigationType?: 'Lawsuit' | string;
+    relatedLitigationId?: number;
+    // ... (outros campos do Appeal que não usamos agora)
+}
+
+export interface LegalOneAppealApiResponse {
+    value: LegalOneAppeal[];
+}
+
 export interface LegalOneParticipant {
     type: "Customer" | "PersonInCharge" | "OtherParty" | "Party" | "Other" | "LawyerOfOtherParty" | "Requester";
     contactId: number;
@@ -153,6 +173,23 @@ export interface LegalOneUpdate {
 export interface LegalOneUpdatesApiResponse {
     value: LegalOneUpdate[];
 }
+
+export interface LegalOneProceduralIssue {
+    id: number;
+    title: string;
+    identifierNumber: string;
+    participants: any[]; // Usando 'any' para simplicidade, já que só queremos 'contactName'
+    courtPanel?: { id: number; description: string };
+    courtPanelNumberText?: string;
+    relatedLitigationId?: number;
+    relatedLitigationType?: 'Lawsuit' | string;
+    // ... outros campos do JSON de resposta
+}
+
+export interface LegalOneProceduralIssueApiResponse {
+    value: LegalOneProceduralIssue[];
+}
+
 
 // Interface para um Contato (genérico)
 export interface LegalOneContact {
@@ -199,7 +236,10 @@ export interface LegalOneDocumentDownload { id: number; url: string; }
 export interface LegalOneLawsuit { id: number; folder: string; title: string; identifierNumber: string; }
 export interface LegalOneLawsuitApiResponse { value: LegalOneLawsuit[]; }
 export interface LegalOneUpdate { id: number; description: string; notes: string | null; date: string; typeId: number; originType: string; }
-export interface LegalOneUpdatesApiResponse { value: LegalOneUpdate[]; }
+export interface LegalOneUpdatesApiResponse {
+    value: LegalOneUpdate[];
+    '@odata.nextLink'?: string;
+}
 
 export interface LegalOneDocument {
     id: number;
@@ -504,42 +544,165 @@ class LegalOneApiService {
         return this.cityMap.get(key);
     }
 
+    /**
+ * NOVO MÉTODO: Busca na gaveta de "Recursos" (Appeals)
+ * Usa a mesma lógica de "Busca Dupla" (com e sem pontuação).
+ */
+    public async getAppealDetails(processNumber: string): Promise<LegalOneAppeal> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const requestUrl = `${apiRestUrl}/appeals`; // <-- O endpoint que você descobriu!
+
+        const cleanProcessNumber = processNumber.trim();
+
+        // TENTATIVA ÚNICA: Buscar com a pontuação original
+        try {
+            console.log(`[Legal One API Service] Buscando (Appeal) com pontuação (${cleanProcessNumber})`);
+            const response = await axios.get<LegalOneAppealApiResponse>(requestUrl, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                params: {
+                    '$filter': `identifierNumber eq '${cleanProcessNumber}'`,
+                    '$expand': 'participants'
+                }
+            });
+
+            const results = response.data.value;
+            if (results && results.length > 0) {
+                console.log(`[Legal One API Service] (Appeal) Sucesso.`);
+                return results[0];
+            }
+        } catch (error: any) {
+            console.warn(`[Legal One API Service] (Appeal) Falha: ${error.message}`);
+            // Lança o erro final
+            throw new Error(`Nenhum Processo ou Recurso encontrado: ${cleanProcessNumber}`);
+        }
+
+        console.log(`[Legal One API Service] (Appeal) Não encontrado (array vazio).`);
+        throw new Error(`Nenhum Processo ou Recurso encontrado: ${cleanProcessNumber}`);
+    }
+
+    /**
+     * NOVO MÉTODO: Busca na gaveta de "Incidentes" (ProceduralIssues)
+     */
+    public async getProceduralIssueDetails(processNumber: string): Promise<LegalOneProceduralIssue> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const requestUrl = `${apiRestUrl}/ProceduralIssues`; // <-- A terceira gaveta!
+
+        const cleanProcessNumber = processNumber.trim();
+
+        try {
+            console.log(`[Legal One API Service] Buscando (ProceduralIssue) com pontuação (${cleanProcessNumber})`);
+            const response = await axios.get<LegalOneProceduralIssueApiResponse>(requestUrl, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                params: {
+                    '$filter': `identifierNumber eq '${cleanProcessNumber}'`,
+                    '$expand': 'participants'
+                }
+            });
+
+            const results = response.data.value;
+            if (results && results.length > 0) {
+                console.log(`[Legal One API Service] (ProceduralIssue) Sucesso.`);
+                return results[0];
+            }
+        } catch (error: any) {
+            console.warn(`[Legal One API Service] (ProceduralIssue) Falha: ${error.message}`);
+            // Lança o erro final
+            throw new Error(`Nenhum Processo, Recurso ou Incidente encontrado: ${cleanProcessNumber}`);
+        }
+
+        console.log(`[Legal One API Service] (ProceduralIssue) Não encontrado (array vazio).`);
+        throw new Error(`Nenhum Processo, Recurso ou Incidente encontrado: ${cleanProcessNumber}`);
+    }
+
     public async getProcessDetails(processNumber: string): Promise<LegalOneLawsuit> {
         const token = await this.getAccessToken();
+        console.log('Token obtido para busca de processo.', token);
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/Lawsuits`;
 
-        const response = await axios.get<LegalOneLawsuitApiResponse>(requestUrl, {
-            headers: { 'Authorization': `Bearer ${token}` },
-            params: {
-                '$filter': `identifierNumber eq '${processNumber}'`,
+        // Limpa a string de "lixo" (espaços)
+        const cleanProcessNumber = processNumber.trim();
+
+        // TENTATIVA 1: Buscar com a pontuação original (em AMBOS os campos)
+        try {
+            console.log(`[Legal One API Service] Tentativa 1 (Busca Ampla): Buscando com pontuação (${cleanProcessNumber})`);
+
+            // A NOVA LÓGICA: $filter=identifierNumber eq '...' or otherNumber eq '...'
+            const filterQueryV1 = `identifierNumber eq '${cleanProcessNumber}' or otherNumber eq '${cleanProcessNumber}'`;
+
+            const response = await axios.get<LegalOneLawsuitApiResponse>(requestUrl, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                params: {
+                    '$filter': filterQueryV1,
+                    '$expand': 'participants'
+                }
+            });
+
+            const results = response.data.value;
+            if (results && results.length > 0) {
+                console.log(`[Legal One API Service] Tentativa 1 (Busca Ampla): Sucesso.`);
+                return results[0]; // Encontrado! Retorna.
             }
-        });
-
-        const results = response.data.value;
-        if (!results || results.length === 0) {
-            throw new Error(`Nenhum processo encontrado no Legal One com o número: ${processNumber}`);
+        } catch (error: any) {
+            console.warn(`[Legal One API Service] Tentativa 1 (Busca Ampla) falhou: ${error.message}`);
+            // Continua para a Tentativa 2
         }
-
-        return results[0];
+        // Se ambas as tentativas não retornarem nada
+        console.log(`[Legal One API Service] Ambas as tentativas (Busca Ampla) falharam.`);
+        throw new Error(`Nenhum processo encontrado no Legal One com o número: ${cleanProcessNumber}`);
     }
 
-    public async getProcessUpdates(lawsuitId: number): Promise<LegalOneUpdate[]> {
+    public async getProcessUpdates(entityId: number): Promise<LegalOneUpdate[]> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/Updates`;
 
-        console.log(`[Legal One API Service] Buscando andamentos para o Lawsuit ID: ${lawsuitId}`);
+        // Array para acumular todos os andamentos de todas as páginas
+        let allUpdates: LegalOneUpdate[] = [];
 
-        const response = await axios.get<LegalOneUpdatesApiResponse>(requestUrl, {
-            headers: { 'Authorization': `Bearer ${token}` },
-            params: {
-                '$filter': `relationships/any(r: r/Link eq 'Litigation' and r/LinkItem/Id eq ${lawsuitId})`,
-                '$orderby': 'date desc'
+        // 1. O FILTRO CORRETO (Sua descoberta + Sugestão de eficiência)
+        // Filtra pela entidade E pelo tipo 'Manual'
+        const filterQuery = `relationships/any(r: r/linkType eq 'Litigation' and r/linkId eq ${entityId}) and originType eq 'Manual'`;
+
+        // 2. MONTA A URL INICIAL
+        // Usamos encodeURIComponent para garantir que o OData não quebre
+        let requestUrl: string | null = `${apiRestUrl}/Updates?$filter=${encodeURIComponent(filterQuery)}&$orderby=date desc`;
+
+        console.log(`[Legal One API Service] Buscando TODOS andamentos manuais para o Entity ID: ${entityId}`);
+
+        try {
+            // 3. O LOOP DE PAGINAÇÃO
+            while (requestUrl) {
+                const response: AxiosResponse<LegalOneUpdatesApiResponse> = await axios.get<LegalOneUpdatesApiResponse>(requestUrl, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const updatesOnThisPage = response.data.value;
+
+                if (updatesOnThisPage && updatesOnThisPage.length > 0) {
+                    allUpdates = allUpdates.concat(updatesOnThisPage);
+                }
+
+                // 4. VERIFICA A PRÓXIMA PÁGINA
+                // A API nos diz qual é a URL da próxima página
+                requestUrl = response.data['@odata.nextLink'] || null;
+
+                if (requestUrl) {
+                    console.log(`[Legal One API Service] Próxima página encontrada (${allUpdates.length} já carregados), buscando...`);
+                }
             }
-        });
 
-        return response.data.value || [];
+            console.log(`[Legal One API Service] Busca concluída. Total de ${allUpdates.length} andamentos manuais encontrados para o Entity ID: ${entityId}.`);
+            return allUpdates;
+
+        } catch (error: any) {
+            console.error(`[Legal One API Service] Erro ao buscar andamentos paginados para ${entityId}. Filtro: ${filterQuery}`);
+            if (error.response && error.response.data) {
+                console.error("[Legal One API Service] Erro detalhado:", JSON.stringify(error.response.data, null, 2));
+            }
+            throw error;
+        }
     }
 
     public async getContactDetails(contactId: number): Promise<LegalOneContact> {
