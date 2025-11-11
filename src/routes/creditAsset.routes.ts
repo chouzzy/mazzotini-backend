@@ -8,6 +8,7 @@ import { GetAssetByProcessNumberController } from '../modules/creditAssets/useCa
 import { SyncSingleAssetController } from '../modules/creditAssets/useCases/syncSingleAsset/SyncSingleAssetController';
 import { ListAllAssetsController } from '../modules/creditAssets/useCases/listAllAssets/ListAllAssetsController';
 import { LookupAssetFromLegalOneController } from '../modules/users/useCases/lookupAssetFromLegalOne/LookupAssetFromLegalOneController';
+import { GetAssetEstimationController } from '../modules/creditAssets/useCases/getAssetEstimation/GetAssetEstimationController';
 
 
 
@@ -19,6 +20,7 @@ const getAssetByProcessNumberController = new GetAssetByProcessNumberController(
 const syncSingleAssetController = new SyncSingleAssetController();
 const listAllAssetsController = new ListAllAssetsController();
 const lookupAssetFromLegalOneController = new LookupAssetFromLegalOneController();
+const getAssetEstimationController = new GetAssetEstimationController();
 
 /**
  * @route   POST /api/assets
@@ -80,6 +82,17 @@ creditAssetRoutes.post(
     checkJwt,
     checkRole(['OPERATOR', 'ADMIN']),
     syncSingleAssetController.handle
+);
+
+/**
+ * @route   GET /api/assets/:assetId/estimate
+ * @desc    Calcula e retorna a estimativa de valor atual de um ativo.
+ * @access  Privado (Todos os autenticados)
+ */
+creditAssetRoutes.get(
+    '/api/assets/:assetId/estimate',
+    // checkJwt,
+    getAssetEstimationController.handle
 );
 
 export { creditAssetRoutes };

@@ -1,24 +1,26 @@
-// ============================================================================
-//   ARQUIVO: src/modules/creditAssets/useCases/createCreditAsset/CreateCreditAssetUseCase.ts
-// ============================================================================
-
 import { PrismaClient, CreditAsset, User, Investment } from "@prisma/client";
-import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/EnrichAssetFromLegalOneUseCase";
+import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/EnrichAssetFromLegalOneUseCase"; // Importa o UseCase de enriquecimento
 
 const prisma = new PrismaClient();
 
-// A MUDANÇA: O tipo agora reflete o schema.prisma sem o 'initialValue'.
+// ATUALIZADO: O DTO (Data Transfer Object) agora reflete TODOS os campos
+// que o frontend inteligente está enviando.
 type ICreateCreditAssetDTO =
     Pick<CreditAsset,
         'processNumber' |
         'originalCreditor' |
+        'origemProcesso' |       // <-- NOVO
+        'legalOneId' |           // <-- NOVO
+        'legalOneType' |         // <-- NOVO
         'originalValue' |
         'acquisitionValue' |
-        'acquisitionDate'
+        'acquisitionDate' |
+        'updateIndexType' |      // <-- NOVO
+        'contractualIndexRate'   // <-- NOVO
     > & {
         investorId: User['id'];
         investorShare: Investment['investorShare'];
-        associateId?: User['id']; // NOVO CAMPO (opcional)
+        associateId?: User['id'];
     };
 
 /**
@@ -33,16 +35,23 @@ class CreateCreditAssetUseCase {
             investorId,
             investorShare,
             associateId,
-            ...assetData // O resto dos dados para o CreditAsset
+            // O resto dos dados (incluindo os novos) vão para 'assetData'
+            ...assetData 
         } = data;
 
         // 1. Validação: Verifica se o ativo já existe
-        const assetAlreadyExists = await prisma.creditAsset.findUnique({
-            where: { processNumber },
+        const assetAlreadyExists = await prisma.creditAsset.findFirst({
+            where: { 
+                // Um processo não pode ser cadastrado duas vezes
+                OR: [
+                    { processNumber: processNumber },
+                    { legalOneId: assetData.legalOneId } // Nem o ID do Legal One
+                ]
+            },
         });
 
         if (assetAlreadyExists) {
-            throw new Error("Já existe um ativo de crédito com este número de processo.");
+            throw new Error(`Já existe um ativo de crédito com este Número de Processo (${processNumber}) ou ID Legal One (${assetData.legalOneId}).`);
         }
 
         // 2. Validação: Verifica se o investidor (User) existe
@@ -65,24 +74,26 @@ class CreateCreditAssetUseCase {
             }
         }
 
-        // 3. Criação Atómica com Transação
+        // 4. Criação Atómica com Transação
         const newCreditAsset = await prisma.$transaction(async (tx) => {
-            // 3.1. Cria o "esqueleto" do ativo com status pendente
+            
+            // 4.1. Cria o ativo com os dados completos
             const createdAsset = await tx.creditAsset.create({
                 data: {
-                    ...assetData,
-                    processNumber,
-                    status: 'PENDING_ENRICHMENT',
-                    // A MUDANÇA: O valor atual agora é inicializado com o valor de aquisição.
-                    currentValue: assetData.acquisitionValue,
-                    // Campos que serão preenchidos pelo Legal One
-                    origemProcesso: 'Aguardando Legal One...',
-                    associateId: associateId
-                    // O 'originalCreditor' já está em 'assetData'
+                    ...assetData, // Contém todos os campos novos (origemProcesso, legalOneId, etc.)
+                    processNumber: processNumber,
+                    status: 'PENDING_ENRICHMENT', // Inicia pendente de buscar ANDAMENTOS
+                    
+                    // O valor atual é inicializado com o valor de aquisição.
+                    // O 'originalValue' (valor de face) é salvo, mas não usado como 'currentValue'
+                    currentValue: assetData.originalValue, 
+                    
+                    // Conecta ao Associado (Vendedor), se houver
+                    associateId: associateId 
                 },
             });
 
-            // 3.2. Cria o registo de investimento, ligando o utilizador ao ativo
+            // 4.2. Cria o registo de investimento, ligando o utilizador ao ativo
             await tx.investment.create({
                 data: {
                     investorShare: investorShare,
@@ -92,14 +103,19 @@ class CreateCreditAssetUseCase {
                 }
             });
 
-            console.log(`✅ Esqueleto do ativo e investimento criados para o processo ${createdAsset.processNumber}`);
+            console.log(`✅ Ativo e investimento criados para o processo ${createdAsset.processNumber} (LegalOne ID: ${createdAsset.legalOneId})`);
 
             return createdAsset;
         });
 
-        // 4. Dispara o processo de enriquecimento em segundo plano
+        // 5. Dispara o processo de enriquecimento (agora focado SÓ em ANDAMENTOS)
+        // Usamos o 'execute' fora da transação (não precisamos esperar)
         const enrichUseCase = new EnrichAssetFromLegalOneUseCase();
-        enrichUseCase.execute(newCreditAsset.id);
+        enrichUseCase.execute(newCreditAsset.id)
+            .catch(err => {
+                // Loga o erro, mas não quebra a requisição principal
+                console.error(`[Enrich-Trigger] Falha ao iniciar enriquecimento para ${newCreditAsset.id}:`, err.message);
+            });
 
         return newCreditAsset;
     }

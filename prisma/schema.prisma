@@ -106,6 +106,11 @@ model CreditAsset {
   status               String
   lawsuitType          String?
   lawyerResponsible    String?
+  // --- NOVOS CAMPOS PARA INTEGRAÇÃO ---
+  // ID do Processo/Recurso/Incidente no Legal One
+  legalOneId           Int?
+  // Tipo da entidade (para sabermos qual API chamar no futuro)
+  legalOneType         String? // "Lawsuit", "Appeal", "ProceduralIssue"
 
   // --- Relações ---
   updates   AssetUpdate[]
