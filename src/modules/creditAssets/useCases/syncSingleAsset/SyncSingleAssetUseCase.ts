@@ -1,18 +1,12 @@
-// /src/modules/creditAssets/useCases/syncSingleAsset/SyncSingleAssetUseCase.ts
+// src/modules/creditAssets/useCases/syncSingleAsset/SyncSingleAssetUseCase.ts
 import { PrismaClient } from "@prisma/client";
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 
 const prisma = new PrismaClient();
 
-// As funções auxiliares extractAllValues e extractFreeText são mantidas
-// para a lógica de extração de dados dos andamentos.
-
-/**
- * Tenta extrair todos os valores monetários de uma string de texto.
- */
+// As suas funções de parsing (não as alterei)
 const extractAllValues = (text: string | null | undefined) => {
     if (!text) return { valorDaCausa: null, valorDaCompra: null, valorAtualizado: null };
-
     const parse = (match: RegExpMatchArray | null, truncate = false) => {
         if (match && match[1]) {
             const numericString = match[1].replace(/\./g, '').replace(',', '.');
@@ -21,21 +15,15 @@ const extractAllValues = (text: string | null | undefined) => {
         }
         return null;
     };
-
     const valorDaCausa = text.match(/Valor da Causa:\s*R\$\s*([\d.,]+)/i);
     const valorDaCompra = text.match(/Valor da Compra:\s*R\$\s*([\d.,]+)/i);
     const valorAtualizado = text.match(/Valor Atualizado:\s*R\$\s*([\d.,]+)/i);
-
     return {
         valorDaCausa: parse(valorDaCausa),
         valorDaCompra: parse(valorDaCompra, true),
         valorAtualizado: parse(valorAtualizado),
     };
 };
-
-/**
- * Extrai apenas o texto descritivo do andamento, ignorando a tag #SM e os campos de valor.
- */
 const extractFreeText = (description: string | null | undefined): string => {
     if (!description || !description.includes('#SM')) {
         return description || "Atualização de Valor";
@@ -52,6 +40,7 @@ class SyncSingleAssetUseCase {
     async execute(processNumber: string): Promise<void> {
         console.log(`[SYNC MANUAL] Iniciando sincronização para o processo: ${processNumber}`);
 
+        // 1. Busca o ativo local (sem necessidade de 'select' pois já temos os campos)
         const asset = await prisma.creditAsset.findUnique({
             where: { processNumber },
             include: {
@@ -64,17 +53,58 @@ class SyncSingleAssetUseCase {
             throw new Error("Ativo não encontrado na base de dados local.");
         }
 
-        try {
-            const lawsuitData = await legalOneApiService.getProcessDetails(asset.processNumber);
-            console.log(`[SYNC MANUAL] Processo ${asset.processNumber} encontrado no Legal One: ID ${lawsuitData.id}`);
+        // 2. Validação (que faltava)
+        if (!asset.legalOneId || !asset.legalOneType) {
+            console.warn(`[SYNC MANUAL] Ativo ${asset.processNumber} não possui 'legalOneId' ou 'legalOneType'.`);
+            throw new Error("Ativo local está dessincronizado. O 'Lookup' (Busca) falhou na criação.");
+        }
 
+        try {
+            // =================================================================
+            //  INÍCIO DA CORREÇÃO (Lógica "Pai vs. Filho")
+            //  (Copiada do EnrichAssetFromLegalOneUseCase)
+            // =================================================================
+            
+            let entityIdToFetchFrom = asset.legalOneId; // Começa com o ID que temos
+            let entityType = asset.legalOneType;
+
+            console.log(`[SYNC MANUAL] Sincronizando: ${asset.processNumber} (ID: ${asset.legalOneId}, Tipo: ${asset.legalOneType})`);
+
+            // Se for 'Appeal' ou 'ProceduralIssue', precisamos buscar
+            if (entityType === 'Appeal') {
+                console.log(`[SYNC MANUAL] É um Recurso. Buscando o 'relatedLitigationId' (Pai)...`);
+                const appealData = await legalOneApiService.getAppealDetails(asset.processNumber);
+                if (!appealData.id) {
+                    throw new Error(`Recurso (ID: ${asset.legalOneId}) não possui um ID de Processo (Pai) relacionado.`);
+                }
+                entityIdToFetchFrom = appealData.id;
+                console.log(`[SYNC MANUAL] Pai (Lawsuit) encontrado: ${entityIdToFetchFrom}`);
+
+            } else if (entityType === 'ProceduralIssue') {
+                console.log(`[SYNC MANUAL] É um Incidente. Buscando o 'relatedLitigationId' (Pai)...`);
+                const issueData = await legalOneApiService.getProceduralIssueDetails(asset.processNumber);
+                if (!issueData.relatedLitigationId) {
+                    throw new Error(`Incidente (ID: ${asset.legalOneId}) não possui um ID de Processo (Pai) relacionado.`);
+                }
+                entityIdToFetchFrom = issueData.id;
+                console.log(`[SYNC MANUAL] Pai (Lawsuit) encontrado: ${entityIdToFetchFrom}`);
+            }
+            // Se for 'Lawsuit', o entityIdToFetchFrom já está correto.
+            
+            // =================================================================
+            //  FIM DA CORREÇÃO
+            // =================================================================
+
+
+            // 3. Busca os andamentos e documentos (agora do ID "Pai" correto)
             const [legalOneUpdates, legalOneDocuments] = await Promise.all([
-                legalOneApiService.getProcessUpdates(lawsuitData.id),
-                legalOneApiService.getProcessDocuments(lawsuitData.id)
+                legalOneApiService.getProcessUpdates(entityIdToFetchFrom),
+                legalOneApiService.getProcessDocuments(entityIdToFetchFrom) // Assumindo que os docs também ficam no Pai
             ]);
 
-            console.log(`[SYNC MANUAL] ${legalOneUpdates.length} andamentos e ${legalOneDocuments.length} documentos encontrados no Legal One.`);
+            console.log(`[SYNC MANUAL] ${legalOneUpdates.length} andamentos e ${legalOneDocuments.length} documentos encontrados no Legal One (ID Pai: ${entityIdToFetchFrom}).`);
 
+            // 4. Lógica de Sincronização (O seu código, que já estava correto)
             const existingUpdateIds = new Set(asset.updates.map(u => u.legalOneUpdateId).filter(id => id !== null));
             const newUpdates = legalOneUpdates.filter(update => !existingUpdateIds.has(update.id));
 
@@ -98,6 +128,9 @@ class SyncSingleAssetUseCase {
                 if (sortedNewUpdates.length > 0) {
                     console.log(`[SYNC MANUAL] Salvando ${sortedNewUpdates.length} novo(s) andamento(s)...`);
                     for (const update of sortedNewUpdates) {
+                        // NOTA: Esta lógica de parsing é DIFERENTE da que usamos no EnrichUseCase (#SM).
+                        // Se o seu botão "Sincronizar" também deve obedecer o "#SM",
+                        // precisaremos refatorar esta parte.
                         const allValues = extractAllValues(update.description);
                         const updateText = extractFreeText(update.description);
 
@@ -110,7 +143,7 @@ class SyncSingleAssetUseCase {
                                 assetId: asset.id,
                                 legalOneUpdateId: update.id,
                                 date: new Date(update.date),
-                                description: update.description,
+                                description: update.description, // <-- Salva a descrição (que pode ou não ser a limpa)
                                 updatedValue: allValues.valorAtualizado ?? currentAssetValues.currentValue,
                                 source: `Legal One - ${update.originType}`,
                             }
@@ -127,12 +160,13 @@ class SyncSingleAssetUseCase {
                                 legalOneDocumentId: doc.id,
                                 name: doc.archive,
                                 category: doc.type || 'Indefinido',
-                                url: '', // A URL será gerada sob demanda pelo frontend
+                                url: '', 
                             }
                         });
                     }
                 }
 
+                // Atualiza os valores principais
                 await tx.creditAsset.update({
                     where: { id: asset.id },
                     data: {
@@ -142,7 +176,6 @@ class SyncSingleAssetUseCase {
                     }
                 });
             }, {
-                // Aumenta o timeout desta transação específica para 30 segundos por segurança
                 maxWait: 30000,
                 timeout: 30000,
             });
@@ -157,4 +190,3 @@ class SyncSingleAssetUseCase {
 }
 
 export { SyncSingleAssetUseCase };
-

@@ -656,6 +656,7 @@ class LegalOneApiService {
 
     public async getProcessUpdates(entityId: number): Promise<LegalOneUpdate[]> {
         const token = await this.getAccessToken();
+        console.log(token)
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
 
         // Array para acumular todos os andamentos de todas as páginas
