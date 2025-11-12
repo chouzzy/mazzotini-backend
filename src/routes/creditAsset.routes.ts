@@ -9,6 +9,7 @@ import { SyncSingleAssetController } from '../modules/creditAssets/useCases/sync
 import { ListAllAssetsController } from '../modules/creditAssets/useCases/listAllAssets/ListAllAssetsController';
 import { LookupAssetFromLegalOneController } from '../modules/users/useCases/lookupAssetFromLegalOne/LookupAssetFromLegalOneController';
 import { GetAssetEstimationController } from '../modules/creditAssets/useCases/getAssetEstimation/GetAssetEstimationController';
+import { UpdateAssetController } from '../modules/creditAssets/useCases/updateAsset/UpdateAssetController';
 
 
 
@@ -21,6 +22,7 @@ const syncSingleAssetController = new SyncSingleAssetController();
 const listAllAssetsController = new ListAllAssetsController();
 const lookupAssetFromLegalOneController = new LookupAssetFromLegalOneController();
 const getAssetEstimationController = new GetAssetEstimationController();
+const updateAssetController = new UpdateAssetController();
 
 /**
  * @route   POST /api/assets
@@ -93,6 +95,18 @@ creditAssetRoutes.get(
     '/api/assets/:assetId/estimate',
     // checkJwt,
     getAssetEstimationController.handle
+);
+
+/**
+ * @route   PATCH /api/assets/:processNumber
+ * @desc    Atualiza um ativo de crédito existente.
+ * @access  Privado (OPERATOR, ADMIN)
+ */
+creditAssetRoutes.patch(
+    '/api/assets/:processNumber',
+    checkJwt,
+    checkRole(['OPERATOR', 'ADMIN']), // Protege a rota
+    updateAssetController.handle
 );
 
 export { creditAssetRoutes };

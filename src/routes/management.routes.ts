@@ -10,6 +10,7 @@ import { ApproveUserProfileController } from '../modules/management/useCases/app
 import { ListPendingUsersController } from '../modules/management/useCases/listPendingUsers/ListPendingUsersController';
 import { RejectUserProfileController } from '../modules/management/useCases/rejectUserProfile/RejectUserProfileController';
 import { TestGetDocumentsController } from '../modules/users/useCases/testGetDocuments/TestGetDocumentsController';
+import { TestMonthlyUpdateController } from '../modules/creditAssets/useCases/testMonthlyUpdate/TestMonthlyUpdateController';
 
 const managementRoutes = Router();
 const listManagementUsersController = new ListManagementUsersController();
@@ -20,7 +21,7 @@ const listPendingUsersController = new ListPendingUsersController();
 const approveUserProfileController = new ApproveUserProfileController();
 const rejectUserProfileController = new RejectUserProfileController();
 const testGetDocumentsController = new TestGetDocumentsController();
-
+const testMonthlyUpdateController = new TestMonthlyUpdateController();
 
 const ROLES = {
     ADMIN: process.env.ROLE_ADMIN || 'ADMIN',
@@ -121,5 +122,17 @@ managementRoutes.get(
     testGetDocumentsController.handle // 3. ADICIONAR A ROTA
 );
 
+
+/**
+ * @route   GET /api/management/test-monthly-update
+ * @desc    [TESTE] Força a execução do cron de atualização monetária mensal.
+ * @access  Privado (Apenas ADMINs)
+ */
+managementRoutes.get(
+    '/api/management/test-monthly-update',
+    // checkJwt,
+    // checkRole([ROLES.ADMIN]), // Protegido
+    testMonthlyUpdateController.handle
+);
 
 export { managementRoutes };
