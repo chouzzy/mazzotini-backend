@@ -1,51 +1,50 @@
-import { PrismaClient, CreditAsset, User, Investment } from "@prisma/client";
-import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/EnrichAssetFromLegalOneUseCase"; // Importa o UseCase de enriquecimento
+// src/modules/creditAssets/useCases/createCreditAsset/CreateCreditAssetUseCase.ts
+import { PrismaClient, CreditAsset, User } from "@prisma/client";
+import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/EnrichAssetFromLegalOneUseCase"; 
 
 const prisma = new PrismaClient();
 
-// ATUALIZADO: O DTO (Data Transfer Object) agora reflete TODOS os campos
-// que o frontend inteligente está enviando.
+// Interface para o array de investidores que vem do frontend
+interface InvestorInput {
+    userId: User['id'];
+    share?: number;
+}
+
+// O DTO (Data Transfer Object) agora espera 'investors' (array)
 type ICreateCreditAssetDTO =
     Pick<CreditAsset,
         'processNumber' |
         'originalCreditor' |
-        'origemProcesso' |       // <-- NOVO
-        'legalOneId' |           // <-- NOVO
-        'legalOneType' |         // <-- NOVO
+        'origemProcesso' |    
+        'legalOneId' |        
+        'legalOneType' |      
         'originalValue' |
         'acquisitionValue' |
         'acquisitionDate' |
-        'updateIndexType' |      // <-- NOVO
-        'contractualIndexRate'   // <-- NOVO
+        'updateIndexType'
     > & {
-        investorId: User['id'];
-        investorShare: Investment['investorShare'];
-        associateId?: User['id'];
+        contractualIndexRate?: number | null;
+        investors: InvestorInput[]; 
+        associateId?: User['id'] | null;
     };
 
-/**
- * @class CreateCreditAssetUseCase
- * @description Lógica de negócio para criar um ativo e o seu investimento associado.
- */
+
 class CreateCreditAssetUseCase {
     async execute(data: ICreateCreditAssetDTO): Promise<CreditAsset> {
 
         const {
             processNumber,
-            investorId,
-            investorShare,
+            investors, 
             associateId,
-            // O resto dos dados (incluindo os novos) vão para 'assetData'
             ...assetData 
         } = data;
 
         // 1. Validação: Verifica se o ativo já existe
         const assetAlreadyExists = await prisma.creditAsset.findFirst({
             where: { 
-                // Um processo não pode ser cadastrado duas vezes
                 OR: [
                     { processNumber: processNumber },
-                    { legalOneId: assetData.legalOneId } // Nem o ID do Legal One
+                    { legalOneId: assetData.legalOneId } 
                 ]
             },
         });
@@ -54,66 +53,80 @@ class CreateCreditAssetUseCase {
             throw new Error(`Já existe um ativo de crédito com este Número de Processo (${processNumber}) ou ID Legal One (${assetData.legalOneId}).`);
         }
 
-        // 2. Validação: Verifica se o investidor (User) existe
-        const investorExists = await prisma.user.findUnique({
-            where: { id: investorId }
-        });
-
-        if (!investorExists) {
-            throw new Error("O investidor selecionado não foi encontrado no sistema.");
-        }
-
-        // 3. Validação: Se um associateId foi fornecido, verifica se ele existe
+        // 2. Validação: Se um associateId foi fornecido, verifica se ele existe
         if (associateId) {
             const associateExists = await prisma.user.findUnique({
                 where: { id: associateId }
             });
-
             if (!associateExists) {
                 throw new Error("O associado selecionado não foi encontrado no sistema.");
             }
         }
+        
+        // =================================================================
+        //  A SUA CORREÇÃO (Validação de Duplicidade no Backend)
+        // =================================================================
+        const investorUserIds = investors.map(inv => inv.userId);
+        const uniqueInvestorIds = new Set(investorUserIds);
 
-        // 4. Criação Atómica com Transação
+        if (uniqueInvestorIds.size !== investorUserIds.length) {
+            console.error("[CreateAsset] Tentativa de criação de ativo com investidores duplicados.", investorUserIds);
+            throw new Error("Não é permitido adicionar o mesmo investidor duas vezes ao processo.");
+        }
+        // =================================================================
+
+        // // 4. Validação (Soma 0%)
+        // const totalShare = investors.reduce((sum, investor) => sum + (Number(investor.share) || 0), 0);
+        // if (totalShare < 0 || totalShare > 100) {
+        //      throw new Error(`A soma das participações dos investidores (${totalShare}%) é inválida.`);
+        // }
+        // const mazzotiniShare = 100 - totalShare;
+
+        // 5. Criação Atómica com Transação
         const newCreditAsset = await prisma.$transaction(async (tx) => {
             
-            // 4.1. Cria o ativo com os dados completos
+            // 5.1. Cria o ativo
             const createdAsset = await tx.creditAsset.create({
                 data: {
-                    ...assetData, // Contém todos os campos novos (origemProcesso, legalOneId, etc.)
+                    ...assetData, 
                     processNumber: processNumber,
-                    status: 'PENDING_ENRICHMENT', // Inicia pendente de buscar ANDAMENTOS
-                    
-                    // O valor atual é inicializado com o valor de aquisição.
-                    // O 'originalValue' (valor de face) é salvo, mas não usado como 'currentValue'
+                    status: 'PENDING_ENRICHMENT',
                     currentValue: assetData.originalValue, 
-                    
-                    // Conecta ao Associado (Vendedor), se houver
-                    associateId: associateId 
+                    associateId: associateId || null
                 },
             });
 
-            // 4.2. Cria o registo de investimento, ligando o utilizador ao ativo
-            await tx.investment.create({
-                data: {
-                    investorShare: investorShare,
-                    mazzotiniShare: 100 - investorShare,
-                    userId: investorId,
-                    creditAssetId: createdAsset.id,
+            // 5.2. Prepara os dados para TODOS os investimentos
+            const investmentData = investors.map(investor => {
+                if (!investor.userId) {
+                    throw new Error("Dados de investidor inválidos no array.");
                 }
+                return {
+                    investorShare: investor.share || 0, // Garante 0% se for nulo
+                    mazzotiniShare: 0, 
+                    userId: investor.userId,
+                    creditAssetId: createdAsset.id,
+                };
             });
 
-            console.log(`✅ Ativo e investimento criados para o processo ${createdAsset.processNumber} (LegalOne ID: ${createdAsset.legalOneId})`);
+            if (investmentData.length > 0) {
+                 investmentData[0].mazzotiniShare = 0;
+            }
+
+            // 5.3. Cria MÚLTIPLOS registos de investimento
+            await tx.investment.createMany({
+                data: investmentData
+            });
+
+            console.log(`✅ Ativo e ${investmentData.length} investimento(s) criados para o processo ${createdAsset.processNumber}`);
 
             return createdAsset;
         });
 
-        // 5. Dispara o processo de enriquecimento (agora focado SÓ em ANDAMENTOS)
-        // Usamos o 'execute' fora da transação (não precisamos esperar)
+        // 6. Dispara o enriquecimento em segundo plano (sem mudanças)
         const enrichUseCase = new EnrichAssetFromLegalOneUseCase();
         enrichUseCase.execute(newCreditAsset.id)
             .catch(err => {
-                // Loga o erro, mas não quebra a requisição principal
                 console.error(`[Enrich-Trigger] Falha ao iniciar enriquecimento para ${newCreditAsset.id}:`, err.message);
             });
 

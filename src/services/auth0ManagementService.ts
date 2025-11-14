@@ -145,9 +145,22 @@ class Auth0ManagementService {
 
         // 2. Busca os utilizadores que têm esse ID de role
         const usersResponse = await managementClient.roles.getUsers({ id: associateRole.id });
-        
+
         console.log(`[Auth0 Mgmt] ${usersResponse.data.length} utilizadores encontrados com a role ${roleName}.`);
         return usersResponse.data;
+    }
+
+    async deleteUser(auth0UserId: string): Promise<void> {
+        console.log(`[Auth0 Mgmt] A excluir permanentemente o utilizador: ${auth0UserId}...`);
+
+        try {
+            await managementClient.users.delete({ id: auth0UserId });
+            console.log(`[Auth0 Mgmt] Utilizador ${auth0UserId} excluído com sucesso.`);
+        } catch (error: any) {
+            console.error(`[Auth0 Mgmt] Falha ao excluir o utilizador ${auth0UserId}:`, error.message);
+            // Lança o erro para que o UseCase possa parar
+            throw new Error("Falha ao excluir o utilizador no Auth0.");
+        }
     }
 
 }
