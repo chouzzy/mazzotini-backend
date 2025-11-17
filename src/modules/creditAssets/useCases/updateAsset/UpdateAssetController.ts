@@ -5,25 +5,33 @@ import * as yup from 'yup';
 
 class UpdateAssetController {
     
-    // O schema (isto está correto)
+    // =================================================================
+    //  A MUDANÇA (Funcionalidade 2)
+    // =================================================================
+    // O schema de validação agora espera um ARRAY 'investors'
+    // Todos os campos são 'optional()' porque um PATCH pode atualizar
+    // só os investidores, ou só o 'associateId', etc.
     private validationSchema = yup.object().shape({
         originalValue: yup.number().positive("O valor original deve ser positivo.").optional(),
         acquisitionValue: yup.number().positive("O valor de aquisição deve ser positivo.").optional(),
         acquisitionDate: yup.date().optional(),
-        investorId: yup.string().optional(), 
-        investorShare: yup.number().min(0).max(100).optional(), 
+        
+        // --- A MUDANÇA ESTÁ AQUI ---
+        investors: yup.array().of(
+            yup.object().shape({
+                userId: yup.string().required("O ID do investidor é obrigatório."),
+                share: yup.number().min(0).max(100).required("A participação é obrigatória.")
+            })
+        ).min(1, "É preciso associar pelo menos um investidor.").optional(), // É opcional no PATCH
+        // --- FIM DA MUDANÇA ---
+        
         associateId: yup.string().optional().nullable(),
         updateIndexType: yup.string().optional(),
         contractualIndexRate: yup.number().optional().nullable(),
-    });
-    // Não precisamos de stripUnknown aqui se o fizermos na validação
+    })
+    .stripUnknown(); // Ignora campos imutáveis (processNumber, etc.)
 
-    // =================================================================
-    // A CORREÇÃO (O Erro do 'this')
-    // Trocamos 'async handle(...)' por 'handle = async (...)'
-    // A "arrow function" garante que o 'this' da classe seja mantido
-    // quando o Express chamar esta função.
-    // =================================================================
+    // "Arrow function" para garantir o 'this'
     handle = async (request: Request, response: Response): Promise<Response> => {
         const { processNumber } = request.params;
         const bodyData = request.body; 
@@ -32,15 +40,13 @@ class UpdateAssetController {
         console.log("[UpdateAsset] Dados recebidos para atualização:", bodyData);
 
         try {
-            // 'this.validationSchema' agora vai funcionar
             validatedData = await this.validationSchema.validate(bodyData, { 
                 abortEarly: false, 
-                stripUnknown: true // Remove campos extras (como 'originalCreditor')
+                stripUnknown: true 
             });
 
         } catch (err: any) {
-            // Log de erro melhorado
-            console.error("[UpdateAsset] Erro de validação. Mensagem:", err.message);
+            console.error("[UpdateAsset] Erro de validação:", err.message);
             console.error("[UpdateAsset] Detalhes do Erro (Inner):", err.inner); 
             
             const errorDetails = err.inner ? err.inner.map((e: any) => e.message) : [err.message];

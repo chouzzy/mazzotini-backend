@@ -1,6 +1,7 @@
 // /src/services/legalOneApiService.ts
 import { User } from '@prisma/client';
 import axios, { AxiosResponse } from 'axios';
+import { maskCPFOrCNPJ } from '../utils/masks';
 
 // ============================================================================
 //  INTERFACES DA RESPOSTA REAL (BASEADO NO SCHEMA)
@@ -292,7 +293,8 @@ interface LegalOneCityApiResponse {
 // Interface para o payload de criação de /individuals (Pessoa)
 interface LegalOneCreatePersonPayload {
     name: string;
-    personStateIdentificationNumber?: string; // RG
+    identificationNumber?: string; // CPF/CNPJ
+    personStateIdentificationNumber?: string; // RG ou CPF/CNPJ
     country?: { id: number };
     birthDate?: string;
     gender?: 'Male' | 'Female'; // CORRIGIDO: Removido 'Other'
@@ -720,6 +722,98 @@ class LegalOneApiService {
         return response.data;
     }
 
+    // --- MÉTODOS DE CONTATO (CRIAR, BUSCAR, ANEXAR) ---
+
+    // ============================================================================
+    //  CORREÇÃO (Ponto 1 do Beta): Buscar por CPF
+    // ============================================================================
+    /**
+     * Busca um contato existente no Legal One pelo CPF/CNPJ (identificationNumber).
+     * CORRIGIDO: Agora usa a "gaveta" /individuals e filtra por 'identificationNumber' MASCARADO.
+     */
+    public async getContactByCPF(cpfOrCnpj: string): Promise<LegalOneContact | null> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const requestUrl = `${apiRestUrl}/individuals`;
+
+        // =================================================================
+        //  A CORREÇÃO (O Erro da Máscara)
+        // =================================================================
+        // Aplicamos a máscara ANTES de enviar para a API
+        const maskedCpfOrCnpj = maskCPFOrCNPJ(cpfOrCnpj);
+        console.log(`[Legal One API Service] Buscando (Individual) com CPF/CNPJ mascarado: ${maskedCpfOrCnpj}`);
+
+        // O campo é 'identificationNumber' (como você descobriu no ID 2828)
+        const filterQuery = `identificationNumber eq '${maskedCpfOrCnpj}'`;
+
+        try {
+            const response = await axios.get<{ value: LegalOneContact[] }>(requestUrl, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                params: {
+                    '$filter': filterQuery,
+                    '$top': 1
+                }
+            });
+
+            const results = response.data.value;
+            if (results && results.length > 0) {
+                console.log(`[Legal One API Service] Contato existente (Individual) encontrado. ID: ${results[0].id}`);
+                return results[0];
+            }
+
+            console.log(`[Legal One API Service] Nenhum contato (Individual) encontrado com CPF/CNPJ: ${maskedCpfOrCnpj}`);
+            return null;
+
+        } catch (error: any) {
+            console.error(`[Legal One API Service] Erro ao buscar (Individual) por CPF/CNPJ: ${error.message}`);
+            return null;
+        }
+    }
+
+    // ============================================================================
+    //  NOVA FUNÇÃO: Buscar por RG
+    // ============================================================================
+    /**
+     * Busca um contato existente no Legal One pelo RG (personStateIdentificationNumber).
+     */
+    public async getContactByRG(rg: string): Promise<LegalOneContact | null> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const requestUrl = `${apiRestUrl}/individuals`;
+
+        // TODO: Aplicar máscara de RG aqui (ex: maskRG(rg))
+        const maskedRg = rg; // Por enquanto, enviamos o RG sem máscara
+
+        console.log(`[Legal One API Service] Buscando (Individual) com RG: ${maskedRg}`);
+
+        // O campo (como você descobriu) é 'personStateIdentificationNumber'
+        const filterQuery = `personStateIdentificationNumber eq '${maskedRg}'`;
+
+        try {
+            const response = await axios.get<{ value: LegalOneContact[] }>(requestUrl, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                params: {
+                    '$filter': filterQuery,
+                    '$top': 1
+                }
+            });
+
+            const results = response.data.value;
+            if (results && results.length > 0) {
+                console.log(`[Legal One API Service] Contato existente (Individual) encontrado. ID: ${results[0].id}`);
+                return results[0];
+            }
+
+            console.log(`[Legal One API Service] Nenhum contato (Individual) encontrado com RG: ${maskedRg}`);
+            return null;
+
+        } catch (error: any) {
+            console.error(`[Legal One API Service] Erro ao buscar (Individual) por RG: ${error.message}`);
+            return null;
+        }
+    }
+
+
     public async createContact(user: User): Promise<LegalOneContact> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
@@ -727,61 +821,48 @@ class LegalOneApiService {
 
         console.log(`[Legal One API Service] A criar novo contato (Individual): ${user.name} (${user.email})`);
 
-        // --- LÓGICA DE LOOKUP ATIVADA ---
-        const DEFAULT_COUNTRY_ID = 1; // ID 1 (Brasil)
-        const DEFAULT_CITY_ID = 1; // ID 1 (Default/Não Encontrada)
+        // --- LÓGICA DE LOOKUP (Sob Demanda) ---
+        const DEFAULT_COUNTRY_ID = 1; // Brasil
+        const DEFAULT_CITY_ID = 1; // Default
 
-        // 1. Busca ID do País (Default: 1 para "Brasil" se não achar)
         const countryName = (user.nationality === "Brasileira" || !user.nationality) ? "Brasil" : user.nationality;
-        let countryId = await this.getCountryIdByName(countryName);
-        if (!countryId) {
-            console.warn(`[Legal One Lookup] Nacionalidade "${countryName}" não encontrada. Usando ID ${DEFAULT_COUNTRY_ID} (Brasil) como padrão.`);
-            countryId = DEFAULT_COUNTRY_ID;
-        }
+        let countryId = await this.getCountryIdByName(countryName) || DEFAULT_COUNTRY_ID;
 
-        // 2. Busca ID do Estado e Cidade Residenciais
         let residentialCityId = DEFAULT_CITY_ID;
         if (user.residentialCity && user.residentialState) {
             const stateId = await this.getStateIdByCode(user.residentialState);
             if (stateId) {
-                const cityId = await this.getCityIdByNameAndState(user.residentialCity, stateId);
-                if (cityId) {
-                    residentialCityId = cityId;
-                } else {
-                    console.warn(`[Legal One Lookup] Cidade Residencial "${user.residentialCity}" não encontrada no estado ${user.residentialState}. Usando ID ${DEFAULT_CITY_ID} como padrão.`);
-                }
-            } else {
-                console.warn(`[Legal One Lookup] Estado Residencial "${user.residentialState}" não encontrado. Usando ID ${DEFAULT_CITY_ID} como padrão para a cidade.`);
+                residentialCityId = await this.getCityIdByNameAndState(user.residentialCity, stateId) || DEFAULT_CITY_ID;
             }
         }
 
-        // 3. Busca ID do Estado e Cidade Comerciais (se aplicável)
         let commercialCityId = DEFAULT_CITY_ID;
         if (user.commercialCity && user.commercialState) {
             const stateId = await this.getStateIdByCode(user.commercialState);
             if (stateId) {
-                const cityId = await this.getCityIdByNameAndState(user.commercialCity, stateId);
-                if (cityId) {
-                    commercialCityId = cityId;
-                } else {
-                    console.warn(`[Legal One Lookup] Cidade Comercial "${user.commercialCity}" não encontrada no estado ${user.commercialState}. Usando ID ${DEFAULT_CITY_ID} como padrão.`);
-                }
-            } else {
-                console.warn(`[Legal One Lookup] Estado Comercial "${user.commercialState}" não encontrado. Usando ID ${DEFAULT_CITY_ID} como padrão para a cidade.`);
+                commercialCityId = await this.getCityIdByNameAndState(user.commercialCity, stateId) || DEFAULT_CITY_ID;
             }
         }
-        // --- FIM DA LÓGICA DE LOOKUP ---
+        // --- FIM LOOKUP ---
 
-
-        // Mapeia os dados do nosso 'User' para o 'PersonModel' do Legal One
+        // ============================================================================
+        //  CORREÇÃO (Ponto 1 do Beta): Usando o payload CORRETO (baseado no seu ID 2828)
+        // ============================================================================
         const payload: LegalOneCreatePersonPayload = {
             name: user.name,
-            personStateIdentificationNumber: user.rg || undefined,
-            birthDate: user.birthDate ? new Date(user.birthDate).toISOString() : undefined,
+
+            // CORRIGIDO: Aplicando a máscara no CPF/CNPJ
+            identificationNumber: user.cpfOrCnpj
+                ? maskCPFOrCNPJ(user.cpfOrCnpj)
+                : undefined,
+
+            // CORRIGIDO: Aplicando a máscara no RG (precisamos criar a maskRG)
+            // TODO: Criar a maskRG em /utils/masks.ts
+            personStateIdentificationNumber: user.rg ? user.rg : undefined, // (Sem máscara por enquanto)
+
+            birthDate: user.birthDate ? new Date(user.birthDate).toISOString().split('T')[0] : undefined, // YYYY-MM-DD
             gender: user.gender as 'Male' | 'Female',
-            country: {
-                id: countryId
-            },
+            country: { id: countryId },
             emails: [
                 {
                     email: user.email,
@@ -794,8 +875,8 @@ class LegalOneApiService {
             phones: [],
             addresses: [],
         };
+        // ============================================================================
 
-        // (Lógica de emails secundários e telefones inalterada)
         if (user.infoEmail) {
             payload.emails.push({
                 email: user.infoEmail,
@@ -820,8 +901,7 @@ class LegalOneApiService {
             });
         }
 
-
-        // Adiciona o endereço residencial (agora com cityId dinâmico)
+        // Adiciona o endereço residencial
         if (user.residentialCep && user.residentialStreet) {
             payload.addresses?.push({
                 type: 'Residential',
@@ -829,14 +909,14 @@ class LegalOneApiService {
                 addressNumber: user.residentialNumber || 'S/N',
                 addressLine2: user.residentialComplement || undefined,
                 neighborhood: user.residentialNeighborhood || 'N/A',
-                cityId: residentialCityId, // Mapeado (não mais fixo)
+                cityId: residentialCityId,
                 isMainAddress: user.correspondenceAddress === 'residential',
                 isBillingAddress: (user.commercialCep && user.commercialStreet) ? false : true,
                 isInvoicingAddress: (user.commercialCep && user.commercialStreet) ? false : true,
             });
         }
 
-        // Adiciona o endereço comercial (agora com cityId dinâmico)
+        // Adiciona o endereço comercial
         if (user.commercialCep && user.commercialStreet) {
             payload.addresses?.push({
                 type: 'Comercial',
@@ -844,7 +924,7 @@ class LegalOneApiService {
                 addressNumber: user.commercialNumber || 'S/N',
                 addressLine2: user.commercialComplement || undefined,
                 neighborhood: user.commercialNeighborhood || 'N/A',
-                cityId: commercialCityId, // Mapeado (não mais fixo)
+                cityId: commercialCityId,
                 isMainAddress: user.correspondenceAddress === 'commercial',
                 isBillingAddress: true,
                 isInvoicingAddress: true,
@@ -856,11 +936,9 @@ class LegalOneApiService {
             const response = await axios.post<LegalOneContact>(requestUrl, payload, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-
             console.log(`[Legal One API Service] Resposta:`, response.data);
             return response.data;
         } catch (error: any) {
-            // Log detalhado do erro da API
             if (error.response && error.response.data) {
                 console.log('[Legal One API Service] Erro detalhado:', JSON.stringify(error.response.data, null, 2));
             } else {

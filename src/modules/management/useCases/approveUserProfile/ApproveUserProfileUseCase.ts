@@ -1,5 +1,6 @@
+// src/modules/management/useCases/approveUserProfile/ApproveUserProfileUseCase.ts
 import { PrismaClient } from "@prisma/client";
-import { legalOneApiService } from "../../../../services/legalOneApiService";
+import { legalOneApiService, LegalOneContact } from "../../../../services/legalOneApiService";
 import axios from 'axios';
 
 const prisma = new PrismaClient();
@@ -13,15 +14,23 @@ class ApproveUserProfileUseCase {
             where: { id: userId }
         });
 
-        // Validação de segurança
-        if (!user.cpfOrCnpj || !user.email) {
-            throw new Error("Perfil do utilizador está incompleto e não pode ser aprovado.");
+        // =================================================================
+        //  CORREÇÃO 1 (Bug da Validação)
+        //  Agora verifica se o e-mail E (CPF OU RG) existem.
+        // =================================================================
+        const documentId = user.cpfOrCnpj || user.rg; // Pega o primeiro documento disponível
+        if ((!documentId) || !user.email) {
+            throw new Error("Perfil do utilizador está incompleto (sem CPF/RG ou e-mail) e não pode ser aprovado.");
         }
+        // =================================================================
+
         if (user.status !== 'PENDING_REVIEW') {
              throw new Error("Este utilizador não está pendente de revisão.");
         }
 
-        // --- VALIDAÇÃO DE DUPLICIDADE (RG/CPF) ---
+        // --- VALIDAÇÃO DE DUPLICIDADE (RG/CPF) LOCAL ---
+        // (A sua lógica aqui já estava correta, mas vamos garantir
+        //  que ela use a variável 'documentId' para o CPF/CNPJ)
         if (user.rg) {
             const existingUserWithRG = await prisma.user.findFirst({
                 where: {
@@ -30,14 +39,12 @@ class ApproveUserProfileUseCase {
                     id: { not: userId }
                 }
             });
-
             if (existingUserWithRG) {
                 console.warn(`[ADMIN] Falha na aprovação: O RG ${user.rg} já pertence ao usuário ${existingUserWithRG.id}.`);
                 throw new Error("Este RG já está em uso por outro usuário aprovado.");
             }
         }
-        
-        if (user.cpfOrCnpj) {
+        if (user.cpfOrCnpj) { // O CPF/CNPJ ainda é o 'documentId' principal
             const existingUserWithCPF = await prisma.user.findFirst({
                 where: {
                     cpfOrCnpj: user.cpfOrCnpj,
@@ -53,47 +60,59 @@ class ApproveUserProfileUseCase {
         // --- FIM DA VALIDAÇÃO ---
 
 
-        // 2. Tenta criar o Contato no Legal One
-        const newContact = await legalOneApiService.createContact(user);
+        // =================================================================
+        //  CORREÇÃO 2 (Bug da Busca)
+        //  Usamos a variável 'documentId' para fazer UMA busca.
+        // =================================================================
+        let legalOneContact: LegalOneContact; // O contato que vamos usar
+
+        // 2. Tenta encontrar o contato no Legal One (pelo CPF ou RG)
+        //    (A função getContactByCPF busca no 'personStateIdentificationNumber',
+        //     que é onde o 'createContact' salva o CPF ou o RG)
+        const existingContact = await legalOneApiService.getContactByCPF(documentId);
+
+        if (existingContact) {
+            // 2a. Se JÁ EXISTE: Reutiliza
+            console.log(`[ADMIN] Contato já existe no Legal One (ID: ${existingContact.id}). Reutilizando.`);
+            legalOneContact = existingContact;
+            
+        } else {
+            // 2b. Se NÃO EXISTE: Cria
+            console.log(`[ADMIN] Contato não existe no Legal One. Criando...`);
+            legalOneContact = await legalOneApiService.createContact(user);
+        }
+        // =================================================================
+        //  FIM DA NOVA LÓGICA
+        // =================================================================
+
         
-        // 3. Anexa os documentos pessoais ao novo Contato no Legal One
+        // 3. Anexa os documentos pessoais ao Contato (novo ou existente)
         if (user.personalDocumentUrls && user.personalDocumentUrls.length > 0) {
-            console.log(`[ADMIN] Anexando ${user.personalDocumentUrls.length} documento(s) ao novo Contato ID: ${newContact.id}...`);
+            console.log(`[ADMIN] Anexando ${user.personalDocumentUrls.length} documento(s) ao Contato ID: ${legalOneContact.id}...`);
             
             for (const docUrl of user.personalDocumentUrls) {
                 try {
-                    // Etapa 3a: Fazer o download do ficheiro
+                    // Lógica de upload
                     console.log(`[Upload] Baixando ficheiro de: ${docUrl}`);
                     const fileResponse = await axios.get(docUrl, { responseType: 'arraybuffer' });
                     const fileBuffer = Buffer.from(fileResponse.data);
-                    
                     const originalFileName = decodeURIComponent(docUrl.split('/').pop()?.split('-').pop() || 'documento.pdf');
-                    
-                    // **CORREÇÃO APLICADA:** Enviar 'pdf', e não '.pdf'
                     const fileExtension = originalFileName.split('.').pop() || 'pdf'; 
-                    
                     const mimeType = fileResponse.headers['content-type'] || 'application/octet-stream';
 
-                    // Etapa 3b: Pedir o container ao Legal One
                     const container = await legalOneApiService.getUploadContainer(fileExtension);
-                    
-                    // Etapa 3c: Fazer o upload para o container (Azure) do Legal One
                     await legalOneApiService.uploadFileToContainer(container.externalId, fileBuffer, mimeType);
                     
-                    // Etapa 3d: Finalizar e anexar o documento no Legal One
-                    await legalOneApiService.finalizeDocument(container.fileName, originalFileName, newContact.id);
+                    // Usa o ID (novo ou existente)
+                    await legalOneApiService.finalizeDocument(container.fileName, originalFileName, legalOneContact.id);
 
                 } catch (docError: any) {
-                    // --- MELHORIA NO LOG DE ERRO ---
-                    // Mostra a mensagem de erro simples
+                    // Log de erro
                     console.log('[ADMIN] Erro ao anexar documento:', JSON.stringify(docError));
-                    console.error(`[ADMIN] Falha ao anexar o documento ${docUrl} ao Contato ${newContact.id}. Erro:`, docError.message);
-                    
-                    // Mostra a resposta JSON completa do Legal One, se existir
+                    console.error(`[ADMIN] Falha ao anexar o documento ${docUrl} ao Contato ${legalOneContact.id}. Erro:`, docError.message);
                     if (docError.response && docError.response.data) {
                         console.error("[ADMIN] Resposta de erro detalhada do Legal One:", JSON.stringify(docError.response.data, null, 2));
                     }
-                    // Não para o fluxo, apenas regista o erro
                 }
             }
         }
@@ -103,12 +122,11 @@ class ApproveUserProfileUseCase {
             where: { id: userId },
             data: {
                 status: "ACTIVE",
-                legalOneContactId: newContact.id // Guarda o ID do Legal One
+                legalOneContactId: legalOneContact.id // Guarda o ID (novo ou existente)
             }
         });
 
-        // TODO: Enviar um e-mail de "Bem-vindo, seu perfil foi aprovado!" para o utilizador.
-        console.log(`[ADMIN] Perfil ${userId} aprovado com sucesso. Legal One ID: ${newContact.id}`);
+        console.log(`[ADMIN] Perfil ${userId} aprovado com sucesso. Legal One ID: ${legalOneContact.id}`);
     }
 }
 

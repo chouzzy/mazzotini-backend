@@ -1,3 +1,4 @@
+// src/modules/creditAssets/useCases/createCreditAsset/CreateCreditAssetController.ts
 import { Request, Response } from 'express';
 import { CreateCreditAssetUseCase } from './CreateCreditAssetUseCase';
 import * as yup from 'yup';
@@ -9,10 +10,12 @@ import * as yup from 'yup';
 class CreateCreditAssetController {
     async handle(request: Request, response: Response): Promise<Response> {
 
-        console.log("🔄 Criando novo ativo de crédito...");
+        console.log("🔄 Criando novo ativo de crédito (com múltiplos investidores)...");
         
-        // --- VALIDAÇÃO (ATUALIZADA) ---
-        // Agora inclui os novos campos que vêm da busca do Legal One
+        // =================================================================
+        //  A MUDANÇA (Funcionalidade 2)
+        // =================================================================
+        // O schema de validação agora espera um ARRAY 'investors'
         const validationSchema = yup.object().shape({
             // Dados da Busca (obrigatórios)
             processNumber: yup.string().required("O número do processo é obrigatório."),
@@ -22,19 +25,28 @@ class CreateCreditAssetController {
             legalOneType: yup.string().oneOf(['Lawsuit', 'Appeal', 'ProceduralIssue']).required("O Tipo (Lawsuit, etc.) é obrigatório."),
 
             // Dados da Negociação (obrigatórios)
-            acquisitionValue: yup.number().positive("O valor de aquisição deve ser positivo.").required("O valor de aquisição é obrigatório."),
-            originalValue: yup.number().positive("O valor original deve ser positivo.").required("O valor original é obrigatório."),
+            acquisitionValue: yup.number().positive("O valor de aquisição deve ser positivo.").required(),
+            originalValue: yup.number().positive("O valor original deve ser positivo.").required(),
             acquisitionDate: yup.date().required("A data de aquisição é obrigatória."),
-            investorId: yup.string().required("O ID do investidor é obrigatório."),
-            investorShare: yup.number().min(0).max(100).required("A participação do investidor é obrigatória."),
+            
+            // --- A MUDANÇA ESTÁ AQUI ---
+            // 'investorId' e 'investorShare' foram substituídos por 'investors'
+            investors: yup.array().of(
+                yup.object().shape({
+                    userId: yup.string().required("O ID do investidor é obrigatório."),
+                    share: yup.number().min(0).max(100).required("A participação é obrigatória.")
+                })
+            ).min(1, "É preciso associar pelo menos um investidor.").required(),
+            // --- FIM DA MUDANÇA ---
             
             // Dados dos Índices (obrigatórios)
             updateIndexType: yup.string().required("O índice de correção é obrigatório."),
-            contractualIndexRate: yup.number().min(0).optional().nullable(), // Taxa adicional é opcional
+            contractualIndexRate: yup.number().min(0).optional().nullable(), 
             
             // Dados Opcionais
             associateId: yup.string().optional().nullable(),
         });
+        // =================================================================
 
         try {
             await validationSchema.validate(request.body, { abortEarly: false });
@@ -43,48 +55,16 @@ class CreateCreditAssetController {
             return response.status(400).json({ error: 'Erro de validação.', details: err.errors });
         }
 
-        // Desestrutura TODOS os campos validados
-        const {
-            processNumber,
-            originalCreditor,
-            origemProcesso,
-            legalOneId,
-            legalOneType,
-            acquisitionValue,
-            originalValue,
-            acquisitionDate,
-            investorId,
-            investorShare,
-            updateIndexType,
-            contractualIndexRate,
-            associateId, 
-        } = request.body;
-
         const createCreditAssetUseCase = new CreateCreditAssetUseCase();
 
         try {
-            // Envia todos os dados para o UseCase
-            const newAsset = await createCreditAssetUseCase.execute({
-                processNumber,
-                originalCreditor,
-                origemProcesso,
-                legalOneId,
-                legalOneType,
-                originalValue,
-                acquisitionValue,
-                acquisitionDate: new Date(acquisitionDate),
-                investorId,
-                investorShare,
-                updateIndexType,
-                contractualIndexRate: contractualIndexRate || 0, // Garante que é um número
-                associateId
-            });
+            // Passamos o request.body inteiro, que agora contém o array 'investors'
+            const newAsset = await createCreditAssetUseCase.execute(request.body);
 
             return response.status(201).json(newAsset);
 
         } catch (err: any) {
             console.error("❌ Erro ao criar ativo de crédito:", err.message);
-            // Verifica se é um erro de duplicidade
             if (err.message.includes("Já existe um ativo")) {
                 return response.status(409).json({ error: err.message }); // 409 Conflict
             }

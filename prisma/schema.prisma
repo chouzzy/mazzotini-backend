@@ -145,7 +145,7 @@ model Investment {
   mazzotiniShare Float
 
   userId String @db.ObjectId
-  user   User   @relation(fields: [userId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id]) // <-- 'User' virou 'User?'
 
   creditAssetId String      @db.ObjectId
   asset         CreditAsset @relation(fields: [creditAssetId], references: [id])

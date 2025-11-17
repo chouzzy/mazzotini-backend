@@ -1,4 +1,5 @@
 // /src/modules/management/useCases/listUsers/ListManagementUsersUseCase.ts
+import { stat } from "fs";
 import { auth0ManagementService } from "../../../../services/auth0ManagementService";
 import { PrismaClient } from "@prisma/client";
 
@@ -38,6 +39,7 @@ class ListManagementUsersUseCase {
                 auth0UserId: true,
                 name: true,
                 profilePictureUrl: true,
+                status: true,
             }
         });
 
@@ -58,6 +60,7 @@ class ListManagementUsersUseCase {
                 profilePictureUrl: localProfile?.profilePictureUrl,
                 lastLogin: auth0User.last_login ? String(auth0User.last_login) : undefined,
                 roles: auth0User.roles || [],
+                status: localProfile?.status,
             };
         });
 
