@@ -1,9 +1,8 @@
-// src/modules/creditAssets/useCases/listAllAssets/ListAllAssetsUseCase.ts
+// /src/modules/creditAssets/useCases/listAllAssets/ListAllAssetsUseCase.ts
 import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// As ROLES (como você já tinha)
 const ROLES = {
     ADMIN: process.env.ROLE_ADMIN || 'ADMIN',
     OPERATOR: process.env.ROLE_OPERATOR || 'OPERATOR',
@@ -11,7 +10,7 @@ const ROLES = {
     ASSOCIATE: process.env.ROLE_ASSOCIATE || 'ASSOCIATE',
 };
 
-// A Tipagem de Retorno (está perfeita)
+// Tipagem para o retorno (sem mudanças)
 export type AssetSummary = {
     id: string;
     processNumber: string;
@@ -23,17 +22,17 @@ export type AssetSummary = {
     investorId: string | null;
     associateId: string | null;
     investorShare: number;
-    investedValue: number; // Este é o campo que vamos preencher dinamicamente
+    investedValue: number;
     updateIndexType: string | null;
 };
 
-// O Payload do Prisma (está perfeito)
+// O Payload do Prisma (sem mudanças)
 const assetWithInvestorPayload = {
     include: { 
         investors: { 
             take: 1, 
             include: { 
-                user: { 
+                user: { // Agora que o schema é 'User?', isto retornará 'null' em vez de quebrar
                     select: { name: true, id: true }
                 } 
             } 
@@ -59,13 +58,13 @@ class ListAllAssetsUseCase {
         }
 
         let assets: AssetWithInvestor[] = [];
-        let isAdminOrOperator = false; // Flag para o nosso mapeamento
+        let isAdminOrOperator = false; 
 
         // 1. BUSCA (A sua lógica, que já está correta)
         switch (primaryRole) {
             case ROLES.ADMIN:
             case ROLES.OPERATOR:
-                isAdminOrOperator = true; // Define a flag
+                isAdminOrOperator = true; 
                 assets = await prisma.creditAsset.findMany({
                     orderBy: { acquisitionDate: 'desc' },
                     ...assetWithInvestorPayload
@@ -94,18 +93,19 @@ class ListAllAssetsUseCase {
         }
         
         // =================================================================
-        //  A CORREÇÃO (MAPEAMENTO INTELIGENTE)
+        //  A CORREÇÃO (Mapeamento Defensivo)
         // =================================================================
         const summarizedAssets = assets.map(asset => {
             
-            const investorShare = asset.investors[0]?.investorShare || 0;
+            // 2. A CORREÇÃO: 'mainInvestment' pode ser 'undefined' (se 'investors' for [])
+            const mainInvestment = asset.investors?.[0]; 
+
+            const investorShare = mainInvestment?.investorShare || 0;
             let investedValue = 0;
 
-            // Se for Admin, o "Valor Investido" é o custo TOTAL do ativo.
             if (isAdminOrOperator) {
                 investedValue = asset.acquisitionValue;
             } else {
-                // Se for Investidor/Associado, é a *fatia* dele.
                 investedValue = asset.acquisitionValue * (investorShare / 100);
             }
 
@@ -116,12 +116,15 @@ class ListAllAssetsUseCase {
                 currentValue: asset.currentValue,
                 status: asset.status,
                 acquisitionDate: asset.acquisitionDate,
-                mainInvestorName: asset.investors[0]?.user.name || 'N/A',
-                investorId: asset.investors[0]?.userId || null,
+                
+                // 3. A CORREÇÃO: Adicionamos '?' para verificar se 'user' não é 'null'
+                mainInvestorName: mainInvestment?.user?.name || 'N/A', 
+                investorId: mainInvestment?.user?.id || null, 
+                
                 associateId: asset.associateId || null,
                 
                 investorShare: investorShare,
-                investedValue: investedValue, // <-- Agora preenchido corretamente
+                investedValue: investedValue, 
                 updateIndexType: asset.updateIndexType || null,
             };
         });
