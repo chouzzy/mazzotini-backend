@@ -1,7 +1,7 @@
 // /src/services/legalOneApiService.ts
 import { User } from '@prisma/client';
 import axios, { AxiosResponse } from 'axios';
-import { maskCPFOrCNPJ } from '../utils/masks';
+import { maskCPFOrCNPJ, maskRG } from '../utils/masks';
 
 // ============================================================================
 //  INTERFACES DA RESPOSTA REAL (BASEADO NO SCHEMA)
@@ -290,28 +290,55 @@ interface LegalOneCityApiResponse {
     value: LegalOneCity[];
 }
 
-// Interface para o payload de criação de /individuals (Pessoa)
+
+// Payload para POST /individuals (Pessoa)
 interface LegalOneCreatePersonPayload {
     name: string;
-    identificationNumber?: string; // CPF/CNPJ
-    personStateIdentificationNumber?: string; // RG ou CPF/CNPJ
+    identificationNumber?: string;
+    personStateIdentificationNumber?: string;
     country?: { id: number };
     birthDate?: string;
-    gender?: 'Male' | 'Female'; // CORRIGIDO: Removido 'Other'
+    gender?: 'Male' | 'Female';
+    // NOVOS CAMPOS
+    nacionality?: string; // <--- Adicionado (API usa 'nacionality')
+
     emails: { email: string; isMainEmail: boolean; typeId: number; isBillingEmail: boolean; isInvoicingEmail: boolean }[];
     phones?: { number: string; isMainPhone: boolean; typeId: number }[];
     addresses?: {
         type: 'Residential' | 'Comercial';
-        addressLine1: string; // Rua
+        addressLine1: string;
         addressNumber: string;
-        addressLine2?: string; // Complemento
+        addressLine2?: string;
         neighborhood: string;
-        cityId: number; // TODO: Precisamos de um "de-para" de Nome de Cidade para ID
+        cityId: number;
         isMainAddress: boolean;
         isBillingAddress: boolean;
         isInvoicingAddress: boolean;
     }[];
 }
+
+interface LegalOneCreatePersonPayload {
+    name: string;
+    identificationNumber?: string;
+    personStateIdentificationNumber?: string;
+    country?: { id: number };
+    birthDate?: string;
+    gender?: 'Male' | 'Female';
+    emails: { email: string; isMainEmail: boolean; typeId: number; isBillingEmail: boolean; isInvoicingEmail: boolean }[];
+    phones?: { number: string; isMainPhone: boolean; typeId: number }[];
+    addresses?: {
+        type: 'Residential' | 'Comercial';
+        addressLine1: string;
+        addressNumber: string;
+        addressLine2?: string;
+        neighborhood: string;
+        cityId: number;
+        isMainAddress: boolean;
+        isBillingAddress: boolean;
+        isInvoicingAddress: boolean;
+    }[];
+}
+
 
 // ============================================================================
 //  LÓGICA DE SERVIÇO DA API
@@ -811,6 +838,142 @@ class LegalOneApiService {
             console.error(`[Legal One API Service] Erro ao buscar (Individual) por RG: ${error.message}`);
             return null;
         }
+    }
+
+
+    // ============================================================================
+    //  NOVO MÉTODO: Atualizar Contato (PATCH)
+    // ============================================================================
+    public async updateContact(contactId: number, user: User): Promise<void> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+
+        // URL para update: /individuals/{id}
+        const requestUrl = `${apiRestUrl}/individuals/${contactId}`;
+
+        console.log(`[Legal One API Service] A atualizar contato existente (ID: ${contactId}): ${user.name}`);
+
+        // Reusa a lógica de construção do payload
+        const payload = await this.buildPersonPayload(user);
+
+        try {
+            // CORREÇÃO: Usando PATCH
+            await axios.patch(requestUrl, payload, {
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+            });
+            console.log(`[Legal One API Service] Contato ID ${contactId} atualizado com sucesso.`);
+        } catch (error: any) {
+            if (error.response && error.response.data) {
+                console.log('[Legal One API Service] Erro detalhado no update:', JSON.stringify(error.response.data, null, 2));
+            }
+            throw new Error(`Erro ao atualizar contato ID ${contactId} no Legal One.`);
+        }
+    }
+
+
+    // --- HELPER PRIVADO: CONSTRUTOR DE PAYLOAD ---
+    // Centraliza a lógica de mapeamento para usar em Create e Update
+    private async buildPersonPayload(user: User): Promise<LegalOneCreatePersonPayload> {
+        const DEFAULT_COUNTRY_ID = 1; // Brasil
+        const DEFAULT_CITY_ID = 1; // Default
+
+        const countryName = (user.nationality === "Brasileira" || !user.nationality) ? "Brasil" : user.nationality;
+        let countryId = await this.getCountryIdByName(countryName) || DEFAULT_COUNTRY_ID;
+
+        let residentialCityId = DEFAULT_CITY_ID;
+        if (user.residentialCity && user.residentialState) {
+            const stateId = await this.getStateIdByCode(user.residentialState);
+            if (stateId) {
+                residentialCityId = await this.getCityIdByNameAndState(user.residentialCity, stateId) || DEFAULT_CITY_ID;
+            }
+        }
+
+        let commercialCityId = DEFAULT_CITY_ID;
+        if (user.commercialCity && user.commercialState) {
+            const stateId = await this.getStateIdByCode(user.commercialState);
+            if (stateId) {
+                commercialCityId = await this.getCityIdByNameAndState(user.commercialCity, stateId) || DEFAULT_CITY_ID;
+            }
+        }
+
+        const payload: LegalOneCreatePersonPayload = {
+            name: user.name,
+            identificationNumber: user.cpfOrCnpj ? maskCPFOrCNPJ(user.cpfOrCnpj) : undefined,
+            personStateIdentificationNumber: user.rg ? maskRG(user.rg) : undefined,
+            birthDate: user.birthDate ? new Date(user.birthDate).toISOString().split('T')[0] : undefined,
+            gender: user.gender as 'Male' | 'Female',
+
+            // CORREÇÃO: Removido 'profession'
+            // Nacionalidade é suportada
+            nacionality: user.nationality || undefined,
+
+            country: { id: countryId },
+            emails: [
+                {
+                    email: user.email,
+                    isMainEmail: true,
+                    isBillingEmail: true,
+                    isInvoicingEmail: true,
+                    typeId: 1
+                }
+            ],
+            phones: [],
+            addresses: [],
+        };
+
+        if (user.infoEmail) {
+            payload.emails.push({
+                email: user.infoEmail,
+                isMainEmail: false,
+                isBillingEmail: false,
+                isInvoicingEmail: false,
+                typeId: 2
+            });
+        }
+        if (user.cellPhone) {
+            payload.phones?.push({
+                number: user.cellPhone,
+                isMainPhone: true,
+                typeId: 1
+            });
+        }
+        if (user.phone) {
+            payload.phones?.push({
+                number: user.phone,
+                isMainPhone: false,
+                typeId: 2
+            });
+        }
+
+        if (user.residentialCep && user.residentialStreet) {
+            payload.addresses?.push({
+                type: 'Residential',
+                addressLine1: user.residentialStreet,
+                addressNumber: user.residentialNumber || 'S/N',
+                addressLine2: user.residentialComplement || undefined,
+                neighborhood: user.residentialNeighborhood || 'N/A',
+                cityId: residentialCityId,
+                isMainAddress: user.correspondenceAddress === 'residential',
+                isBillingAddress: (user.commercialCep && user.commercialStreet) ? false : true,
+                isInvoicingAddress: (user.commercialCep && user.commercialStreet) ? false : true,
+            });
+        }
+
+        if (user.commercialCep && user.commercialStreet) {
+            payload.addresses?.push({
+                type: 'Comercial',
+                addressLine1: user.commercialStreet,
+                addressNumber: user.commercialNumber || 'S/N',
+                addressLine2: user.commercialComplement || undefined,
+                neighborhood: user.commercialNeighborhood || 'N/A',
+                cityId: commercialCityId,
+                isMainAddress: user.correspondenceAddress === 'commercial',
+                isBillingAddress: true,
+                isInvoicingAddress: true,
+            });
+        }
+
+        return payload;
     }
 
 
