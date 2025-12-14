@@ -296,11 +296,11 @@ interface LegalOneCreatePersonPayload {
     name: string;
     identificationNumber?: string;
     personStateIdentificationNumber?: string;
-    country?: { id: number };
+    // country?: { id: number };
     birthDate?: string;
     gender?: 'Male' | 'Female';
     // NOVOS CAMPOS
-    nacionality?: string; // <--- Adicionado (API usa 'nacionality')
+    // nacionality?: string; // <--- Adicionado (API usa 'nacionality')
 
     emails: { email: string; isMainEmail: boolean; typeId: number; isBillingEmail: boolean; isInvoicingEmail: boolean }[];
     phones?: { number: string; isMainPhone: boolean; typeId: number }[];
@@ -905,7 +905,7 @@ class LegalOneApiService {
 
             // CORREÇÃO: Removido 'profession'
             // Nacionalidade é suportada
-            nacionality: user.nationality || undefined,
+            // nacionality: user.nationality || undefined,
 
             country: { id: countryId },
             emails: [
