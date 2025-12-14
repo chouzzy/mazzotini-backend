@@ -840,8 +840,7 @@ class LegalOneApiService {
         }
     }
 
-
-      // ============================================================================
+    // ============================================================================
     //  NOVO MÉTODO: Atualizar Contato (PATCH)
     // ============================================================================
     public async updateContact(contactId: number, user: User): Promise<void> {
@@ -855,9 +854,15 @@ class LegalOneApiService {
         // 1. Gera o payload completo
         const fullPayload = await this.buildPersonPayload(user);
 
-        // 2. CORREÇÃO CRÍTICA: Remove 'country' do payload para o PATCH
-        // A API não aceita atualizar este campo (navigation property) via PATCH
-        const { country, ...payloadForPatch } = fullPayload;
+        // 2. CORREÇÃO CRÍTICA V2: Remover campos não suportados no PATCH
+        // A documentação diz que 'emails', 'phones', 'addresses' e 'country' não podem ir no PATCH.
+        const { 
+            country, 
+            emails, 
+            phones, 
+            addresses, 
+            ...payloadForPatch 
+        } = fullPayload;
 
         try {
             await axios.patch(requestUrl, payloadForPatch, {
@@ -871,6 +876,7 @@ class LegalOneApiService {
             throw new Error(`Erro ao atualizar contato ID ${contactId} no Legal One.`);
         }
     }
+
 
 
     // --- HELPER PRIVADO: CONSTRUTOR DE PAYLOAD ---
