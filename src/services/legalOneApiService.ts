@@ -841,24 +841,26 @@ class LegalOneApiService {
     }
 
 
-    // ============================================================================
+      // ============================================================================
     //  NOVO MÉTODO: Atualizar Contato (PATCH)
     // ============================================================================
     public async updateContact(contactId: number, user: User): Promise<void> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-
-        // URL para update: /individuals/{id}
+        
         const requestUrl = `${apiRestUrl}/individuals/${contactId}`;
 
         console.log(`[Legal One API Service] A atualizar contato existente (ID: ${contactId}): ${user.name}`);
 
-        // Reusa a lógica de construção do payload
-        const payload = await this.buildPersonPayload(user);
+        // 1. Gera o payload completo
+        const fullPayload = await this.buildPersonPayload(user);
+
+        // 2. CORREÇÃO CRÍTICA: Remove 'country' do payload para o PATCH
+        // A API não aceita atualizar este campo (navigation property) via PATCH
+        const { country, ...payloadForPatch } = fullPayload;
 
         try {
-            // CORREÇÃO: Usando PATCH
-            await axios.patch(requestUrl, payload, {
+            await axios.patch(requestUrl, payloadForPatch, {
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
             });
             console.log(`[Legal One API Service] Contato ID ${contactId} atualizado com sucesso.`);
