@@ -1,7 +1,7 @@
-// src/modules/management/useCases/approveUserProfile/ApproveUserProfileUseCase.ts
 import { PrismaClient } from "@prisma/client";
-import { legalOneApiService, LegalOneContact } from "../../../../services/legalOneApiService";
+import { legalOneApiService } from "../../../../services/legalOneApiService";
 import axios from 'axios';
+import { LegalOneContact } from "../../../../services/legalOneTypes";
 
 const prisma = new PrismaClient();
 
@@ -9,11 +9,11 @@ class ApproveUserProfileUseCase {
     async execute(userId: string): Promise<void> {
         console.log(`[ADMIN] Aprovando perfil do utilizador ID: ${userId}`);
 
+        // 1. Busca os dados completos do utilizador
         const user = await prisma.user.findUniqueOrThrow({
             where: { id: userId }
         });
 
-        // Validação de segurança
         const hasDocument = user.cpfOrCnpj || user.rg;
         if (!hasDocument || !user.email) {
             throw new Error("Perfil do utilizador está incompleto (sem CPF/CNPJ ou RG) e não pode ser aprovado.");
@@ -22,13 +22,12 @@ class ApproveUserProfileUseCase {
              throw new Error("Este utilizador não está pendente de revisão.");
         }
 
-        // --- VALIDAÇÃO DE DUPLICIDADE LOCAL ---
+        // --- VALIDAÇÃO DE DUPLICIDADE ---
         if (user.rg) {
             const existingUserWithRG = await prisma.user.findFirst({
                 where: { rg: user.rg, status: 'ACTIVE', id: { not: userId } }
             });
             if (existingUserWithRG) {
-                console.warn(`[ADMIN] Falha na aprovação: O RG ${user.rg} já pertence ao usuário ${existingUserWithRG.id}.`);
                 throw new Error("Este RG já está em uso por outro usuário aprovado.");
             }
         }
@@ -37,51 +36,61 @@ class ApproveUserProfileUseCase {
                 where: { cpfOrCnpj: user.cpfOrCnpj, status: 'ACTIVE', id: { not: userId } }
             });
             if (existingUserWithCPF) {
-                console.warn(`[ADMIN] Falha na aprovação: O CPF/CNPJ já pertence ao usuário ${existingUserWithCPF.id}.`);
                 throw new Error("Este CPF/CNPJ já está em uso por outro usuário aprovado.");
             }
         }
-        // --- FIM DA VALIDAÇÃO ---
-
 
         // =================================================================
-        //  LÓGICA DE BUSCAR, ATUALIZAR OU CRIAR
+        //  RESOLVER NOME DO ASSOCIADO (Para o Custom Field)
         // =================================================================
+        let associateName: string | undefined;
+
+        if (user.referredById) {
+            // Se tem ID, busca o nome do associado no banco
+            const associateUser = await prisma.user.findUnique({
+                where: { id: user.referredById },
+                select: { name: true }
+            });
+            if (associateUser) {
+                associateName = associateUser.name;
+            }
+        } else if (user.indication) {
+            // Se foi indicação manual
+            associateName = user.indication;
+        }
+
+        if (associateName) {
+            console.log(`[ADMIN] Associado identificado para este contato: "${associateName}"`);
+        }
+        // =================================================================
+
+
         let legalOneContact: LegalOneContact | null = null; 
 
-        // 1. Tenta encontrar pelo CPF
+        // 2. Busca Dupla (CPF ou RG)
         if (user.cpfOrCnpj) {
             legalOneContact = await legalOneApiService.getContactByCPF(user.cpfOrCnpj);
         }
-
-        // 2. Se NÃO achou pelo CPF E existe um RG, tenta pelo RG
         if (!legalOneContact && user.rg) {
             legalOneContact = await legalOneApiService.getContactByRG(user.rg);
         }
 
-        // 3. Verifica o resultado
+        // 3. Cria ou Atualiza
         if (legalOneContact) {
-            // 3a. Se JÁ EXISTE: Atualiza (Sobrescreve) com os dados do Mazzotini
-            console.log(`[ADMIN] Contato já existe no Legal One (ID: ${legalOneContact.id}). Atualizando dados...`);
-            
-            // CHAMA O NOVO MÉTODO DE UPDATE
-            await legalOneApiService.updateContact(legalOneContact.id, user);
-            
+            console.log(`[ADMIN] Contato já existe (ID: ${legalOneContact.id}). Atualizando...`);
+            // Passamos o associateName
+            await legalOneApiService.updateContact(legalOneContact.id, user, associateName);
         } else {
-            // 3b. Se NÃO EXISTE: Cria
-            console.log(`[ADMIN] Contato não existe no Legal One. Criando...`);
-            legalOneContact = await legalOneApiService.createContact(user);
+            console.log(`[ADMIN] Criando novo contato...`);
+            // Passamos o associateName
+            legalOneContact = await legalOneApiService.createContact(user, associateName);
         }
-        // =================================================================
         
-        
-        // 4. Anexa os documentos pessoais
+        // 4. Documentos
         if (user.personalDocumentUrls && user.personalDocumentUrls.length > 0) {
-            console.log(`[ADMIN] Anexando ${user.personalDocumentUrls.length} documento(s) ao Contato ID: ${legalOneContact.id}...`);
-            
+            console.log(`[ADMIN] Anexando documentos...`);
             for (const docUrl of user.personalDocumentUrls) {
                 try {
-                    console.log(`[Upload] Baixando ficheiro de: ${docUrl}`);
                     const fileResponse = await axios.get(docUrl, { responseType: 'arraybuffer' });
                     const fileBuffer = Buffer.from(fileResponse.data);
                     const originalFileName = decodeURIComponent(docUrl.split('/').pop()?.split('-').pop() || 'documento.pdf');
@@ -91,15 +100,13 @@ class ApproveUserProfileUseCase {
                     const container = await legalOneApiService.getUploadContainer(fileExtension);
                     await legalOneApiService.uploadFileToContainer(container.externalId, fileBuffer, mimeType);
                     await legalOneApiService.finalizeDocument(container.fileName, originalFileName, legalOneContact.id);
-
                 } catch (docError: any) {
                     console.error(`[ADMIN] Falha ao anexar documento:`, docError.message);
-                    // Loga mas não para o fluxo
                 }
             }
         }
         
-        // 5. Atualiza o nosso banco de dados
+        // 5. Finaliza no Banco Local
         await prisma.user.update({
             where: { id: userId },
             data: {
@@ -108,7 +115,7 @@ class ApproveUserProfileUseCase {
             }
         });
 
-        console.log(`[ADMIN] Perfil ${userId} aprovado com sucesso. Legal One ID: ${legalOneContact.id}`);
+        console.log(`[ADMIN] Perfil ${userId} aprovado com sucesso.`);
     }
 }
 

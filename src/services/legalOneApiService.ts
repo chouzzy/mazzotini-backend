@@ -1,1281 +1,560 @@
-// /src/services/legalOneApiService.ts
 import { User } from '@prisma/client';
 import axios, { AxiosResponse } from 'axios';
-import { maskCPFOrCNPJ, maskRG } from '../utils/masks';
+import { maskCPFOrCNPJ, maskRG, unmask } from '../utils/masks';
+import {
+    LegalOneAppeal,
+    LegalOneAppealApiResponse,
+    LegalOneCityApiResponse,
+    LegalOneContact,
+    LegalOneCountryApiResponse,
+    LegalOneCreatePersonPayload,
+    LegalOneDocument,
+    LegalOneDocumentDownload,
+    LegalOneDocumentPayload,
+    LegalOneDocumentsApiResponse,
+    LegalOneLawsuit,
+    LegalOneLawsuitApiResponse,
+    LegalOnePagedResponse,
+    LegalOneProceduralIssue,
+    LegalOneProceduralIssueApiResponse,
+    LegalOneStateApiResponse,
+    LegalOneUpdate,
+    LegalOneUpdatesApiResponse,
+    LegalOneUploadContainer,
+    LegalOneAddress,
+} from './legalOneTypes';
 
 // ============================================================================
-//  INTERFACES DA RESPOSTA REAL (BASEADO NO SCHEMA)
+//  CLASSE DE SERVIÇO PRINCIPAL
 // ============================================================================
 
-export interface LegalOneParticipant {
-    type: "Customer" | "PersonInCharge" | "OtherParty" | "Party" | "Other" | "LawyerOfOtherParty" | "Requester";
-    contactId: number;
-}
-
-export interface LegalOneLawsuit {
-    id: number;
-    originOfficeId?: number;
-    natureId?: number;
-    phaseId?: number | null;
-    personIds?: number[];
-    monetaryAmountType?: 'Determined' | 'Undetermined' | string;
-    folder: string;
-    title: string;
-    type?: string;
-    identifierNumber: string;
-    oldNumber?: string | null;
-    otherNumberTypeId?: number | null;
-    otherNumber?: string | null;
-    statusId?: number;
-    distributionDate?: string | null;
-    terminationDate?: string | null;
-    closingDate?: string | null;
-    closingReason?: string | null;
-    closed?: boolean;
-    responsibleOfficeId?: number | null;
-    actionTypeId?: number | null;
-    countryId?: number | null;
-    stateId?: number | null;
-    cityId?: number | null;
-    courtId?: number | null;
-    justiceId?: number | null;
-    levelId?: number | null;
-    jurisdictionId?: number | null;
-    jurisdictionComplementId?: number | null;
-    costsType?: string | null;
-    notes?: string | null;
-    creationDate?: string | null;
-    changeJustification?: string | null;
-    courtPanelNumber?: number | null;
-    courtPanelNumberText?: string | null;
-    contingency?: any | null;
-    probabilityType?: any | null;
-    resultDate?: string | null;
-    decisionDate?: string | null;
-    monetaryAmount?: {
-        value: number;
-        code: string | null;
-    } | null;
-    amountOfSettlementOrJudgment?: number | null;
-    amountOfLawyersFee?: number | null;
-    involvedAmount?: number | null;
-    costs?: number | null;
-    procedure?: {
-        id: number;
-        description: string;
-    } | null;
-    courtPanel?: {
-        id: number;
-        description: string;
-    } | null;
-    probability?: any | null;
-    risk?: any | null;
-    resultType?: any | null;
-    result?: any | null;
-    resultReason?: any | null;
-    participants: (LegalOneParticipant & {
-        id?: number;
-        contactId?: number;
-        contactName?: string;
-        positionId?: number | null;
-        isMainParticipant?: boolean;
-    })[];
-}
-
-export interface LegalOneLawsuitApiResponse {
-    value: LegalOneLawsuit[];
-}
-
-export interface LegalOneUpdate {
-    id: number;
-    description: string;
-    notes: string | null;
-    date: string;
-    typeId: number;
-    originType: 'Manual' | 'OfficialJournalsCrawler' | string;
-}
-
-export interface LegalOneUpdatesApiResponse {
-    value: LegalOneUpdate[];
-}
-
-export interface LegalOneContact {
-    id: number;
-    name: string;
-    email?: string;
-    documentNumber?: string;
-}
-
-interface LegalOneCreateContactPayload {
-    name: string;
-    email: string;
-    documentNumber?: string;
-    contactType: 'Person';
-}
-
-export interface LegalOneDocument {
-    id: number;
-    archive: string;
-    type: string;
-}
-
-export interface LegalOneDocumentsApiResponse {
-    value: LegalOneDocument[];
-}
-
-export interface LegalOneDocumentDownload {
-    id: number;
-    url: string;
-}
-
-// Interfaces para UploadFromUrl
-interface RelationshipModel {
-    link: 'Contact' | 'Litigation';
-    linkItem: {
-        id: number;
-    };
-}
-
-export interface LegalOneAppeal {
-    id: number;
-    folder: string;
-    title: string;
-    identifierNumber: string;
-    participants: LegalOneParticipant[]; // <-- Importante, já temos essa interface
-    courtPanel?: {
-        id: number;
-        description: string;
-    };
-    courtPanelNumberText?: string;
-    relatedLitigationType?: 'Lawsuit' | string;
-    relatedLitigationId?: number;
-    // ... (outros campos do Appeal que não usamos agora)
-}
-
-export interface LegalOneAppealApiResponse {
-    value: LegalOneAppeal[];
-}
-
-export interface LegalOneParticipant {
-    type: "Customer" | "PersonInCharge" | "OtherParty" | "Party" | "Other" | "LawyerOfOtherParty" | "Requester";
-    contactId: number;
-}
-export interface LegalOneLawsuitApiResponse {
-    value: LegalOneLawsuit[];
-}
-export interface LegalOneUpdate {
-    id: number;
-    description: string;
-    notes: string | null;
-    date: string;
-    typeId: number;
-    originType: 'Manual' | 'OfficialJournalsCrawler' | string;
-}
-export interface LegalOneUpdatesApiResponse {
-    value: LegalOneUpdate[];
-}
-
-export interface LegalOneProceduralIssue {
-    id: number;
-    title: string;
-    identifierNumber: string;
-    participants: any[]; // Usando 'any' para simplicidade, já que só queremos 'contactName'
-    courtPanel?: { id: number; description: string };
-    courtPanelNumberText?: string;
-    relatedLitigationId?: number;
-    relatedLitigationType?: 'Lawsuit' | string;
-    // ... outros campos do JSON de resposta
-}
-
-export interface LegalOneProceduralIssueApiResponse {
-    value: LegalOneProceduralIssue[];
-}
-
-
-// Interface para um Contato (genérico)
-export interface LegalOneContact {
-    id: number;
-    name: string;
-    email?: string;
-    documentNumber?: string;
-}
-// Interface para o retorno de 'getcontainer'
-interface LegalOneUploadContainer {
-    id: number;
-    fileName: string;
-    externalId: string; // Esta é a URL para onde devemos enviar o PUT
-    uploadedFileSize: number;
-}
-
-// Interface para o payload de 'POST /documents' (finalização)
-interface LegalOneDocumentPayload {
-    archive: string; // O nome do ficheiro (ex: "rg.pdf")
-    fileName: string; // O 'fileName' retornado pelo getcontainer
-    repository: string; // Ex: "LegalOne"
-    description: string; // Descrição do documento
-    generateUrlDownload: string; // Ex: ""  
-    typeId: string | null;
-    author: string | null;
-    type: string; // Ex: "#SM Documento Pessoal"
-    isPhysicallyStored: boolean | null;
-    isModel: boolean | null;
-    fileUploader: string | null;
-    beginDate: string | null;
-    endDate: string | null;
-    notes: string | null;
-    phisicalLocalization: string | null;
-
-    relationships: {
-        link: 'Contact';
-        linkItem: { id: number; description: string };
-    }[];
-}
-
-export interface LegalOneDocument { id: number; archive: string; type: string; }
-export interface LegalOneDocumentsApiResponse { value: LegalOneDocument[]; }
-export interface LegalOneDocumentDownload { id: number; url: string; }
-export interface LegalOneLawsuit { id: number; folder: string; title: string; identifierNumber: string; }
-export interface LegalOneLawsuitApiResponse { value: LegalOneLawsuit[]; }
-export interface LegalOneUpdate { id: number; description: string; notes: string | null; date: string; typeId: number; originType: string; }
-export interface LegalOneUpdatesApiResponse {
-    value: LegalOneUpdate[];
-    '@odata.nextLink'?: string;
-}
-
-export interface LegalOneDocument {
-    id: number;
-    archive: string;
-    type: string;
-}
-export interface LegalOneDocumentsApiResponse {
-    value: LegalOneDocument[];
-}
-export interface LegalOneDocumentDownload {
-    id: number;
-    url: string;
-}
-
-interface LegalOneState {
-    id: number;
-    name: string;
-    stateCode: string;
-}
-interface LegalOneStateApiResponse {
-    value: LegalOneState[];
-}
-
-interface LegalOneCountry {
-    id: number;
-    name: string;
-}
-interface LegalOneCountryApiResponse {
-    '@odata.nextLink'?: string;
-    value: LegalOneCountry[];
-}
-interface LegalOneCity {
-    id: number;
-    name: string;
-    state: {
-        id: number;
-        name: string;
-        country: {
-            id: number;
-            name: string;
-        };
-        stateCode: string; // "SP", "RJ", etc.
-    };
-}
-interface LegalOneCityApiResponse {
-    '@odata.nextLink'?: string;
-    value: LegalOneCity[];
-}
-
-
-// Payload para POST /individuals (Pessoa)
-interface LegalOneCreatePersonPayload {
-    name: string;
-    identificationNumber?: string;
-    personStateIdentificationNumber?: string;
-    // country?: { id: number };
-    birthDate?: string;
-    gender?: 'Male' | 'Female';
-    // NOVOS CAMPOS
-    // nacionality?: string; // <--- Adicionado (API usa 'nacionality')
-
-    emails: { email: string; isMainEmail: boolean; typeId: number; isBillingEmail: boolean; isInvoicingEmail: boolean }[];
-    phones?: { number: string; isMainPhone: boolean; typeId: number }[];
-    addresses?: {
-        type: 'Residential' | 'Comercial';
-        addressLine1: string;
-        addressNumber: string;
-        addressLine2?: string;
-        neighborhood: string;
-        cityId: number;
-        isMainAddress: boolean;
-        isBillingAddress: boolean;
-        isInvoicingAddress: boolean;
-    }[];
-}
-
-interface LegalOneCreatePersonPayload {
-    name: string;
-    identificationNumber?: string;
-    personStateIdentificationNumber?: string;
-    country?: { id: number };
-    birthDate?: string;
-    gender?: 'Male' | 'Female';
-    emails: { email: string; isMainEmail: boolean; typeId: number; isBillingEmail: boolean; isInvoicingEmail: boolean }[];
-    phones?: { number: string; isMainPhone: boolean; typeId: number }[];
-    addresses?: {
-        type: 'Residential' | 'Comercial';
-        addressLine1: string;
-        addressNumber: string;
-        addressLine2?: string;
-        neighborhood: string;
-        cityId: number;
-        isMainAddress: boolean;
-        isBillingAddress: boolean;
-        isInvoicingAddress: boolean;
-    }[];
-}
-
-
-// ============================================================================
-//  LÓGICA DE SERVIÇO DA API
-// ============================================================================
 class LegalOneApiService {
     private accessToken: string | null = null;
     private tokenExpiresAt: number | null = null;
-
-
-    // --- NOVO: Caching para Lookups ---
-    // Chave: "NOME DA CIDADE-UF" (ex: "SÃO PAULO-SP"), Valor: ID
-    private cityMap = new Map<string, number>();
-    // Chave: "NOME DO PAÍS" (ex: "BRASIL"), Valor: ID
-    private countryMap = new Map<string, number>();
-
-    private isCacheInitialized = false;
-    private isCacheInitializing = false; // Mutex simples para evitar corridas
 
     private async getAccessToken(): Promise<string> {
         if (this.accessToken && this.tokenExpiresAt && Date.now() < this.tokenExpiresAt) {
             return this.accessToken;
         }
-
         console.log("[Legal One API Service] Obtendo novo token de acesso...");
-
         const key = process.env.LEGAL_ONE_CONSUMER_KEY;
         const secret = process.env.LEGAL_ONE_CONSUMER_SECRET;
         const baseUrl = process.env.LEGAL_ONE_API_BASE_URL;
-
         if (!key || !secret || !baseUrl) {
             throw new Error("Credenciais ou URL Base da API do Legal One não configuradas.");
         }
-
         const tokenUrl = `${baseUrl}/oauth?grant_type=client_credentials`;
-
         const response = await axios.get(tokenUrl, {
             headers: { 'Authorization': `Basic ${Buffer.from(`${key}:${secret}`).toString('base64')}` }
         });
-
         const { access_token, expires_in } = response.data;
-
         this.accessToken = access_token;
         this.tokenExpiresAt = Date.now() + (expires_in - 60) * 1000;
-
         console.log("[Legal One API Service] Novo token obtido com sucesso.");
+        console.log(this.accessToken)
         return this.accessToken as string;
     }
 
+    // --- MÉTODOS DE LOOKUP ---
 
-    // --- NOVOS MÉTODOS DE LOOKUP (SOB-DEMANDA) ---
-
-    /**
-     * Busca o ID de um país pelo nome (ex: "Brasil").
-     * API: GET /countries?$filter=name eq 'Brasil'
-     */
     private async getCountryIdByName(name: string): Promise<number | null> {
-        console.log(`[Legal One Lookup] Buscando ID para o País: "${name}"`);
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/countries`;
-
         try {
-            const response = await axios.get<LegalOneCountryApiResponse>(requestUrl, {
+            const response = await axios.get<LegalOneCountryApiResponse>(`${apiRestUrl}/countries`, {
                 headers: { 'Authorization': `Bearer ${token}` },
-                params: {
-                    '$filter': `name eq '${name}'`
-                }
+                params: { '$filter': `name eq '${name}'` }
             });
-            const country = response.data.value?.[0];
-            return country ? country.id : null;
+            return response.data.value?.[0]?.id || null;
         } catch (error: any) {
-            console.error(`[Legal One Lookup] Erro ao buscar País "${name}":`, error.message);
             return null;
         }
     }
 
-    /**
-    * Busca o ID de um estado pela sigla/UF (ex: "SP").
-    * API: GET /states?$filter=stateCode eq 'SP'
-    */
     private async getStateIdByCode(stateCode: string): Promise<number | null> {
-        console.log(`[Legal One Lookup] Buscando ID para o Estado (UF): "${stateCode}"`);
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/states`;
-
         try {
-            const response = await axios.get<LegalOneStateApiResponse>(requestUrl, {
+            const response = await axios.get<LegalOneStateApiResponse>(`${apiRestUrl}/states`, {
                 headers: { 'Authorization': `Bearer ${token}` },
-                params: {
-                    '$filter': `stateCode eq '${stateCode}'`
-                }
+                params: { '$filter': `stateCode eq '${stateCode}'` }
             });
-            const state = response.data.value?.[0];
-            return state ? state.id : null;
+            return response.data.value?.[0]?.id || null;
         } catch (error: any) {
-            console.error(`[Legal One Lookup] Erro ao buscar Estado "${stateCode}":`, error.message);
             return null;
         }
     }
 
-    /**
-     * Busca o ID de uma cidade pelo nome E ID do estado.
-     * API: GET /cities?$filter=name eq 'São Paulo' and state/id eq 1
-     */
     private async getCityIdByNameAndState(cityName: string, stateId: number): Promise<number | null> {
-        console.log(`[Legal One Lookup] Buscando ID para Cidade: "${cityName}" no Estado ID: ${stateId}`);
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/cities`;
-
         try {
-            const response = await axios.get<LegalOneCityApiResponse>(requestUrl, {
+            const response = await axios.get<LegalOneCityApiResponse>(`${apiRestUrl}/cities`, {
                 headers: { 'Authorization': `Bearer ${token}` },
-                params: {
-                    '$filter': `name eq '${cityName}' and state/id eq ${stateId}`
+                params: { 
+                    '$filter': `name eq '${cityName}' and state/id eq ${stateId}`,
+                    '$expand': 'state'
                 }
             });
-            const city = response.data.value?.[0];
-            return city ? city.id : null;
+            return response.data.value?.[0]?.id || null;
         } catch (error: any) {
-            console.error(`[Legal One Lookup] Erro ao buscar Cidade "${cityName}":`, error.message);
             return null;
         }
     }
 
-
-
-    /**
-     * Inicializa os mapas de Cidades e Países na memória.
-     * Será chamado automaticamente na primeira vez que um ID for solicitado.
-     */
-    private async initializeLookups(): Promise<void> {
-        if (this.isCacheInitialized || this.isCacheInitializing) {
-            // Se já estiver inicializado, retorna.
-            // Se estiver inicializando em outra chamada, espera um pouco.
-            if (this.isCacheInitializing) {
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                return;
+    // --- HELPER: CONSTRUTOR DE PAYLOAD ---
+    // Atualizado para aceitar 'associateName' e injetar nos customFields
+    private async buildPersonPayload(user: User, associateName?: string): Promise<LegalOneCreatePersonPayload> {
+        const DEFAULT_COUNTRY_ID = 1; 
+        const DEFAULT_CITY_ID = 1; 
+        
+        const countryName = (user.nationality === "Brasileira" || !user.nationality) ? "Brasil" : user.nationality;
+        let countryId = await this.getCountryIdByName(countryName) || DEFAULT_COUNTRY_ID;
+        
+        let residentialCityId = DEFAULT_CITY_ID;
+        if (user.residentialCity && user.residentialState) {
+            const stateId = await this.getStateIdByCode(user.residentialState);
+            if (stateId) {
+                residentialCityId = await this.getCityIdByNameAndState(user.residentialCity, stateId) || DEFAULT_CITY_ID;
             }
-            if (this.isCacheInitialized) return;
         }
-        this.isCacheInitializing = true;
-
-        try {
-            console.log("[Legal One Lookup] Inicializando cache de lookups (Países e Cidades)...");
-            await this.fetchCountries();
-            await this.fetchCities();
-            this.isCacheInitialized = true;
-            console.log(`[Legal One Lookup] Cache inicializado: ${this.countryMap.size} países, ${this.cityMap.size} cidades.`);
-        } catch (error: any) {
-            console.error("[Legal One Lookup] Falha ao inicializar o cache de lookups:", error.message);
-            // Permite tentar novamente na próxima chamada
-        } finally {
-            this.isCacheInitializing = false;
+        
+        let commercialCityId = DEFAULT_CITY_ID;
+        if (user.commercialCity && user.commercialState) {
+            const stateId = await this.getStateIdByCode(user.commercialState);
+            if (stateId) {
+                commercialCityId = await this.getCityIdByNameAndState(user.commercialCity, stateId) || DEFAULT_CITY_ID;
+            }
         }
-    }
 
-    /**
-     * Busca todos os países (com paginação) e os armazena no `countryMap`.
-     */
-    private async fetchCountries(): Promise<void> {
-        const token = await this.getAccessToken();
-        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        let requestUrl: string | undefined = `${apiRestUrl}/countries`;
-
-        console.log("[Legal One Lookup] Buscando países...");
-
-        while (requestUrl) {
-            const response: AxiosResponse<LegalOneCountryApiResponse> = await axios.get<LegalOneCountryApiResponse>(requestUrl, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            response.data.value.forEach(country => {
-                this.countryMap.set(country.name.toUpperCase(), country.id);
-            });
-
-            requestUrl = response.data['@odata.nextLink'];
+        // Definição local para garantir tipos, incluindo customFields
+        interface LocalLegalOneCreatePersonPayload extends Omit<LegalOneCreatePersonPayload, 'addresses'> {
+            addresses?: any[];
+            customFields?: {
+                customFieldId: number;
+                textValue: string;
+            }[];
         }
-    }
 
-    /**
-     * Busca todas as cidades (com paginação) e as armazena no `cityMap`.
-     */
-    private async fetchCities(): Promise<void> {
-        const token = await this.getAccessToken();
-        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        // Usamos $expand para pegar o 'stateCode' (UF) na mesma chamada
-        let requestUrl: string | undefined = `${apiRestUrl}/cities?$expand=state`;
-
-        console.log("[Legal One Lookup] Buscando cidades (isso pode levar um tempo)...");
-
-        while (requestUrl) {
-            const response: AxiosResponse<LegalOneCityApiResponse> = await axios.get<LegalOneCityApiResponse>(requestUrl, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-
-            response.data.value.forEach(city => {
-                if (city.state && city.state.stateCode) {
-                    // Chave composta: "SÃO PAULO-SP"
-                    const key = `${city.name.toUpperCase()}-${city.state.stateCode.toUpperCase()}`;
-                    this.cityMap.set(key, city.id);
+        const payload: LocalLegalOneCreatePersonPayload = {
+            name: user.name,
+            identificationNumber: user.cpfOrCnpj ? maskCPFOrCNPJ(user.cpfOrCnpj) : undefined, 
+            personStateIdentificationNumber: user.rg ? maskRG(user.rg) : undefined, 
+            birthDate: user.birthDate ? new Date(user.birthDate).toISOString().split('T')[0] : undefined,
+            gender: user.gender as 'Male' | 'Female', 
+            nacionality: user.nationality || undefined,
+            country: { id: countryId },
+            emails: [
+                {
+                    email: user.email,
+                    isMainEmail: true,
+                    isBillingEmail: true,
+                    isInvoicingEmail: true,
+                    typeId: 1 
                 }
+            ],
+            phones: [],
+            addresses: [],
+            customFields: []
+        };
+
+        // --- Injeção do Nome do Associado ---
+        if (associateName && payload.customFields) {
+            payload.customFields.push({
+                customFieldId: 3706, // ID fixo que você descobriu
+                textValue: associateName
             });
-
-            requestUrl = response.data['@odata.nextLink'];
-            if (requestUrl) {
-                console.log("[Legal One Lookup] Buscando próxima página de cidades...");
-            }
         }
-    }
+        // Nota: Se a profissão for virar Custom Field no futuro, adicionamos aqui.
 
-    /**
-     * Busca o ID de um país pelo nome (ex: "Brasil").
-     */
-    public async getCountryId(name: string): Promise<number | undefined> {
-        if (!this.isCacheInitialized) {
-            await this.initializeLookups(); // Garante que o cache esteja pronto
-        }
-        return this.countryMap.get(name.toUpperCase());
-    }
-
-    /**
-     * Busca o ID de uma cidade pelo nome e UF (ex: "São Paulo", "SP").
-     */
-    public async getCityId(name: string, stateCode: string): Promise<number | undefined> {
-        if (!this.isCacheInitialized) {
-            await this.initializeLookups(); // Garante que o cache esteja pronto
-        }
-        const key = `${name.toUpperCase()}-${stateCode.toUpperCase()}`;
-        return this.cityMap.get(key);
-    }
-
-    /**
- * NOVO MÉTODO: Busca na gaveta de "Recursos" (Appeals)
- * Usa a mesma lógica de "Busca Dupla" (com e sem pontuação).
- */
-    public async getAppealDetails(processNumber: string): Promise<LegalOneAppeal> {
-        const token = await this.getAccessToken();
-        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/appeals`; // <-- O endpoint que você descobriu!
-
-        const cleanProcessNumber = processNumber.trim();
-
-        // TENTATIVA ÚNICA: Buscar com a pontuação original
-        try {
-            console.log(`[Legal One API Service] Buscando (Appeal) com pontuação (${cleanProcessNumber})`);
-            const response = await axios.get<LegalOneAppealApiResponse>(requestUrl, {
-                headers: { 'Authorization': `Bearer ${token}` },
-                params: {
-                    '$filter': `identifierNumber eq '${cleanProcessNumber}'`,
-                    '$expand': 'participants'
-                }
+        if (user.infoEmail) {
+            payload.emails.push({
+                email: user.infoEmail,
+                isMainEmail: false,
+                isBillingEmail: false,
+                isInvoicingEmail: false,
+                typeId: 2 
             });
-
-            const results = response.data.value;
-            if (results && results.length > 0) {
-                console.log(`[Legal One API Service] (Appeal) Sucesso.`);
-                return results[0];
-            }
-        } catch (error: any) {
-            console.warn(`[Legal One API Service] (Appeal) Falha: ${error.message}`);
-            // Lança o erro final
-            throw new Error(`Nenhum Processo ou Recurso encontrado: ${cleanProcessNumber}`);
         }
-
-        console.log(`[Legal One API Service] (Appeal) Não encontrado (array vazio).`);
-        throw new Error(`Nenhum Processo ou Recurso encontrado: ${cleanProcessNumber}`);
-    }
-
-    /**
-     * NOVO MÉTODO: Busca na gaveta de "Incidentes" (ProceduralIssues)
-     */
-    public async getProceduralIssueDetails(processNumber: string): Promise<LegalOneProceduralIssue> {
-        const token = await this.getAccessToken();
-        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/ProceduralIssues`; // <-- A terceira gaveta!
-
-        const cleanProcessNumber = processNumber.trim();
-
-        try {
-            console.log(`[Legal One API Service] Buscando (ProceduralIssue) com pontuação (${cleanProcessNumber})`);
-            const response = await axios.get<LegalOneProceduralIssueApiResponse>(requestUrl, {
-                headers: { 'Authorization': `Bearer ${token}` },
-                params: {
-                    '$filter': `identifierNumber eq '${cleanProcessNumber}'`,
-                    '$expand': 'participants'
-                }
+        if (user.cellPhone) {
+            payload.phones?.push({
+                number: user.cellPhone,
+                isMainPhone: true,
+                typeId: 1 
             });
-
-            const results = response.data.value;
-            if (results && results.length > 0) {
-                console.log(`[Legal One API Service] (ProceduralIssue) Sucesso.`);
-                return results[0];
-            }
-        } catch (error: any) {
-            console.warn(`[Legal One API Service] (ProceduralIssue) Falha: ${error.message}`);
-            // Lança o erro final
-            throw new Error(`Nenhum Processo, Recurso ou Incidente encontrado: ${cleanProcessNumber}`);
         }
-
-        console.log(`[Legal One API Service] (ProceduralIssue) Não encontrado (array vazio).`);
-        throw new Error(`Nenhum Processo, Recurso ou Incidente encontrado: ${cleanProcessNumber}`);
-    }
-
-    public async getProcessDetails(processNumber: string): Promise<LegalOneLawsuit> {
-        const token = await this.getAccessToken();
-        console.log('Token obtido para busca de processo.', token);
-        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/Lawsuits`;
-
-        // Limpa a string de "lixo" (espaços)
-        const cleanProcessNumber = processNumber.trim();
-
-        // TENTATIVA 1: Buscar com a pontuação original (em AMBOS os campos)
-        try {
-            console.log(`[Legal One API Service] Tentativa 1 (Busca Ampla): Buscando com pontuação (${cleanProcessNumber})`);
-
-            // A NOVA LÓGICA: $filter=identifierNumber eq '...' or otherNumber eq '...'
-            const filterQueryV1 = `identifierNumber eq '${cleanProcessNumber}' or otherNumber eq '${cleanProcessNumber}'`;
-
-            const response = await axios.get<LegalOneLawsuitApiResponse>(requestUrl, {
-                headers: { 'Authorization': `Bearer ${token}` },
-                params: {
-                    '$filter': filterQueryV1,
-                    '$expand': 'participants'
-                }
+        if (user.phone) {
+            payload.phones?.push({
+                number: user.phone,
+                isMainPhone: false,
+                typeId: 2 
             });
-
-            const results = response.data.value;
-            if (results && results.length > 0) {
-                console.log(`[Legal One API Service] Tentativa 1 (Busca Ampla): Sucesso.`);
-                return results[0]; // Encontrado! Retorna.
-            }
-        } catch (error: any) {
-            console.warn(`[Legal One API Service] Tentativa 1 (Busca Ampla) falhou: ${error.message}`);
-            // Continua para a Tentativa 2
         }
-        // Se ambas as tentativas não retornarem nada
-        console.log(`[Legal One API Service] Ambas as tentativas (Busca Ampla) falharam.`);
-        throw new Error(`Nenhum processo encontrado no Legal One com o número: ${cleanProcessNumber}`);
-    }
 
-    public async getProcessUpdates(entityId: number): Promise<LegalOneUpdate[]> {
-        const token = await this.getAccessToken();
-        console.log(token)
-        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-
-        // Array para acumular todos os andamentos de todas as páginas
-        let allUpdates: LegalOneUpdate[] = [];
-
-        // 1. O FILTRO CORRETO (Sua descoberta + Sugestão de eficiência)
-        // Filtra pela entidade E pelo tipo 'Manual'
-        const filterQuery = `relationships/any(r: r/linkType eq 'Litigation' and r/linkId eq ${entityId}) and originType eq 'Manual'`;
-
-        // 2. MONTA A URL INICIAL
-        // Usamos encodeURIComponent para garantir que o OData não quebre
-        let requestUrl: string | null = `${apiRestUrl}/Updates?$filter=${encodeURIComponent(filterQuery)}&$orderby=date desc`;
-
-        console.log(`[Legal One API Service] Buscando TODOS andamentos manuais para o Entity ID: ${entityId}`);
-
-        try {
-            // 3. O LOOP DE PAGINAÇÃO
-            while (requestUrl) {
-                const response: AxiosResponse<LegalOneUpdatesApiResponse> = await axios.get<LegalOneUpdatesApiResponse>(requestUrl, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                const updatesOnThisPage = response.data.value;
-
-                if (updatesOnThisPage && updatesOnThisPage.length > 0) {
-                    allUpdates = allUpdates.concat(updatesOnThisPage);
-                }
-
-                // 4. VERIFICA A PRÓXIMA PÁGINA
-                // A API nos diz qual é a URL da próxima página
-                requestUrl = response.data['@odata.nextLink'] || null;
-
-                if (requestUrl) {
-                    console.log(`[Legal One API Service] Próxima página encontrada (${allUpdates.length} já carregados), buscando...`);
-                }
-            }
-
-            console.log(`[Legal One API Service] Busca concluída. Total de ${allUpdates.length} andamentos manuais encontrados para o Entity ID: ${entityId}.`);
-            return allUpdates;
-
-        } catch (error: any) {
-            console.error(`[Legal One API Service] Erro ao buscar andamentos paginados para ${entityId}. Filtro: ${filterQuery}`);
-            if (error.response && error.response.data) {
-                console.error("[Legal One API Service] Erro detalhado:", JSON.stringify(error.response.data, null, 2));
-            }
-            throw error;
+        if (user.residentialCep && user.residentialStreet) {
+            payload.addresses?.push({
+                type: 'Residential',
+                addressLine1: user.residentialStreet,
+                addressNumber: user.residentialNumber || 'S/N',
+                addressLine2: user.residentialComplement || undefined,
+                neighborhood: user.residentialNeighborhood || 'N/A',
+                cityId: residentialCityId, 
+                areaCode: unmask(user.residentialCep),
+                isMainAddress: user.correspondenceAddress === 'residential',
+                isBillingAddress: (user.commercialCep && user.commercialStreet) ? false : true,
+                isInvoicingAddress: (user.commercialCep && user.commercialStreet) ? false : true,
+            });
         }
+
+        if (user.commercialCep && user.commercialStreet) {
+            payload.addresses?.push({
+                type: 'Comercial',
+                addressLine1: user.commercialStreet,
+                addressNumber: user.commercialNumber || 'S/N',
+                addressLine2: user.commercialComplement || undefined,
+                neighborhood: user.commercialNeighborhood || 'N/A',
+                cityId: commercialCityId, 
+                areaCode: unmask(user.commercialCep),
+                isMainAddress: user.correspondenceAddress === 'commercial',
+                isBillingAddress: true,
+                isInvoicingAddress: true,
+            });
+        }
+
+        return payload as unknown as LegalOneCreatePersonPayload;
     }
 
-    public async getContactDetails(contactId: number): Promise<LegalOneContact> {
-        const token = await this.getAccessToken();
-        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/Contacts/${contactId}`;
+    // --- MÉTODOS DE CONTATO ---
 
-        console.log(`[Legal One API Service] Buscando detalhes do contato ID: ${contactId}`);
-
-        const response = await axios.get<LegalOneContact>(requestUrl, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        return response.data;
-    }
-
-    // --- MÉTODOS DE CONTATO (CRIAR, BUSCAR, ANEXAR) ---
-
-    // ============================================================================
-    //  CORREÇÃO (Ponto 1 do Beta): Buscar por CPF
-    // ============================================================================
-    /**
-     * Busca um contato existente no Legal One pelo CPF/CNPJ (identificationNumber).
-     * CORRIGIDO: Agora usa a "gaveta" /individuals e filtra por 'identificationNumber' MASCARADO.
-     */
     public async getContactByCPF(cpfOrCnpj: string): Promise<LegalOneContact | null> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/individuals`;
+        const requestUrl = `${apiRestUrl}/individuals`; 
 
-        // =================================================================
-        //  A CORREÇÃO (O Erro da Máscara)
-        // =================================================================
-        // Aplicamos a máscara ANTES de enviar para a API
         const maskedCpfOrCnpj = maskCPFOrCNPJ(cpfOrCnpj);
         console.log(`[Legal One API Service] Buscando (Individual) com CPF/CNPJ mascarado: ${maskedCpfOrCnpj}`);
-
-        // O campo é 'identificationNumber' (como você descobriu no ID 2828)
         const filterQuery = `identificationNumber eq '${maskedCpfOrCnpj}'`;
 
         try {
-            const response = await axios.get<{ value: LegalOneContact[] }>(requestUrl, {
+            const response = await axios.get<LegalOnePagedResponse<LegalOneContact>>(requestUrl, {
                 headers: { 'Authorization': `Bearer ${token}` },
-                params: {
-                    '$filter': filterQuery,
-                    '$top': 1
-                }
+                params: { '$filter': filterQuery, '$top': 1 }
             });
 
             const results = response.data.value;
-            if (results && results.length > 0) {
-                console.log(`[Legal One API Service] Contato existente (Individual) encontrado. ID: ${results[0].id}`);
-                return results[0];
-            }
-
-            console.log(`[Legal One API Service] Nenhum contato (Individual) encontrado com CPF/CNPJ: ${maskedCpfOrCnpj}`);
-            return null;
-
+            if (results && results.length > 0) return results[0]; 
+            return null; 
         } catch (error: any) {
-            console.error(`[Legal One API Service] Erro ao buscar (Individual) por CPF/CNPJ: ${error.message}`);
+            console.error(`[Legal One API Service] Erro ao buscar (Individual) por CPF: ${error.message}`);
             return null;
         }
     }
 
-    // ============================================================================
-    //  NOVA FUNÇÃO: Buscar por RG
-    // ============================================================================
-    /**
-     * Busca um contato existente no Legal One pelo RG (personStateIdentificationNumber).
-     */
     public async getContactByRG(rg: string): Promise<LegalOneContact | null> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/individuals`;
-
-        // TODO: Aplicar máscara de RG aqui (ex: maskRG(rg))
-        const maskedRg = rg; // Por enquanto, enviamos o RG sem máscara
-
-        console.log(`[Legal One API Service] Buscando (Individual) com RG: ${maskedRg}`);
-
-        // O campo (como você descobriu) é 'personStateIdentificationNumber'
+        const requestUrl = `${apiRestUrl}/individuals`; 
+        const maskedRg = maskRG(rg); 
+        console.log(`[Legal One API Service] Buscando (Individual) com RG mascarado: ${maskedRg}`);
         const filterQuery = `personStateIdentificationNumber eq '${maskedRg}'`;
-
         try {
-            const response = await axios.get<{ value: LegalOneContact[] }>(requestUrl, {
+            const response = await axios.get<LegalOnePagedResponse<LegalOneContact>>(requestUrl, {
                 headers: { 'Authorization': `Bearer ${token}` },
-                params: {
-                    '$filter': filterQuery,
-                    '$top': 1
-                }
+                params: { '$filter': filterQuery, '$top': 1 }
             });
-
             const results = response.data.value;
-            if (results && results.length > 0) {
-                console.log(`[Legal One API Service] Contato existente (Individual) encontrado. ID: ${results[0].id}`);
-                return results[0];
-            }
-
-            console.log(`[Legal One API Service] Nenhum contato (Individual) encontrado com RG: ${maskedRg}`);
-            return null;
-
+            if (results && results.length > 0) return results[0]; 
+            return null; 
         } catch (error: any) {
-            console.error(`[Legal One API Service] Erro ao buscar (Individual) por RG: ${error.message}`);
             return null;
         }
     }
 
-    // ============================================================================
-    //  NOVO MÉTODO: Atualizar Contato (PATCH)
-    // ============================================================================
-    public async updateContact(contactId: number, user: User): Promise<void> {
+    public async getIndividualDetails(contactId: number): Promise<LegalOneContact> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        
         const requestUrl = `${apiRestUrl}/individuals/${contactId}`;
 
-        console.log(`[Legal One API Service] A atualizar contato existente (ID: ${contactId}): ${user.name}`);
-
-        // 1. Gera o payload completo
-        const fullPayload = await this.buildPersonPayload(user);
-
-        // 2. CORREÇÃO CRÍTICA V2: Remover campos não suportados no PATCH
-        // A documentação diz que 'emails', 'phones', 'addresses' e 'country' não podem ir no PATCH.
-        const { 
-            country, 
-            emails, 
-            phones, 
-            addresses, 
-            ...payloadForPatch 
-        } = fullPayload;
-
-        try {
-            await axios.patch(requestUrl, payloadForPatch, {
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-            });
-            console.log(`[Legal One API Service] Contato ID ${contactId} atualizado com sucesso.`);
-        } catch (error: any) {
-            if (error.response && error.response.data) {
-                console.log('[Legal One API Service] Erro detalhado no update:', JSON.stringify(error.response.data, null, 2));
-            }
-            throw new Error(`Erro ao atualizar contato ID ${contactId} no Legal One.`);
-        }
+        console.log(`[Legal One API Service] Buscando detalhes completos do Individual ID: ${contactId}`);
+        const response = await axios.get<LegalOneContact>(requestUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        return response.data;
     }
 
-
-
-    // --- HELPER PRIVADO: CONSTRUTOR DE PAYLOAD ---
-    // Centraliza a lógica de mapeamento para usar em Create e Update
-    private async buildPersonPayload(user: User): Promise<LegalOneCreatePersonPayload> {
-        const DEFAULT_COUNTRY_ID = 1; // Brasil
-        const DEFAULT_CITY_ID = 1; // Default
-
-        const countryName = (user.nationality === "Brasileira" || !user.nationality) ? "Brasil" : user.nationality;
-        let countryId = await this.getCountryIdByName(countryName) || DEFAULT_COUNTRY_ID;
-
-        let residentialCityId = DEFAULT_CITY_ID;
-        if (user.residentialCity && user.residentialState) {
-            const stateId = await this.getStateIdByCode(user.residentialState);
-            if (stateId) {
-                residentialCityId = await this.getCityIdByNameAndState(user.residentialCity, stateId) || DEFAULT_CITY_ID;
-            }
-        }
-
-        let commercialCityId = DEFAULT_CITY_ID;
-        if (user.commercialCity && user.commercialState) {
-            const stateId = await this.getStateIdByCode(user.commercialState);
-            if (stateId) {
-                commercialCityId = await this.getCityIdByNameAndState(user.commercialCity, stateId) || DEFAULT_CITY_ID;
-            }
-        }
-
-        const payload: LegalOneCreatePersonPayload = {
-            name: user.name,
-            identificationNumber: user.cpfOrCnpj ? maskCPFOrCNPJ(user.cpfOrCnpj) : undefined,
-            personStateIdentificationNumber: user.rg ? maskRG(user.rg) : undefined,
-            birthDate: user.birthDate ? new Date(user.birthDate).toISOString().split('T')[0] : undefined,
-            gender: user.gender as 'Male' | 'Female',
-
-            // CORREÇÃO: Removido 'profession'
-            // Nacionalidade é suportada
-            // nacionality: user.nationality || undefined,
-
-            country: { id: countryId },
-            emails: [
-                {
-                    email: user.email,
-                    isMainEmail: true,
-                    isBillingEmail: true,
-                    isInvoicingEmail: true,
-                    typeId: 1
-                }
-            ],
-            phones: [],
-            addresses: [],
-        };
-
-        if (user.infoEmail) {
-            payload.emails.push({
-                email: user.infoEmail,
-                isMainEmail: false,
-                isBillingEmail: false,
-                isInvoicingEmail: false,
-                typeId: 2
-            });
-        }
-        if (user.cellPhone) {
-            payload.phones?.push({
-                number: user.cellPhone,
-                isMainPhone: true,
-                typeId: 1
-            });
-        }
-        if (user.phone) {
-            payload.phones?.push({
-                number: user.phone,
-                isMainPhone: false,
-                typeId: 2
-            });
-        }
-
-        if (user.residentialCep && user.residentialStreet) {
-            payload.addresses?.push({
-                type: 'Residential',
-                addressLine1: user.residentialStreet,
-                addressNumber: user.residentialNumber || 'S/N',
-                addressLine2: user.residentialComplement || undefined,
-                neighborhood: user.residentialNeighborhood || 'N/A',
-                cityId: residentialCityId,
-                isMainAddress: user.correspondenceAddress === 'residential',
-                isBillingAddress: (user.commercialCep && user.commercialStreet) ? false : true,
-                isInvoicingAddress: (user.commercialCep && user.commercialStreet) ? false : true,
-            });
-        }
-
-        if (user.commercialCep && user.commercialStreet) {
-            payload.addresses?.push({
-                type: 'Comercial',
-                addressLine1: user.commercialStreet,
-                addressNumber: user.commercialNumber || 'S/N',
-                addressLine2: user.commercialComplement || undefined,
-                neighborhood: user.commercialNeighborhood || 'N/A',
-                cityId: commercialCityId,
-                isMainAddress: user.correspondenceAddress === 'commercial',
-                isBillingAddress: true,
-                isInvoicingAddress: true,
-            });
-        }
-
-        return payload;
-    }
-
-
-    public async createContact(user: User): Promise<LegalOneContact> {
+    // ATUALIZADO: Aceita associateName
+    public async createContact(user: User, associateName?: string): Promise<LegalOneContact> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/individuals`;
-
-        console.log(`[Legal One API Service] A criar novo contato (Individual): ${user.name} (${user.email})`);
-
-        // --- LÓGICA DE LOOKUP (Sob Demanda) ---
-        const DEFAULT_COUNTRY_ID = 1; // Brasil
-        const DEFAULT_CITY_ID = 1; // Default
-
-        const countryName = (user.nationality === "Brasileira" || !user.nationality) ? "Brasil" : user.nationality;
-        let countryId = await this.getCountryIdByName(countryName) || DEFAULT_COUNTRY_ID;
-
-        let residentialCityId = DEFAULT_CITY_ID;
-        if (user.residentialCity && user.residentialState) {
-            const stateId = await this.getStateIdByCode(user.residentialState);
-            if (stateId) {
-                residentialCityId = await this.getCityIdByNameAndState(user.residentialCity, stateId) || DEFAULT_CITY_ID;
-            }
-        }
-
-        let commercialCityId = DEFAULT_CITY_ID;
-        if (user.commercialCity && user.commercialState) {
-            const stateId = await this.getStateIdByCode(user.commercialState);
-            if (stateId) {
-                commercialCityId = await this.getCityIdByNameAndState(user.commercialCity, stateId) || DEFAULT_CITY_ID;
-            }
-        }
-        // --- FIM LOOKUP ---
-
-        // ============================================================================
-        //  CORREÇÃO (Ponto 1 do Beta): Usando o payload CORRETO (baseado no seu ID 2828)
-        // ============================================================================
-        const payload: LegalOneCreatePersonPayload = {
-            name: user.name,
-
-            // CORRIGIDO: Aplicando a máscara no CPF/CNPJ
-            identificationNumber: user.cpfOrCnpj
-                ? maskCPFOrCNPJ(user.cpfOrCnpj)
-                : undefined,
-
-            // CORRIGIDO: Aplicando a máscara no RG (precisamos criar a maskRG)
-            // TODO: Criar a maskRG em /utils/masks.ts
-            personStateIdentificationNumber: user.rg ? user.rg : undefined, // (Sem máscara por enquanto)
-
-            birthDate: user.birthDate ? new Date(user.birthDate).toISOString().split('T')[0] : undefined, // YYYY-MM-DD
-            gender: user.gender as 'Male' | 'Female',
-            country: { id: countryId },
-            emails: [
-                {
-                    email: user.email,
-                    isMainEmail: true,
-                    isBillingEmail: true,
-                    isInvoicingEmail: true,
-                    typeId: 1 // TODO: Mapear tipo (ex: Pessoal)
-                }
-            ],
-            phones: [],
-            addresses: [],
-        };
-        // ============================================================================
-
-        if (user.infoEmail) {
-            payload.emails.push({
-                email: user.infoEmail,
-                isMainEmail: false,
-                isBillingEmail: false,
-                isInvoicingEmail: false,
-                typeId: 2 // Assumido 2 = 'Trabalho'
-            });
-        }
-        if (user.cellPhone) {
-            payload.phones?.push({
-                number: user.cellPhone,
-                isMainPhone: true,
-                typeId: 1 // Assumido 1 = 'Celular'
-            });
-        }
-        if (user.phone) {
-            payload.phones?.push({
-                number: user.phone,
-                isMainPhone: false,
-                typeId: 2 // Assumido 2 = 'Fixo'
-            });
-        }
-
-        // Adiciona o endereço residencial
-        if (user.residentialCep && user.residentialStreet) {
-            payload.addresses?.push({
-                type: 'Residential',
-                addressLine1: user.residentialStreet,
-                addressNumber: user.residentialNumber || 'S/N',
-                addressLine2: user.residentialComplement || undefined,
-                neighborhood: user.residentialNeighborhood || 'N/A',
-                cityId: residentialCityId,
-                isMainAddress: user.correspondenceAddress === 'residential',
-                isBillingAddress: (user.commercialCep && user.commercialStreet) ? false : true,
-                isInvoicingAddress: (user.commercialCep && user.commercialStreet) ? false : true,
-            });
-        }
-
-        // Adiciona o endereço comercial
-        if (user.commercialCep && user.commercialStreet) {
-            payload.addresses?.push({
-                type: 'Comercial',
-                addressLine1: user.commercialStreet,
-                addressNumber: user.commercialNumber || 'S/N',
-                addressLine2: user.commercialComplement || undefined,
-                neighborhood: user.commercialNeighborhood || 'N/A',
-                cityId: commercialCityId,
-                isMainAddress: user.correspondenceAddress === 'commercial',
-                isBillingAddress: true,
-                isInvoicingAddress: true,
-            });
-        }
+        
+        console.log(`[Legal One API Service] A criar novo contato (Individual): ${user.name}`);
+        const payload = await this.buildPersonPayload(user, associateName);
 
         try {
-            console.log(`[Legal One API Service] Payload para criação do contato: ${JSON.stringify(payload, null, 2)}`);
             const response = await axios.post<LegalOneContact>(requestUrl, payload, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            console.log(`[Legal One API Service] Resposta:`, response.data);
+            console.log(`[Legal One API Service] Resposta Create:`, response.data);
             return response.data;
         } catch (error: any) {
-            if (error.response && error.response.data) {
-                console.log('[Legal One API Service] Erro detalhado:', JSON.stringify(error.response.data, null, 2));
-            } else {
-                console.log('[Legal One API Service] Erro:', error.message);
-            }
+            if (error.response?.data) console.log('[Legal One API Service] Erro create:', JSON.stringify(error.response.data, null, 2));
             throw new Error("Erro ao criar contato no Legal One.");
         }
     }
 
-
-    public async getProcessDocuments(lawsuitId: number): Promise<LegalOneDocument[]> {
+    // ============================================================================
+    //  ATUALIZAR CONTATO (COM CUSTOM FIELDS)
+    // ============================================================================
+    // ATUALIZADO: Aceita associateName
+    public async updateContact(contactId: number, user: User, associateName?: string): Promise<void> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/Documents`;
+        const requestUrl = `${apiRestUrl}/individuals/${contactId}`;
 
-        console.log(`[Legal One API Service] Buscando documentos para o Lawsuit ID: ${lawsuitId}`);
+        console.log(`[Legal One API Service] Iniciando atualização profunda do contato ID: ${contactId}`);
 
-        const response = await axios.get<LegalOneDocumentsApiResponse>(requestUrl, {
-            headers: { 'Authorization': `Bearer ${token}` },
-            params: {
-                '$filter': `relationships/any(r: r/Link eq 'Litigation' and r/LinkItem/Id eq ${lawsuitId})`,
+        // 1. Gera o payload (incluindo customFields se tiver associateName)
+        // Precisamos usar 'any' temporariamente para acessar customFields que buildPersonPayload gera
+        const newPayloadAny = await this.buildPersonPayload(user, associateName) as any;
+        
+        // 2. Atualiza Dados Básicos (Raiz) - Remove campos proibidos no PATCH raiz
+        // 'customFields' também não pode ir no PATCH raiz segundo a documentação
+        const { country, emails, phones, addresses, customFields, ...basicPayload } = newPayloadAny;
+        
+        try {
+            await axios.patch(requestUrl, basicPayload, {
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+            });
+            console.log(`[Legal One API Service] Dados básicos atualizados.`);
+        } catch (error: any) {
+            console.error('[Legal One API Service] Erro ao atualizar dados básicos:', error.response?.data || error.message);
+        }
+
+        // 3. Busca dados atuais do Legal One
+        let currentContact: LegalOneContact;
+        try {
+            currentContact = await this.getIndividualDetails(contactId);
+        } catch (error) {
+            console.error('[Legal One API Service] Não foi possível buscar detalhes para atualizar sub-recursos.');
+            return;
+        }
+
+        // 4. Atualiza E-mails (Lógica existente)
+        if (currentContact.emails && currentContact.emails.length > 0 && newPayloadAny.emails.length > 0) {
+            const mainCurrentEmail = currentContact.emails.find(e => e.isMainEmail) || currentContact.emails[0];
+            const mainNewEmail = newPayloadAny.emails.find((e: any) => e.isMainEmail) || newPayloadAny.emails[0];
+            if (mainCurrentEmail && mainNewEmail) {
+                try {
+                    const emailPayload = { ...mainNewEmail, id: mainCurrentEmail.id };
+                    await axios.patch(`${apiRestUrl}/individuals/${contactId}/emails/${mainCurrentEmail.id}`, emailPayload, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                } catch (err: any) { console.error('Erro update email:', err.message); }
             }
-        });
+        }
 
-        return response.data.value || [];
+        // 5. Atualiza Telefones (Lógica existente)
+        if (currentContact.phones && currentContact.phones.length > 0 && newPayloadAny.phones && newPayloadAny.phones.length > 0) {
+            const mainCurrentPhone = currentContact.phones.find(p => p.isMainPhone) || currentContact.phones[0];
+            const mainNewPhone = newPayloadAny.phones.find((p: any) => p.isMainPhone) || newPayloadAny.phones[0];
+            if (mainCurrentPhone && mainNewPhone) {
+                try {
+                    const phonePayload = { ...mainNewPhone, id: mainCurrentPhone.id };
+                    await axios.patch(`${apiRestUrl}/individuals/${contactId}/phones/${mainCurrentPhone.id}`, phonePayload, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                } catch (err: any) { console.error('Erro update phone:', err.message); }
+            }
+        }
+
+        // 6. Atualiza Endereços (Lógica existente)
+        if (newPayloadAny.addresses && newPayloadAny.addresses.length > 0) {
+            try {
+                const addrResponse = await axios.get<LegalOnePagedResponse<LegalOneAddress>>(`${apiRestUrl}/individuals/${contactId}/addresses`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const existingAddresses = addrResponse.data.value || [];
+                for (const newAddr of newPayloadAny.addresses) {
+                    let match = null;
+                    if (newAddr.isMainAddress) {
+                        match = existingAddresses.find(a => a.isMainAddress);
+                    } else {
+                        match = existingAddresses.find(a => !a.isMainAddress && a.type === newAddr.type);
+                    }
+                    if (match) {
+                        await axios.patch(`${apiRestUrl}/individuals/${contactId}/addresses/${match.id}`, {
+                            ...newAddr,
+                            id: match.id
+                        }, { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } });
+                    } else {
+                        await axios.post(`${apiRestUrl}/individuals/${contactId}/addresses`, newAddr, {
+                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+                        });
+                    }
+                }
+            } catch (err: any) {
+                console.error('[Legal One API Service] Erro ao processar endereços:', err.message);
+            }
+        }
+
+        // 7. Atualiza Custom Fields (Associado)
+        if (customFields && customFields.length > 0) {
+            console.log("[Legal One API Service] Atualizando campos personalizados...");
+            try {
+                // a. Busca os custom fields existentes
+                const cfResponse = await axios.get(`${apiRestUrl}/individuals/${contactId}/customFields`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                // A estrutura de resposta pode variar, assumindo value[]
+                const existingCustomFields = (cfResponse.data.value || []) as any[];
+
+                for (const newCF of customFields) {
+                    // Tenta achar se esse campo (3706) já tem valor definido
+                    const match = existingCustomFields.find(cf => cf.customFieldId === newCF.customFieldId);
+
+                    if (match) {
+                        // PATCH
+                        console.log(`[Legal One API Service] Atualizando CustomField ${newCF.customFieldId}...`);
+                        await axios.patch(`${apiRestUrl}/individuals/${contactId}/customFields/${match.id}`, {
+                            id: match.id,
+                            ...newCF
+                        }, { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } });
+                    } else {
+                        // POST
+                        console.log(`[Legal One API Service] Criando valor para CustomField ${newCF.customFieldId}...`);
+                        await axios.post(`${apiRestUrl}/individuals/${contactId}/customFields`, newCF, {
+                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+                        });
+                    }
+                }
+            } catch (err: any) {
+                console.error('[Legal One API Service] Erro ao processar Custom Fields:', err.message);
+                if (err.response) console.error(JSON.stringify(err.response.data));
+            }
+        }
     }
 
-    public async getDocumentDownloadUrl(documentId: number): Promise<string> {
-        const token = await this.getAccessToken();
-        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/Documents/UrlDownload(key=${documentId})`;
 
-        console.log(`[Legal One API Service] Gerando URL de download para o Documento ID: ${documentId}`);
-
-        const response = await axios.get<LegalOneDocumentDownload>(requestUrl, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        return response.data.url;
-    }
-
-    // ============================================================================
-    //  FLUXO DE UPLOAD DE DOCUMENTOS (Etapas 1, 2, 3)
-    // ============================================================================
-
-    /**
-     * Etapa 1 do Upload: Pede ao Legal One um "container" para o upload.
-     */
+    // --- FLUXO DE UPLOAD ---
     public async getUploadContainer(fileExtension: string): Promise<LegalOneUploadContainer> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-
-        // **CORREÇÃO (404):** A API espera aspas simples, ex: fileExtension='pdf'
         const requestUrl = `${apiRestUrl}/documents/getcontainer(fileExtension='${fileExtension}')`;
-
-        console.log(`[Legal One API Service] A pedir container para um ficheiro '${fileExtension}'`);
-
         const response = await axios.get<LegalOneUploadContainer>(requestUrl, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-
         return response.data;
     }
 
-    /**
-     * Etapa 2 do Upload: Envia o ficheiro para o Azure Storage do Legal One.
-     */
     public async uploadFileToContainer(containerUrl: string, fileBuffer: Buffer, mimeType: string): Promise<void> {
-        console.log(`[Legal One API Service] A fazer upload do ficheiro para o container do Azure...`);
-
-        const response = await axios.put(containerUrl, fileBuffer, {
-            headers: {
-                'x-ms-blob-type': 'BlockBlob',
-                'Content-Type': mimeType,
-            }
+        await axios.put(containerUrl, fileBuffer, {
+            headers: { 'x-ms-blob-type': 'BlockBlob', 'Content-Type': mimeType }
         });
-
-        console.log(`[Legal One API Service] data do upload:`, response.data);
-        console.log(`[Legal One API Service] Resposta do upload: ${response.status} ${response.statusText}`);
-        console.log(`[Legal One API Service] Upload para o container concluído.`);
     }
 
-    /**
-     * Etapa 3 do Upload: Finaliza o documento e anexa-o a um Contato.
-     */
-    public async finalizeDocument(
-        fileNameInContainer: string,
-        originalFileName: string,
-        contactId: number
-    ): Promise<void> {
+    public async finalizeDocument(fileNameInContainer: string, originalFileName: string, contactId: number): Promise<void> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/Documents`;
-
-        console.log(`[Legal One API Service] A finalizar e anexar o documento ${originalFileName} ao Contato ID: ${contactId}`);
-
         const payload: LegalOneDocumentPayload = {
             archive: originalFileName,
-            description: `#SM ${originalFileName}`,
-            generateUrlDownload: '',
-            typeId: null,
-            type: 'Documento / Guia',
-            repository: "LegalOne",
+            description: `#SM ${originalFileName}`, 
+            generateUrlDownload: "",
+            typeId: null, 
+            type: "Documento / Guia", 
+            repository: "LegalOne", 
             notes: null,
             phisicalLocalization: null,
             author: null,
             beginDate: null,
             endDate: null,
             fileUploader: null,
-            fileName: fileNameInContainer,
+            fileName: fileNameInContainer, 
             isPhysicallyStored: false,
             isModel: false,
             relationships: [
-                {
-                    link: 'Contact',
-                    linkItem: { id: contactId, description: originalFileName }
-                }
+                { Link: 'Contact', LinkItem: { Id: contactId, Description: originalFileName } }
             ]
         };
-
-        console.log("[Legal One API Service] Payload de finalização:", JSON.stringify(payload, null, 2));
-
         try {
             await axios.post(requestUrl, payload, {
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
             });
-            console.log(`[Legal One API Service] Documento ${originalFileName} anexado com sucesso.`);
-
         } catch (error: any) {
-            // Log de erro aprimorado
-            console.error(`[Legal One API Service] Falha ao finalizar o documento ${originalFileName}.`);
-            if (error.response) {
-                console.error("[Legal One API Service] Resposta de Erro:", JSON.stringify(error.response.data, null, 2));
-            } else {
-                console.error("[Legal One API Service] Erro:", error.message);
-            }
-            throw error; // Relança o erro para o UseCase
+            throw error; 
         }
     }
 
-    // ============================================================================
-    //  MÉTODO DE DEBUG (SPY)
-    // ============================================================================
-
-    /**
-     * [DEBUG] Busca o JSON completo de documentos associados a um processo.
-     * Usa 'any' para retornar a estrutura *exata* da API, não a nossa interface.
-     */
-    public async getRawDocuments(lawsuitId: number): Promise<any[]> {
+    // --- GETTERS DE PROCESSO (Mantidos) ---
+    public async getProcessDetails(processNumber: string): Promise<LegalOneLawsuit> {
         const token = await this.getAccessToken();
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/Documents`;
+        const requestUrl = `${apiRestUrl}/Lawsuits`;
+        const cleanProcessNumber = processNumber.trim();
+        try {
+            const filterQueryV1 = `identifierNumber eq '${cleanProcessNumber}' or otherNumber eq '${cleanProcessNumber}'`;
+            const response = await axios.get<LegalOneLawsuitApiResponse>(requestUrl, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                params: { '$filter': filterQueryV1, '$expand': 'participants,courtPanel' }
+            });
+            if (response.data.value?.length > 0) return response.data.value[0]; 
+        } catch (error: any) {}
+        const unmaskedProcessNumber = cleanProcessNumber.replace(/[.\-/]/g, '');
+        if (unmaskedProcessNumber === cleanProcessNumber) throw new Error(`Nenhum Processo encontrado: ${cleanProcessNumber}`);
+        try {
+            const filterQueryV2 = `identifierNumber eq '${unmaskedProcessNumber}' or otherNumber eq '${unmaskedProcessNumber}'`;
+            const response = await axios.get<LegalOneLawsuitApiResponse>(requestUrl, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                params: { '$filter': filterQueryV2, '$expand': 'participants,courtPanel' }
+            });
+            const results = response.data.value;
+            if (results && results.length > 0) return results[0];
+        } catch (error: any) { throw new Error(`Nenhum Processo encontrado: ${cleanProcessNumber}`); }
+        throw new Error(`Nenhum Processo encontrado: ${cleanProcessNumber}`);
+    }
 
-        console.log(`[SPY Service] Buscando JSON bruto de documentos para o Lawsuit ID: ${lawsuitId}`);
+    public async getAppealDetails(processNumber: string): Promise<LegalOneAppeal> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        try {
+             const response = await axios.get<LegalOneAppealApiResponse>(`${apiRestUrl}/appeals`, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                params: { '$filter': `identifierNumber eq '${processNumber.trim()}'`, '$expand': 'participants,courtPanel' }
+            });
+            if (response.data.value?.length > 0) return response.data.value[0];
+        } catch(e) {}
+        throw new Error("Recurso não encontrado");
+    }
 
-        const response = await axios.get(requestUrl, { // Retorno como 'any'
-            headers: { 'Authorization': `Bearer ${token}` },
-            params: {
-                '$filter': `relationships/any(r: r/Link eq 'Litigation' and r/LinkItem/Id eq ${lawsuitId})`,
-                '$expand': 'relationships,type' // Tenta expandir para ver mais dados
+    public async getProceduralIssueDetails(processNumber: string): Promise<LegalOneProceduralIssue> {
+         const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        try {
+             const response = await axios.get<LegalOneProceduralIssueApiResponse>(`${apiRestUrl}/ProceduralIssues`, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                params: { '$filter': `identifierNumber eq '${processNumber.trim()}'`, '$expand': 'participants,courtPanel' }
+            });
+            if (response.data.value?.length > 0) return response.data.value[0];
+        } catch(e) {}
+        throw new Error("Incidente não encontrado");
+    }
+
+    public async getProcessUpdates(entityId: number): Promise<LegalOneUpdate[]> {
+        const token = await this.getAccessToken();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        let allUpdates: LegalOneUpdate[] = [];
+        const filterQuery = `relationships/any(r: r/linkType eq 'Litigation' and r/linkId eq ${entityId}) and originType eq 'Manual'`;
+        let requestUrl: string | null = `${apiRestUrl}/Updates?$filter=${encodeURIComponent(filterQuery)}&$orderby=date desc`;
+        try {
+            while (requestUrl) {
+                const response: AxiosResponse<LegalOneUpdatesApiResponse> = await axios.get(requestUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (response.data.value?.length > 0) allUpdates = allUpdates.concat(response.data.value);
+                requestUrl = response.data['@odata.nextLink'] || null; 
             }
-        });
-
-        return response.data.value || [];
+            return allUpdates;
+        } catch (error: any) { throw error; }
     }
 }
 
 export const legalOneApiService = new LegalOneApiService();
-

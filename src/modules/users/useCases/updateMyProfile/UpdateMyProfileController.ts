@@ -15,14 +15,17 @@ class UpdateMyProfileController {
             name: yup.string().required("O nome é obrigatório."),
             cpfOrCnpj: yup.string().required("O CPF/CNPJ é obrigatório."),
             cellPhone: yup.string().required("O telemóvel é obrigatório."),
-            
+            gender: yup.string().optional(),
+            // CORREÇÃO: Aceita o ID ou a Indicação Manual
+            indication: yup.string().nullable().optional(),
+
             // CORREÇÃO: Adicionado .nullable() a todos os campos opcionais
             rg: yup.string().optional().nullable(),
             birthDate: yup.date().optional().nullable(),
             profession: yup.string().optional().nullable(),
             contactPreference: yup.string().optional().nullable(),
             infoEmail: yup.string().email("Formato de e-mail inválido.").optional().nullable(),
-            
+
             residentialCep: yup.string().required("O CEP Residencial é obrigatório."),
             residentialStreet: yup.string().required("A Rua Residencial é obrigatória."),
             residentialNumber: yup.string().required("O Número Residencial é obrigatório."),
@@ -41,7 +44,7 @@ class UpdateMyProfileController {
             commercialState: yup.string().optional().nullable(),
 
             correspondenceAddress: yup.string().optional().default("residential"),
-            
+
             nationality: yup.string().optional().nullable(),
             maritalStatus: yup.string().optional().nullable(),
             referredById: yup.string().optional().nullable(), // ID do Associado
