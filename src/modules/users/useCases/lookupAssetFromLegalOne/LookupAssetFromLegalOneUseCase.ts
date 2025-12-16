@@ -2,9 +2,6 @@ import { PrismaClient } from "@prisma/client";
 // ATUALIZADO: Importando os 3 tipos (Assumindo que estão exportados do service)
 import {
     legalOneApiService,
-    LegalOneLawsuit,
-    LegalOneAppeal,
-    LegalOneProceduralIssue
 } from "../../../../services/legalOneApiService";
 
 const prisma = new PrismaClient();

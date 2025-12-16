@@ -64,7 +64,7 @@ class SyncSingleAssetUseCase {
             //  INÍCIO DA CORREÇÃO (Lógica "Pai vs. Filho")
             //  (Copiada do EnrichAssetFromLegalOneUseCase)
             // =================================================================
-            
+
             let entityIdToFetchFrom = asset.legalOneId; // Começa com o ID que temos
             let entityType = asset.legalOneType;
 
@@ -90,28 +90,32 @@ class SyncSingleAssetUseCase {
                 console.log(`[SYNC MANUAL] Pai (Lawsuit) encontrado: ${entityIdToFetchFrom}`);
             }
             // Se for 'Lawsuit', o entityIdToFetchFrom já está correto.
-            
+
             // =================================================================
             //  FIM DA CORREÇÃO
             // =================================================================
 
 
             // 3. Busca os andamentos e documentos (agora do ID "Pai" correto)
-            const [legalOneUpdates, legalOneDocuments] = await Promise.all([
+            const [legalOneUpdates,
+                //  legalOneDocuments
+            ] = await Promise.all([
                 legalOneApiService.getProcessUpdates(entityIdToFetchFrom),
-                legalOneApiService.getProcessDocuments(entityIdToFetchFrom) // Assumindo que os docs também ficam no Pai
+                // legalOneApiService.getProcessDocuments(entityIdToFetchFrom) // Assumindo que os docs também ficam no Pai
             ]);
 
-            console.log(`[SYNC MANUAL] ${legalOneUpdates.length} andamentos e ${legalOneDocuments.length} documentos encontrados no Legal One (ID Pai: ${entityIdToFetchFrom}).`);
+            console.log(`[SYNC MANUAL] ${legalOneUpdates.length} andamentos e documentos encontrados no Legal One (ID Pai: ${entityIdToFetchFrom}).`);
 
             // 4. Lógica de Sincronização (O seu código, que já estava correto)
             const existingUpdateIds = new Set(asset.updates.map(u => u.legalOneUpdateId).filter(id => id !== null));
             const newUpdates = legalOneUpdates.filter(update => !existingUpdateIds.has(update.id));
 
-            const existingDocIds = new Set(asset.documents.map(d => d.legalOneDocumentId).filter(id => id !== null));
-            const newDocuments = legalOneDocuments.filter(doc => !existingDocIds.has(doc.id));
+            // const existingDocIds = new Set(asset.documents.map(d => d.legalOneDocumentId).filter(id => id !== null));
+            // const newDocuments = legalOneDocuments.filter(doc => !existingDocIds.has(doc.id));
 
-            if (newUpdates.length === 0 && newDocuments.length === 0) {
+            if (newUpdates.length === 0
+                // && newDocuments.length === 0
+            ) {
                 console.log(`[SYNC MANUAL] Processo ${asset.processNumber}: Nenhuma novidade encontrada.`);
                 return;
             }
@@ -151,20 +155,20 @@ class SyncSingleAssetUseCase {
                     }
                 }
 
-                if (newDocuments.length > 0) {
-                    console.log(`[SYNC MANUAL] Salvando metadados de ${newDocuments.length} novo(s) documento(s)...`);
-                    for (const doc of newDocuments) {
-                        await tx.document.create({
-                            data: {
-                                assetId: asset.id,
-                                legalOneDocumentId: doc.id,
-                                name: doc.archive,
-                                category: doc.type || 'Indefinido',
-                                url: '', 
-                            }
-                        });
-                    }
-                }
+                // if (newDocuments.length > 0) {
+                //     console.log(`[SYNC MANUAL] Salvando metadados de ${newDocuments.length} novo(s) documento(s)...`);
+                //     for (const doc of newDocuments) {
+                //         await tx.document.create({
+                //             data: {
+                //                 assetId: asset.id,
+                //                 legalOneDocumentId: doc.id,
+                //                 name: doc.archive,
+                //                 category: doc.type || 'Indefinido',
+                //                 url: '',
+                //             }
+                //         });
+                //     }
+                // }
 
                 // Atualiza os valores principais
                 await tx.creditAsset.update({
