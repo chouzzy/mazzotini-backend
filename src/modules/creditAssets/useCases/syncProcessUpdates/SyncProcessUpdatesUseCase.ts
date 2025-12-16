@@ -67,18 +67,22 @@ class SyncProcessUpdatesUseCase {
                 const lawsuitData = await legalOneApiService.getProcessDetails(asset.processNumber);
                 if (!lawsuitData) continue;
 
-                const [legalOneUpdates, legalOneDocuments] = await Promise.all([
+                const [legalOneUpdates, 
+                    // legalOneDocuments
+                ] = await Promise.all([
                     legalOneApiService.getProcessUpdates(lawsuitData.id),
-                    legalOneApiService.getProcessDocuments(lawsuitData.id)
+                    // legalOneApiService.getProcessDocuments(lawsuitData.id)
                 ]);
 
                 const existingUpdateIds = new Set(asset.updates.map(u => u.legalOneUpdateId).filter(id => id !== null));
                 const newUpdates = legalOneUpdates.filter(update => !existingUpdateIds.has(update.id));
 
                 const existingDocIds = new Set(asset.documents.map(d => d.legalOneDocumentId).filter(id => id !== null));
-                const newDocuments = legalOneDocuments.filter(doc => !existingDocIds.has(doc.id));
+                // const newDocuments = legalOneDocuments.filter(doc => !existingDocIds.has(doc.id));
 
-                if (newUpdates.length === 0 && newDocuments.length === 0) {
+                if (newUpdates.length === 0 
+                    // && newDocuments.length === 0
+                    ) {
                     console.log(`[CRON JOB] Processo ${asset.processNumber}: Nenhuma novidade encontrada.`);
                     continue;
                 }
@@ -115,22 +119,22 @@ class SyncProcessUpdatesUseCase {
                         }
                     }
 
-                    if (newDocuments.length > 0) {
-                        console.log(`[CRON JOB] Processo ${asset.processNumber}: ${newDocuments.length} novo(s) documento(s) encontrado(s)!`);
-                        for (const doc of newDocuments) {
-                            const downloadUrl = await legalOneApiService.getDocumentDownloadUrl(doc.id);
+                    // if (newDocuments.length > 0) {
+                    //     console.log(`[CRON JOB] Processo ${asset.processNumber}: ${newDocuments.length} novo(s) documento(s) encontrado(s)!`);
+                    //     for (const doc of newDocuments) {
+                    //         const downloadUrl = await legalOneApiService.getDocumentDownloadUrl(doc.id);
 
-                            await tx.document.create({
-                                data: {
-                                    assetId: asset.id,
-                                    legalOneDocumentId: doc.id,
-                                    name: doc.archive,
-                                    category: doc.type,
-                                    url: downloadUrl,
-                                }
-                            });
-                        }
-                    }
+                    //         await tx.document.create({
+                    //             data: {
+                    //                 assetId: asset.id,
+                    //                 legalOneDocumentId: doc.id,
+                    //                 name: doc.archive,
+                    //                 category: doc.type,
+                    //                 url: downloadUrl,
+                    //             }
+                    //         });
+                    //     }
+                    // }
 
                     await tx.creditAsset.update({
                         where: { id: asset.id },

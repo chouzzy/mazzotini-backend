@@ -17,9 +17,10 @@ class GetDownloadUrlUseCase {
         }
 
         console.log(`[DOWNLOAD] Gerando URL para o Legal One ID: ${document.legalOneDocumentId}`);
-        const downloadUrl = await legalOneApiService.getDocumentDownloadUrl(document.legalOneDocumentId);
+        // const downloadUrl = await legalOneApiService.getDocumentDownloadUrl(document.legalOneDocumentId);
 
-        return downloadUrl;
+        // return downloadUrl;
+        return ''
     }
 }
 

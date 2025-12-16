@@ -2,7 +2,6 @@
 import { PrismaClient } from "@prisma/client";
 import { 
     legalOneApiService, 
-    LegalOneUpdate 
 } from "../../../../services/legalOneApiService"; 
 
 const prisma = new PrismaClient();
