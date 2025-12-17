@@ -21,7 +21,10 @@ class UpdateMyProfileController {
 
             // CORREÇÃO: Adicionado .nullable() a todos os campos opcionais
             rg: yup.string().optional().nullable(),
-            birthDate: yup.date().optional().nullable(),
+            birthDate: yup.date()
+                .transform((curr, orig) => (orig === '' ? null : curr))
+                .nullable()
+                .optional(),
             profession: yup.string().optional().nullable(),
             contactPreference: yup.string().optional().nullable(),
             infoEmail: yup.string().email("Formato de e-mail inválido.").optional().nullable(),
