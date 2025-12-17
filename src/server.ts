@@ -18,6 +18,7 @@ const app = express();
 const allowedOrigins = [
     'http://localhost:3000',
     'https://mazzotini-frontend.vercel.app',
+    'https://portal.mazzotiniadvogados.com.br',
     // Adicione a sua URL de deploy da Vercel aqui
 ];
 
