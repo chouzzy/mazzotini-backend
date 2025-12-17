@@ -59,6 +59,7 @@ class LegalOneApiService {
 
     private async getCountryIdByName(name: string): Promise<number | null> {
         const token = await this.getAccessToken();
+        console.log(token)
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         try {
             const response = await axios.get<LegalOneCountryApiResponse>(`${apiRestUrl}/countries`, {
@@ -73,6 +74,7 @@ class LegalOneApiService {
 
     private async getStateIdByCode(stateCode: string): Promise<number | null> {
         const token = await this.getAccessToken();
+        console.log(token)
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         try {
             const response = await axios.get<LegalOneStateApiResponse>(`${apiRestUrl}/states`, {
@@ -87,6 +89,7 @@ class LegalOneApiService {
 
     private async getCityIdByNameAndState(cityName: string, stateId: number): Promise<number | null> {
         const token = await this.getAccessToken();
+        console.log(token)
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         try {
             const response = await axios.get<LegalOneCityApiResponse>(`${apiRestUrl}/cities`, {
@@ -228,6 +231,7 @@ class LegalOneApiService {
 
     public async getContactByCPF(cpfOrCnpj: string): Promise<LegalOneContact | null> {
         const token = await this.getAccessToken();
+        console.log(token)
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/individuals`; 
 
@@ -252,6 +256,7 @@ class LegalOneApiService {
 
     public async getContactByRG(rg: string): Promise<LegalOneContact | null> {
         const token = await this.getAccessToken();
+        console.log(token)
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/individuals`; 
         const maskedRg = maskRG(rg); 
@@ -272,6 +277,7 @@ class LegalOneApiService {
 
     public async getIndividualDetails(contactId: number): Promise<LegalOneContact> {
         const token = await this.getAccessToken();
+        console.log(token)
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/individuals/${contactId}`;
 
@@ -285,6 +291,7 @@ class LegalOneApiService {
     // ATUALIZADO: Aceita associateName
     public async createContact(user: User, associateName?: string): Promise<LegalOneContact> {
         const token = await this.getAccessToken();
+        console.log(token)
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/individuals`;
         
@@ -309,6 +316,7 @@ class LegalOneApiService {
     // ATUALIZADO: Aceita associateName
     public async updateContact(contactId: number, user: User, associateName?: string): Promise<void> {
         const token = await this.getAccessToken();
+        console.log(token)
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/individuals/${contactId}`;
 
@@ -439,6 +447,7 @@ class LegalOneApiService {
     // --- FLUXO DE UPLOAD ---
     public async getUploadContainer(fileExtension: string): Promise<LegalOneUploadContainer> {
         const token = await this.getAccessToken();
+        console.log(token)
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/documents/getcontainer(fileExtension='${fileExtension}')`;
         const response = await axios.get<LegalOneUploadContainer>(requestUrl, {
@@ -455,6 +464,7 @@ class LegalOneApiService {
 
     public async finalizeDocument(fileNameInContainer: string, originalFileName: string, contactId: number): Promise<void> {
         const token = await this.getAccessToken();
+        console.log(token)
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/Documents`;
         const payload: LegalOneDocumentPayload = {
@@ -489,6 +499,7 @@ class LegalOneApiService {
     // --- GETTERS DE PROCESSO (Mantidos) ---
     public async getProcessDetails(processNumber: string): Promise<LegalOneLawsuit> {
         const token = await this.getAccessToken();
+        console.log(token)
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/Lawsuits`;
         const cleanProcessNumber = processNumber.trim();
@@ -516,6 +527,7 @@ class LegalOneApiService {
 
     public async getAppealDetails(processNumber: string): Promise<LegalOneAppeal> {
         const token = await this.getAccessToken();
+        console.log(token)
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         try {
              const response = await axios.get<LegalOneAppealApiResponse>(`${apiRestUrl}/appeals`, {
@@ -529,6 +541,7 @@ class LegalOneApiService {
 
     public async getProceduralIssueDetails(processNumber: string): Promise<LegalOneProceduralIssue> {
          const token = await this.getAccessToken();
+         console.log(token)
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         try {
              const response = await axios.get<LegalOneProceduralIssueApiResponse>(`${apiRestUrl}/ProceduralIssues`, {
@@ -542,6 +555,7 @@ class LegalOneApiService {
 
     public async getProcessUpdates(entityId: number): Promise<LegalOneUpdate[]> {
         const token = await this.getAccessToken();
+        console.log(token)
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         let allUpdates: LegalOneUpdate[] = [];
         const filterQuery = `relationships/any(r: r/linkType eq 'Litigation' and r/linkId eq ${entityId}) and originType eq 'Manual'`;
