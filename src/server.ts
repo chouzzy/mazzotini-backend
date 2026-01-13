@@ -19,6 +19,7 @@ const allowedOrigins = [
     'http://localhost:3000',
     'https://mazzotini-frontend.vercel.app',
     'https://portal.mazzotiniadvogados.com.br',
+    'https://mazzotini-backup.netlify.app' // (Caso você renomeie, já deixe pronto)
 
     // Adicione a sua URL de deploy da Vercel aqui
 ];
@@ -68,7 +69,7 @@ const PORT = Number(process.env.PORT) || 8080;
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Servidor a rodar na porta ${PORT} e a ouvir em todas as interfaces.`);
-    
+
     startScheduledJobs();
     runMonthlyIndexUpdate()
 });
