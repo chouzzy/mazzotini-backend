@@ -111,6 +111,7 @@ model CreditAsset {
   legalOneId           Int?
   // Tipo da entidade (para sabermos qual API chamar no futuro)
   legalOneType         String? // "Lawsuit", "Appeal", "ProceduralIssue"
+  nickname             String? // Apelido/Nome de referência do processo
 
   // --- Relações ---
   updates   AssetUpdate[]
@@ -161,4 +162,13 @@ model Document {
   assetId            String      @db.ObjectId
   asset              CreditAsset @relation(fields: [assetId], references: [id])
   uploadedAt         DateTime    @default(now())
+}
+
+model SystemNotification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  message   String
+  type      String   @default("info") // 'info', 'success', 'warning', 'new'
+  link      String?  // <--- NOVO: Link opcional (interno ou externo) para saber mais
+  createdAt DateTime @default(now())
 }
