@@ -45,6 +45,7 @@ class GetAssetByProcessNumberUseCase {
     });
 
     console.log(`✅ Ativo encontrado: ${asset.processNumber}`);
+    console.log(`Detalhes do ativo:`, asset);
     return asset;
   }
 }

@@ -1,12 +1,8 @@
-import { PrismaClient } from "@prisma/client";
-// ATUALIZADO: Importando os 3 tipos (Assumindo que estão exportados do service)
-import {
-    legalOneApiService,
+import { 
+    legalOneApiService 
 } from "../../../../services/legalOneApiService";
 
-const prisma = new PrismaClient();
-
-// ATUALIZADO: A interface de retorno agora inclui os dados para o banco
+// A interface de retorno com os dados para o banco
 interface ILookupResult {
     originalCreditor: string;
     origemProcesso: string;
@@ -20,35 +16,48 @@ class LookupAssetFromLegalOneUseCase {
      * Função auxiliar para extrair dados comuns de qualquer uma das 3 entidades
      */
     private extractData(
-        // Usamos 'any' porque os tipos são muito similares, mas não idênticos
         processData: any,
         entityType: 'Lawsuit' | 'Appeal' | 'ProceduralIssue'
     ): ILookupResult {
 
-        console.log('Process Data:', processData);
-
+        console.log('[extractData] Iniciando extração de dados...');
+        console.log('[extractData] Entity Type:', entityType);
+        
         // 1. Encontrar o Credor Original (Cliente Principal)
-        const customer = processData.participants.find((p: any) => p.type === "Customer");
-        const originalCreditor = customer ? customer.contactName : "Credor não encontrado";
+        // CORREÇÃO: Garante que participants seja um array, mesmo se vier null/undefined da API
+        const participants = processData.participants || [];
+        
+        console.log(`[extractData] Buscando participante do tipo "Customer" em ${participants.length} participantes...`);
+        
+        const customer = participants.find((p: any) => p.type === "Customer");
+        
+        if (customer) {
+            console.log('[extractData] "Customer" encontrado:', customer.contactName);
+        } else {
+            console.log('[extractData] Nenhum participante do tipo "Customer" foi encontrado.');
+        }
+
+        const originalCreditor = customer ? customer.contactName : "Credor não identificado";
 
         // 2. Montar a Origem do Processo (Vara/Turma)
-        let origemProcesso = processData.title || "Origem não encontrada"; // Fallback
+        let origemProcesso = processData.title || "Origem não identificada"; // Fallback inicial
 
         if (processData.courtPanel && processData.courtPanelNumberText) {
-            // Ex: "30 Vara Cível"
+            // Ex: "32 Vara Cível"
             origemProcesso = `${processData.courtPanelNumberText} ${processData.courtPanel.description}`;
         }
         else if (processData.courtPanel) {
+            // Ex: "Vara Cível" (sem número)
             origemProcesso = processData.courtPanel.description;
         }
 
-        console.log(`[Lookup Asset] Dados encontrados: Credor: ${originalCreditor}, Origem: ${origemProcesso}`);
+        console.log(`[Lookup Asset] Dados extraídos: Credor: ${originalCreditor}, Origem: ${origemProcesso}`);
 
         return {
             originalCreditor,
             origemProcesso,
             legalOneId: processData.id,
-            legalOneType: entityType // Retorna a "flag" interna
+            legalOneType: entityType
         };
     }
 
@@ -62,17 +71,17 @@ class LookupAssetFromLegalOneUseCase {
         try {
             const lawsuitData = await legalOneApiService.getProcessDetails(processNumber);
             console.log("[Lookup Asset] Encontrado como 'Lawsuit'.");
-            console.log(this.extractData(lawsuitData, 'Lawsuit'));
             return this.extractData(lawsuitData, 'Lawsuit');
 
         } catch (lawsuitError: any) {
-            console.warn(`[Lookup Asset] Não encontrado como 'Lawsuit'. Tentando 'Appeals'...`);
+            // Se o erro não for "Nenhum encontrado", pode ser um erro real de API, mas
+            // assumimos que é "não encontrado" e tentamos o próximo.
+            console.warn(`[Lookup Asset] Não encontrado como 'Lawsuit' (${lawsuitError.message}). Tentando 'Appeals'...`);
 
             // --- TENTATIVA 2: Buscar na gaveta de RECURSOS (Appeals) ---
             try {
                 const appealData = await legalOneApiService.getAppealDetails(processNumber);
                 console.log("[Lookup Asset] Encontrado como 'Appeal'.");
-                console.log(this.extractData(appealData, 'Appeal'))
                 return this.extractData(appealData, 'Appeal');
 
             } catch (appealError: any) {
@@ -82,14 +91,12 @@ class LookupAssetFromLegalOneUseCase {
                 try {
                     const issueData = await legalOneApiService.getProceduralIssueDetails(processNumber);
                     console.log("[Lookup Asset] Encontrado como 'ProceduralIssue'.");
-                    console.log(this.extractData(issueData, 'ProceduralIssue'));
                     return this.extractData(issueData, 'ProceduralIssue');
 
                 } catch (issueError: any) {
                     // Se falhar nas três, lança o erro final
-                    console.error(`[Lookup Asset] Falha ao buscar como 'ProceduralIssue': ${issueError.message}`);
-                    // O erro de getProceduralIssueDetails já é "Nenhum... encontrado"
-                    throw issueError;
+                    console.error(`[Lookup Asset] Esgotadas todas as tentativas. Último erro: ${issueError.message}`);
+                    throw new Error(`Processo ${processNumber} não encontrado em nenhuma categoria (Processo, Recurso ou Incidente).`);
                 }
             }
         }

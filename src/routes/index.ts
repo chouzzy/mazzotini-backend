@@ -6,6 +6,7 @@ import { userRoutes } from "./users.routes";
 import { investmentRoutes } from "./investment.routes";
 import { documentRoutes } from "./document.routes";
 import { managementRoutes } from "./management.routes";
+import { notificationsRoutes } from "./notifications.routes";
 
 const router = Router();
 
@@ -20,6 +21,7 @@ router.use(userRoutes);
 router.use(investmentRoutes);
 router.use(documentRoutes);
 router.use(managementRoutes);
+router.use(notificationsRoutes);
 
 
 export { router };
