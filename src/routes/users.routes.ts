@@ -14,6 +14,7 @@ import { ListAssociatesController } from '../modules/users/useCases/listAssociat
 // NOVAS IMPORTAÇÕES
 import { UploadProfilePictureController } from '../modules/users/useCases/uploadProfilePicture/UploadProfilePictureController';
 import { UploadPersonalDocumentController } from '../modules/users/useCases/uploadPersonalDocument/UploadPersonalDocumentController';
+import { DeletePersonalDocumentController } from '../modules/users/useCases/deletePersonalDocument/DeletePersonalDocumentController';
 
 
 // Configuração do Multer para guardar os ficheiros em memória
@@ -31,6 +32,7 @@ const listAssociatesController = new ListAssociatesController(); // Adicionado d
 // NOVAS INSTÂNCIAS
 const uploadProfilePictureController = new UploadProfilePictureController();
 const uploadPersonalDocumentController = new UploadPersonalDocumentController();
+const deletePersonalDocumentController = new DeletePersonalDocumentController();
 
 
 // ============================================================================
@@ -119,6 +121,18 @@ userRoutes.post(
     '/api/users/me/resend-verification',
     checkJwt,
     resendVerificationEmailController.handle
+);
+
+/**
+ * @route   DELETE /api/users/me/personal-document
+ * @desc    Deleta um documento pessoal do perfil do utilizador autenticado.
+ */
+
+// Rota para deletar documento
+userRoutes.delete(
+    '/api/users/me/personal-document',
+    checkJwt,
+    deletePersonalDocumentController.handle
 );
 
 export { userRoutes };
