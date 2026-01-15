@@ -42,9 +42,11 @@ app.options('*', cors());
 // ============================================================================
 //  CORREÇÃO: Aumentar o Limite de Payload do Express
 // ============================================================================
-// Por padrão, o Express tem um limite de 100kb. Aumentamos para 50mb.
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+//  CORREÇÃO: Aumentar o Limite de Payload do Express
+// ============================================================================
+// Por padrão, o Express tem um limite de 100kb. Aumentamos para 500mb.
+app.use(express.json({ limit: '500mb' }));
+app.use(express.urlencoded({ limit: '500mb', extended: true }));
 // ============================================================================
 
 
