@@ -11,6 +11,9 @@ import { ListPendingUsersController } from '../modules/management/useCases/listP
 import { RejectUserProfileController } from '../modules/management/useCases/rejectUserProfile/RejectUserProfileController';
 import { TestGetDocumentsController } from '../modules/users/useCases/testGetDocuments/TestGetDocumentsController';
 import { TestMonthlyUpdateController } from '../modules/creditAssets/useCases/testMonthlyUpdate/TestMonthlyUpdateController';
+import { GetUserByIdController } from '../modules/management/useCases/getUserById/GetUserByIdController';
+import { AdminUpdateUserController } from '../modules/management/useCases/adminUpdateUser/AdminUpdateUserController';
+import { AdminDeleteUserDocumentController } from '../modules/management/useCases/adminDeleteUserDocument/AdminDeleteUserDocumentController';
 
 const managementRoutes = Router();
 const listManagementUsersController = new ListManagementUsersController();
@@ -22,6 +25,9 @@ const approveUserProfileController = new ApproveUserProfileController();
 const rejectUserProfileController = new RejectUserProfileController();
 const testGetDocumentsController = new TestGetDocumentsController();
 const testMonthlyUpdateController = new TestMonthlyUpdateController();
+const getUserByIdController = new GetUserByIdController();
+const adminUpdateUserController = new AdminUpdateUserController();
+const adminDeleteUserDocumentController = new AdminDeleteUserDocumentController();
 
 const ROLES = {
     ADMIN: process.env.ROLE_ADMIN || 'ADMIN',
@@ -133,6 +139,46 @@ managementRoutes.get(
     // checkJwt,
     // checkRole([ROLES.ADMIN]), // Protegido
     testMonthlyUpdateController.handle
+);
+
+
+
+/**
+ * @route   GET /api/management/users/:id
+ * @desc    Busca detalhes de um usuário específico
+ * @access  Privado (ADMIN)
+ */
+managementRoutes.get(
+    '/api/management/users/:id',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    getUserByIdController.handle
+);
+
+/**
+ * @route   PATCH /api/management/users/:id
+ * @desc    Atualiza dados de um usuário específico
+ * @access  Privado (ADMIN)
+ */
+managementRoutes.patch(
+    '/api/management/users/:id',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    adminUpdateUserController.handle
+);
+
+/**
+ * @route   DELETE /api/management/users/:id/documents
+ * @desc    Deleta um documento pessoal de um usuário (Admin)
+ * @access  Privado (Apenas para ADMINs)
+ */
+
+// Rota de Delete de Documento (Admin)
+managementRoutes.delete(
+    '/api/management/users/:id/documents',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    adminDeleteUserDocumentController.handle
 );
 
 export { managementRoutes };

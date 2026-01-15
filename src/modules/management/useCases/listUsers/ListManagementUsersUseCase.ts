@@ -36,6 +36,7 @@ class ListManagementUsersUseCase {
                 auth0UserId: { in: auth0UserIds }
             },
             select: {
+                id: true,
                 auth0UserId: true,
                 name: true,
                 profilePictureUrl: true,
@@ -51,6 +52,7 @@ class ListManagementUsersUseCase {
             const localProfile = localUserMap.get(auth0User.user_id!);
             
             return {
+                id: localProfile?.id,
                 auth0UserId: auth0User.user_id || 'N/A',
                 email: auth0User.email || 'N/A',
                 // Fonte da verdade: usa o nome do nosso DB; se não existir, usa o do Auth0
