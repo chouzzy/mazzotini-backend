@@ -1,8 +1,11 @@
-// /src/modules/creditAssets/useCases/syncProcessUpdates/SyncProcessUpdatesUseCase.ts
 import { PrismaClient } from "@prisma/client";
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 
 const prisma = new PrismaClient();
+
+// Tags
+const TAG_RELATORIO = "#RelatórioMAA";
+const TAG_DOCUMENTO = "#DocumentoMAA";
 
 /**
  * Tenta extrair todos os valores monetários de uma string de texto.
@@ -33,16 +36,6 @@ const extractAllValues = (text: string | null | undefined) => {
 /**
  * Extrai apenas o texto descritivo do andamento, ignorando a tag e os campos de valor.
  */
-const extractFreeText = (description: string | null | undefined): string => {
-    if (!description || !description.includes('#SM')) {
-        return description || "Atualização de Valor";
-    }
-    const lastValueIndex = description.lastIndexOf('R$');
-    if (lastValueIndex === -1) return description.substring(description.indexOf('#SM') + 3).trim();
-    const textStartIndex = description.indexOf('\n', lastValueIndex);
-    if (textStartIndex === -1) return "Atualização de valores do processo";
-    return description.substring(textStartIndex).trim();
-};
 
 class SyncProcessUpdatesUseCase {
     async execute(): Promise<void> {
@@ -64,25 +57,31 @@ class SyncProcessUpdatesUseCase {
 
         for (const asset of activeAssets) {
             try {
+                // Para simplificar, este useCase assume Lawsuit direto ou que o asset.processNumber busca corretamente.
+                // Se precisar da lógica de Pai vs Filho aqui também, idealmente deveria ser refatorado para usar o legalOneId salvo.
                 const lawsuitData = await legalOneApiService.getProcessDetails(asset.processNumber);
                 if (!lawsuitData) continue;
 
-                const [legalOneUpdates, 
-                    // legalOneDocuments
-                ] = await Promise.all([
+                // Busca Andamentos e Documentos em paralelo
+                const [legalOneUpdates, legalOneDocuments] = await Promise.all([
                     legalOneApiService.getProcessUpdates(lawsuitData.id),
-                    // legalOneApiService.getProcessDocuments(lawsuitData.id)
+                    legalOneApiService.getProcessDocuments(lawsuitData.id)
                 ]);
 
+                // --- 1. Sincronização de ANDAMENTOS ---
                 const existingUpdateIds = new Set(asset.updates.map(u => u.legalOneUpdateId).filter(id => id !== null));
                 const newUpdates = legalOneUpdates.filter(update => !existingUpdateIds.has(update.id));
 
+                // --- 2. Sincronização de DOCUMENTOS (Filtrando por #DocumentoMAA) ---
                 const existingDocIds = new Set(asset.documents.map(d => d.legalOneDocumentId).filter(id => id !== null));
-                // const newDocuments = legalOneDocuments.filter(doc => !existingDocIds.has(doc.id));
+                
+                // Filtra apenas documentos que contenham a TAG no nome (archive) e que sejam novos
+                const newDocuments = legalOneDocuments.filter(doc => 
+                    !existingDocIds.has(doc.id) && 
+                    doc.archive.includes(TAG_DOCUMENTO)
+                );
 
-                if (newUpdates.length === 0 
-                    // && newDocuments.length === 0
-                    ) {
+                if (newUpdates.length === 0 && newDocuments.length === 0) {
                     console.log(`[CRON JOB] Processo ${asset.processNumber}: Nenhuma novidade encontrada.`);
                     continue;
                 }
@@ -96,12 +95,15 @@ class SyncProcessUpdatesUseCase {
                         currentValue: asset.currentValue,
                     };
 
+                    // Salva Andamentos
                     if (sortedNewUpdates.length > 0) {
-                        console.log(`[CRON JOB] Processo ${asset.processNumber}: ${sortedNewUpdates.length} novo(s) andamento(s) encontrado(s)!`);
+                        console.log(`[CRON JOB] Processo ${asset.processNumber}: ${sortedNewUpdates.length} novo(s) andamento(s)!`);
                         for (const update of sortedNewUpdates) {
+                            // Se for um relatório oficial, usa a lógica de extração
+                            const isReport = update.description.includes(TAG_RELATORIO);
+                            
                             const allValues = extractAllValues(update.description);
-                            const updateText = extractFreeText(update.description);
-
+                            
                             if (allValues.valorDaCausa !== null) currentAssetValues.originalValue = allValues.valorDaCausa;
                             if (allValues.valorDaCompra !== null) currentAssetValues.acquisitionValue = allValues.valorDaCompra;
                             if (allValues.valorAtualizado !== null) currentAssetValues.currentValue = allValues.valorAtualizado;
@@ -119,23 +121,29 @@ class SyncProcessUpdatesUseCase {
                         }
                     }
 
-                    // if (newDocuments.length > 0) {
-                    //     console.log(`[CRON JOB] Processo ${asset.processNumber}: ${newDocuments.length} novo(s) documento(s) encontrado(s)!`);
-                    //     for (const doc of newDocuments) {
-                    //         const downloadUrl = await legalOneApiService.getDocumentDownloadUrl(doc.id);
+                    // Salva Documentos
+                    if (newDocuments.length > 0) {
+                        console.log(`[CRON JOB] Processo ${asset.processNumber}: ${newDocuments.length} novo(s) documento(s) com a tag ${TAG_DOCUMENTO}!`);
+                        for (const doc of newDocuments) {
+                            // Limpa o nome do arquivo removendo a tag, se desejar
+                            const cleanName = doc.archive.replace(TAG_DOCUMENTO, '').trim();
 
-                    //         await tx.document.create({
-                    //             data: {
-                    //                 assetId: asset.id,
-                    //                 legalOneDocumentId: doc.id,
-                    //                 name: doc.archive,
-                    //                 category: doc.type,
-                    //                 url: downloadUrl,
-                    //             }
-                    //         });
-                    //     }
-                    // }
+                            // O link de download é gerado sob demanda, mas se quiser salvar uma url temporária:
+                            // const downloadUrl = await legalOneApiService.getDocumentDownloadUrl(doc.id);
+                            
+                            await tx.document.create({
+                                data: {
+                                    assetId: asset.id,
+                                    legalOneDocumentId: doc.id,
+                                    name: cleanName || doc.archive,
+                                    category: doc.type || 'Documento Legal One',
+                                    url: '', // URL vazia indica que deve ser buscada no Legal One na hora do download
+                                }
+                            });
+                        }
+                    }
 
+                    // Atualiza valores do ativo
                     await tx.creditAsset.update({
                         where: { id: asset.id },
                         data: {
@@ -145,12 +153,11 @@ class SyncProcessUpdatesUseCase {
                         }
                     });
                 }, {
-                    // Aumenta o timeout desta transação específica para 30 segundos por segurança
                     maxWait: 30000,
                     timeout: 30000,
                 });
 
-                console.log(`✅ Ativo ${asset.id} sincronizado!`);
+                console.log(`✅ Ativo ${asset.id} sincronizado com sucesso!`);
 
             } catch (error: any) {
                 console.error(`[CRON JOB] Erro ao sincronizar o processo ${asset.processNumber}:`, error.message);
@@ -162,4 +169,3 @@ class SyncProcessUpdatesUseCase {
 }
 
 export { SyncProcessUpdatesUseCase };
-

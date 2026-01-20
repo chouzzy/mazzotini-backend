@@ -24,14 +24,14 @@ const extractAllValues = (text: string | null | undefined) => {
 };
 
 /**
- * Extrai apenas o texto descritivo do andamento, ignorando a tag #SM e os campos de valor.
+ * Extrai apenas o texto descritivo do andamento, ignorando a tag #RelatórioMAA e os campos de valor.
  */
 const extractFreeText = (description: string | null | undefined): string => {
-    if (!description || !description.includes('#SM')) {
+    if (!description || !description.includes('#RelatórioMAA')) {
         return description || "Atualização de Valor";
     }
     const lastValueIndex = description.lastIndexOf('R$');
-    if (lastValueIndex === -1) return description.substring(description.indexOf('#SM') + 3).trim();
+    if (lastValueIndex === -1) return description.substring(description.indexOf('#RelatórioMAA') + 12).trim();
     const textStartIndex = description.indexOf('\n', lastValueIndex);
     if (textStartIndex === -1) return "Atualização de valores do processo";
     return description.substring(textStartIndex).trim();

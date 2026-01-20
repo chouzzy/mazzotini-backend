@@ -14,6 +14,11 @@ import { TestMonthlyUpdateController } from '../modules/creditAssets/useCases/te
 import { GetUserByIdController } from '../modules/management/useCases/getUserById/GetUserByIdController';
 import { AdminUpdateUserController } from '../modules/management/useCases/adminUpdateUser/AdminUpdateUserController';
 import { AdminDeleteUserDocumentController } from '../modules/management/useCases/adminDeleteUserDocument/AdminDeleteUserDocumentController';
+import { UpdateUserInvestmentsController } from '../modules/management/useCases/updateUserInvestments/UpdateUserInvestmentsController';
+import { UploadInvestmentDocumentController } from '../modules/management/useCases/uploadInvestmentDocument/UploadInvestmentDocumentController';
+import uploadConfig from '../config/upload';
+import multer from 'multer';
+
 
 const managementRoutes = Router();
 const listManagementUsersController = new ListManagementUsersController();
@@ -28,6 +33,11 @@ const testMonthlyUpdateController = new TestMonthlyUpdateController();
 const getUserByIdController = new GetUserByIdController();
 const adminUpdateUserController = new AdminUpdateUserController();
 const adminDeleteUserDocumentController = new AdminDeleteUserDocumentController();
+const updateUserInvestmentsController = new UpdateUserInvestmentsController();
+const uploadInvestmentDocumentController = new UploadInvestmentDocumentController();
+const upload = multer(uploadConfig);
+
+
 
 const ROLES = {
     ADMIN: process.env.ROLE_ADMIN || 'ADMIN',
@@ -179,6 +189,36 @@ managementRoutes.delete(
     checkJwt,
     checkRole([ROLES.ADMIN]),
     adminDeleteUserDocumentController.handle
+);
+
+/** 
+ * @route   PATCH /api/management/users/:id/investments
+ * @desc    Atualiza os investimentos de um usuário específico
+ * @access  Privado (ADMIN)
+*/
+managementRoutes.patch(
+    '/api/management/users/:id/investments',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    updateUserInvestmentsController.handle
+);
+
+
+// Rota para atualizar a carteira do usuário
+managementRoutes.patch(
+    '/api/management/users/:id/investments',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    updateUserInvestmentsController.handle
+);
+
+// Rota para upload de documentos de investimento
+managementRoutes.post(
+    '/api/management/users/:id/investments/documents',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    upload.single('document'),
+    uploadInvestmentDocumentController.handle
 );
 
 export { managementRoutes };

@@ -1,12 +1,20 @@
-// src/modules/creditAssets/useCases/syncSingleAsset/SyncSingleAssetUseCase.ts
 import { PrismaClient } from "@prisma/client";
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 
 const prisma = new PrismaClient();
 
-// As suas funções de parsing (não as alterei)
+// ============================================================================
+//  CONSTANTES DE FILTRO (TAGS)
+// ============================================================================
+const TAG_RELATORIO = "#RelatórioMAA";
+const TAG_DOCUMENTO = "#DocumentoMAA";
+
+/**
+ * Tenta extrair todos os valores monetários de uma string de texto.
+ */
 const extractAllValues = (text: string | null | undefined) => {
     if (!text) return { valorDaCausa: null, valorDaCompra: null, valorAtualizado: null };
+
     const parse = (match: RegExpMatchArray | null, truncate = false) => {
         if (match && match[1]) {
             const numericString = match[1].replace(/\./g, '').replace(',', '.');
@@ -15,32 +23,28 @@ const extractAllValues = (text: string | null | undefined) => {
         }
         return null;
     };
+
     const valorDaCausa = text.match(/Valor da Causa:\s*R\$\s*([\d.,]+)/i);
     const valorDaCompra = text.match(/Valor da Compra:\s*R\$\s*([\d.,]+)/i);
     const valorAtualizado = text.match(/Valor Atualizado:\s*R\$\s*([\d.,]+)/i);
+
     return {
         valorDaCausa: parse(valorDaCausa),
         valorDaCompra: parse(valorDaCompra, true),
         valorAtualizado: parse(valorAtualizado),
     };
 };
-const extractFreeText = (description: string | null | undefined): string => {
-    if (!description || !description.includes('#SM')) {
-        return description || "Atualização de Valor";
-    }
-    const lastValueIndex = description.lastIndexOf('R$');
-    if (lastValueIndex === -1) return description.substring(description.indexOf('#SM') + 3).trim();
-    const textStartIndex = description.indexOf('\n', lastValueIndex);
-    if (textStartIndex === -1) return "Atualização de valores do processo";
-    return description.substring(textStartIndex).trim();
-};
+
+/**
+ * Extrai apenas o texto descritivo do andamento, ignorando a tag e os campos de valor.
+ */
 
 
 class SyncSingleAssetUseCase {
     async execute(processNumber: string): Promise<void> {
         console.log(`[SYNC MANUAL] Iniciando sincronização para o processo: ${processNumber}`);
 
-        // 1. Busca o ativo local (sem necessidade de 'select' pois já temos os campos)
+        // 1. Busca o ativo local
         const asset = await prisma.creditAsset.findUnique({
             where: { processNumber },
             include: {
@@ -53,70 +57,64 @@ class SyncSingleAssetUseCase {
             throw new Error("Ativo não encontrado na base de dados local.");
         }
 
-        // 2. Validação (que faltava)
+        // 2. Validação
         if (!asset.legalOneId || !asset.legalOneType) {
             console.warn(`[SYNC MANUAL] Ativo ${asset.processNumber} não possui 'legalOneId' ou 'legalOneType'.`);
             throw new Error("Ativo local está dessincronizado. O 'Lookup' (Busca) falhou na criação.");
         }
 
         try {
-            // =================================================================
-            //  INÍCIO DA CORREÇÃO (Lógica "Pai vs. Filho")
-            //  (Copiada do EnrichAssetFromLegalOneUseCase)
-            // =================================================================
-
-            let entityIdToFetchFrom = asset.legalOneId; // Começa com o ID que temos
+            // Lógica "Pai vs. Filho"
+            let entityIdToFetchFrom = asset.legalOneId; 
             let entityType = asset.legalOneType;
 
             console.log(`[SYNC MANUAL] Sincronizando: ${asset.processNumber} (ID: ${asset.legalOneId}, Tipo: ${asset.legalOneType})`);
 
-            // Se for 'Appeal' ou 'ProceduralIssue', precisamos buscar
             if (entityType === 'Appeal') {
-                console.log(`[SYNC MANUAL] É um Recurso. Buscando o 'relatedLitigationId' (Pai)...`);
                 const appealData = await legalOneApiService.getAppealDetails(asset.processNumber);
-                if (!appealData.id) {
+                if (!appealData.relatedLitigationId) { // Corrigido para relatedLitigationId
                     throw new Error(`Recurso (ID: ${asset.legalOneId}) não possui um ID de Processo (Pai) relacionado.`);
                 }
-                entityIdToFetchFrom = appealData.id;
-                console.log(`[SYNC MANUAL] Pai (Lawsuit) encontrado: ${entityIdToFetchFrom}`);
+                entityIdToFetchFrom = appealData.relatedLitigationId;
 
             } else if (entityType === 'ProceduralIssue') {
-                console.log(`[SYNC MANUAL] É um Incidente. Buscando o 'relatedLitigationId' (Pai)...`);
                 const issueData = await legalOneApiService.getProceduralIssueDetails(asset.processNumber);
                 if (!issueData.relatedLitigationId) {
                     throw new Error(`Incidente (ID: ${asset.legalOneId}) não possui um ID de Processo (Pai) relacionado.`);
                 }
-                entityIdToFetchFrom = issueData.id;
-                console.log(`[SYNC MANUAL] Pai (Lawsuit) encontrado: ${entityIdToFetchFrom}`);
+                entityIdToFetchFrom = issueData.relatedLitigationId;
             }
-            // Se for 'Lawsuit', o entityIdToFetchFrom já está correto.
-
-            // =================================================================
-            //  FIM DA CORREÇÃO
-            // =================================================================
-
 
             // 3. Busca os andamentos e documentos (agora do ID "Pai" correto)
-            const [legalOneUpdates,
-                //  legalOneDocuments
-            ] = await Promise.all([
+            const [legalOneUpdates, legalOneDocuments] = await Promise.all([
                 legalOneApiService.getProcessUpdates(entityIdToFetchFrom),
-                // legalOneApiService.getProcessDocuments(entityIdToFetchFrom) // Assumindo que os docs também ficam no Pai
+                legalOneApiService.getProcessDocuments(entityIdToFetchFrom) 
             ]);
 
-            console.log(`[SYNC MANUAL] ${legalOneUpdates.length} andamentos e documentos encontrados no Legal One (ID Pai: ${entityIdToFetchFrom}).`);
+            console.log(`[SYNC MANUAL] ${legalOneUpdates.length} andamentos e ${legalOneDocuments.length} documentos encontrados no Legal One (ID Pai: ${entityIdToFetchFrom}).`);
 
-            // 4. Lógica de Sincronização (O seu código, que já estava correto)
+            // 4. Lógica de Sincronização de ANDAMENTOS
             const existingUpdateIds = new Set(asset.updates.map(u => u.legalOneUpdateId).filter(id => id !== null));
-            const newUpdates = legalOneUpdates.filter(update => !existingUpdateIds.has(update.id));
+            
+            // Filtra: Apenas novos E que contenham a tag #RelatórioMAA
+            const newUpdates = legalOneUpdates.filter(update => 
+                !existingUpdateIds.has(update.id) && 
+                update.description && 
+                update.description.includes(TAG_RELATORIO)
+            );
 
-            // const existingDocIds = new Set(asset.documents.map(d => d.legalOneDocumentId).filter(id => id !== null));
-            // const newDocuments = legalOneDocuments.filter(doc => !existingDocIds.has(doc.id));
+            // 5. Lógica de Sincronização de DOCUMENTOS
+            const existingDocIds = new Set(asset.documents.map(d => d.legalOneDocumentId).filter(id => id !== null));
+            
+            // Filtra: Apenas novos E que contenham a tag #DocumentoMAA no nome (archive)
+            const newDocuments = legalOneDocuments.filter(doc => 
+                !existingDocIds.has(doc.id) &&
+                doc.archive && 
+                doc.archive.includes(TAG_DOCUMENTO)
+            );
 
-            if (newUpdates.length === 0
-                // && newDocuments.length === 0
-            ) {
-                console.log(`[SYNC MANUAL] Processo ${asset.processNumber}: Nenhuma novidade encontrada.`);
+            if (newUpdates.length === 0 && newDocuments.length === 0) {
+                console.log(`[SYNC MANUAL] Processo ${asset.processNumber}: Nenhuma novidade encontrada (com as tags corretas).`);
                 return;
             }
 
@@ -129,14 +127,11 @@ class SyncSingleAssetUseCase {
                     currentValue: asset.currentValue,
                 };
 
+                // Salva Andamentos
                 if (sortedNewUpdates.length > 0) {
                     console.log(`[SYNC MANUAL] Salvando ${sortedNewUpdates.length} novo(s) andamento(s)...`);
                     for (const update of sortedNewUpdates) {
-                        // NOTA: Esta lógica de parsing é DIFERENTE da que usamos no EnrichUseCase (#SM).
-                        // Se o seu botão "Sincronizar" também deve obedecer o "#SM",
-                        // precisaremos refatorar esta parte.
                         const allValues = extractAllValues(update.description);
-                        const updateText = extractFreeText(update.description);
 
                         if (allValues.valorDaCausa !== null) currentAssetValues.originalValue = allValues.valorDaCausa;
                         if (allValues.valorDaCompra !== null) currentAssetValues.acquisitionValue = allValues.valorDaCompra;
@@ -147,7 +142,7 @@ class SyncSingleAssetUseCase {
                                 assetId: asset.id,
                                 legalOneUpdateId: update.id,
                                 date: new Date(update.date),
-                                description: update.description, // <-- Salva a descrição (que pode ou não ser a limpa)
+                                description: update.description,
                                 updatedValue: allValues.valorAtualizado ?? currentAssetValues.currentValue,
                                 source: `Legal One - ${update.originType}`,
                             }
@@ -155,20 +150,24 @@ class SyncSingleAssetUseCase {
                     }
                 }
 
-                // if (newDocuments.length > 0) {
-                //     console.log(`[SYNC MANUAL] Salvando metadados de ${newDocuments.length} novo(s) documento(s)...`);
-                //     for (const doc of newDocuments) {
-                //         await tx.document.create({
-                //             data: {
-                //                 assetId: asset.id,
-                //                 legalOneDocumentId: doc.id,
-                //                 name: doc.archive,
-                //                 category: doc.type || 'Indefinido',
-                //                 url: '',
-                //             }
-                //         });
-                //     }
-                // }
+                // Salva Documentos
+                if (newDocuments.length > 0) {
+                    console.log(`[SYNC MANUAL] Salvando metadados de ${newDocuments.length} novo(s) documento(s)...`);
+                    for (const doc of newDocuments) {
+                        // Opcional: Remover a tag do nome do arquivo ao salvar no banco para ficar mais limpo
+                        const cleanName = doc.archive.replace(TAG_DOCUMENTO, '').trim();
+                        
+                        await tx.document.create({
+                            data: {
+                                assetId: asset.id,
+                                legalOneDocumentId: doc.id,
+                                name: cleanName || doc.archive,
+                                category: doc.type || 'Documento Legal One',
+                                url: '', // A URL será gerada sob demanda pelo frontend
+                            }
+                        });
+                    }
+                }
 
                 // Atualiza os valores principais
                 await tx.creditAsset.update({
