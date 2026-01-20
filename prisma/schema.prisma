@@ -150,6 +150,8 @@ model Investment {
 
   creditAssetId String      @db.ObjectId
   asset         CreditAsset @relation(fields: [creditAssetId], references: [id])
+
+  documents      String[]
 }
 
 // --- Modelo de Documento ---
