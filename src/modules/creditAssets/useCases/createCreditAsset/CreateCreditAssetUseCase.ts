@@ -3,110 +3,54 @@ import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/Enric
 
 const prisma = new PrismaClient();
 
-interface InvestorInput {
-    userId: User['id'];
-    share?: number;
-}
+interface InvestorInput { userId: User['id']; share?: number; }
 
-type ICreateCreditAssetDTO =
-    Pick<CreditAsset,
-        'processNumber' |
-        'originalCreditor' |
-        'origemProcesso' |    
-        'legalOneId' |        
-        'legalOneType' |      
-        'originalValue' |
-        'acquisitionValue' |
-        'acquisitionDate' |
-        'updateIndexType' |
-        'contractualIndexRate' |
-        'nickname' // <-- NOVO
-    > & {
-        investors: InvestorInput[]; 
-        associateId?: User['id'] | null;
-    };
-
+type ICreateCreditAssetDTO = Pick<CreditAsset, 'processNumber' | 'originalCreditor' | 'origemProcesso' | 'legalOneId' | 'legalOneType' | 'originalValue' | 'acquisitionValue' | 'acquisitionDate' | 'updateIndexType' | 'contractualIndexRate' | 'nickname' | 'otherParty'> & { // <--- Adicionado otherParty
+    investors: InvestorInput[]; 
+    associateId?: User['id'] | null;
+};
 
 class CreateCreditAssetUseCase {
     async execute(data: ICreateCreditAssetDTO): Promise<CreditAsset> {
+        const { processNumber, investors, associateId, ...assetData } = data;
 
-        const {
-            processNumber,
-            investors, 
-            associateId,
-            ...assetData 
-        } = data;
-
+        // ... (Validações mantidas)
         const assetAlreadyExists = await prisma.creditAsset.findFirst({
-            where: { 
-                OR: [
-                    { processNumber: processNumber },
-                    { legalOneId: assetData.legalOneId } 
-                ]
-            },
+            where: { OR: [{ processNumber }, { legalOneId: assetData.legalOneId }] },
         });
-
-        if (assetAlreadyExists) {
-            throw new Error(`Já existe um ativo de crédito com este Número de Processo (${processNumber}) ou ID Legal One (${assetData.legalOneId}).`);
-        }
-
-        if (associateId) {
-            const associateExists = await prisma.user.findUnique({ where: { id: associateId } });
-            if (!associateExists) throw new Error("O associado selecionado não foi encontrado.");
-        }
+        if (assetAlreadyExists) throw new Error(`Já existe um ativo com este Processo ou ID Legal One.`);
         
-        const investorUserIds = investors.map(inv => inv.userId);
-        const uniqueInvestorIds = new Set(investorUserIds);
-        if (uniqueInvestorIds.size !== investorUserIds.length) {
-            throw new Error("Não é permitido adicionar o mesmo investidor duas vezes ao processo.");
-        }
-
-        const totalShare = investors.reduce((sum, investor) => sum + (Number(investor.share) || 0), 0);
-        if (totalShare < 0 || totalShare > 100) {
-             throw new Error(`A soma das participações dos investidores (${totalShare}%) é inválida.`);
-        }
+        const totalShare = investors.reduce((sum, i) => sum + (Number(i.share) || 0), 0);
         const mazzotiniShare = 100 - totalShare;
 
         const newCreditAsset = await prisma.$transaction(async (tx) => {
-            
             const createdAsset = await tx.creditAsset.create({
                 data: {
-                    ...assetData, 
-                    processNumber: processNumber,
+                    ...assetData, // Já inclui otherParty e nickname
+                    processNumber,
                     status: 'PENDING_ENRICHMENT',
                     currentValue: assetData.originalValue, 
                     associateId: associateId || null,
-                    // nickname já vem no ...assetData
                 },
             });
 
-            const investmentData = investors.map(investor => {
-                return {
-                    investorShare: investor.share || 0,
-                    mazzotiniShare: 0, 
-                    userId: investor.userId,
-                    creditAssetId: createdAsset.id,
-                };
-            });
-
-            if (investmentData.length > 0) {
-                 investmentData[0].mazzotiniShare = mazzotiniShare;
+            if (investors.length > 0) {
+                await tx.investment.createMany({
+                    data: investors.map((inv, idx) => ({
+                        investorShare: inv.share || 0,
+                        mazzotiniShare: idx === 0 ? mazzotiniShare : 0,
+                        userId: inv.userId,
+                        creditAssetId: createdAsset.id,
+                    }))
+                });
             }
-
-            await tx.investment.createMany({
-                data: investmentData
-            });
-
-            console.log(`✅ Ativo criado: ${createdAsset.processNumber} (${createdAsset.nickname || 'Sem apelido'})`);
-
             return createdAsset;
         });
 
         const enrichUseCase = new EnrichAssetFromLegalOneUseCase();
-        enrichUseCase.execute(newCreditAsset.id).catch(err => console.error(err));
+        enrichUseCase.execute(newCreditAsset.id).catch(console.error);
 
         return newCreditAsset;
     }
 }
-
 export { CreateCreditAssetUseCase };

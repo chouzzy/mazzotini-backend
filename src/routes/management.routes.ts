@@ -18,6 +18,7 @@ import { UpdateUserInvestmentsController } from '../modules/management/useCases/
 import { UploadInvestmentDocumentController } from '../modules/management/useCases/uploadInvestmentDocument/UploadInvestmentDocumentController';
 import uploadConfig from '../config/upload';
 import multer from 'multer';
+import { AdminUploadUserDocumentController } from '../modules/management/useCases/adminUploadUserDocument/AdminUploadUserDocumentController';
 
 
 const managementRoutes = Router();
@@ -35,6 +36,7 @@ const adminUpdateUserController = new AdminUpdateUserController();
 const adminDeleteUserDocumentController = new AdminDeleteUserDocumentController();
 const updateUserInvestmentsController = new UpdateUserInvestmentsController();
 const uploadInvestmentDocumentController = new UploadInvestmentDocumentController();
+const adminUploadUserDocumentController = new AdminUploadUserDocumentController();
 const upload = multer(uploadConfig);
 
 
@@ -203,6 +205,11 @@ managementRoutes.patch(
     updateUserInvestmentsController.handle
 );
 
+/** 
+ * @route   POST /api/management/users/:id/investments/documents]
+ * @desc    Upload de documentos de investimento para um usuário específico
+ * @access  Privado (ADMIN)
+*/
 
 // Rota para atualizar a carteira do usuário
 managementRoutes.patch(
@@ -212,6 +219,12 @@ managementRoutes.patch(
     updateUserInvestmentsController.handle
 );
 
+/** 
+ * @route   POST /api/management/users/:id/investments/documents
+ * @desc    Upload de documentos de investimento para um usuário específico
+ * @access  Privado (ADMIN)
+*/
+
 // Rota para upload de documentos de investimento
 managementRoutes.post(
     '/api/management/users/:id/investments/documents',
@@ -219,6 +232,21 @@ managementRoutes.post(
     checkRole([ROLES.ADMIN]),
     upload.single('document'),
     uploadInvestmentDocumentController.handle
+);
+
+/** 
+ * @route   POST /api/management/users/:id/documents
+ * @desc    Upload de documentos pessoais para um usuário específico (Admin)
+ * @access  Privado (ADMIN)
+*/
+
+// Rota de Upload de Documento PESSOAL pelo Admin (gestão)
+managementRoutes.post(
+    '/api/management/users/:id/documents',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    upload.single('document'), // Usa o middleware do multer configurado
+    adminUploadUserDocumentController.handle
 );
 
 export { managementRoutes };

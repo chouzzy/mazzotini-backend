@@ -45,7 +45,10 @@ export class LegalOneDocuments extends LegalOneAuth {
             fileUploader: null,
             isPhysicallyStored: false,
             isModel: false,
-            relationships: [{ Link: 'Contact', LinkItem: { Id: contactId, Description: taggedName } }]
+            relationships: [{ 
+                link: 'Contact', // camelCase aqui para POST/PATCH (JSON)
+                linkItem: { id: contactId, description: taggedName } 
+            }]
         };
         
         await axios.post(url, payload, { 
@@ -55,8 +58,13 @@ export class LegalOneDocuments extends LegalOneAuth {
 
     public async getProcessDocuments(lawsuitId: number): Promise<LegalOneDocument[]> {
         const headers = await this.getAuthHeader();
-        const filterQuery = `relationships/any(r: r/linkType eq 'Litigation' and r/linkId eq ${lawsuitId})`;
         const url = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/Documents`;
+
+        // =================================================================
+        // A CORREÇÃO: Filtro OData ajustado para a estrutura real
+        // 'Link' e 'LinkItem/Id' (PascalCase é comum em queries OData .NET)
+        // =================================================================
+        const filterQuery = `relationships/any(r: r/Link eq 'Litigation' and r/LinkItem/Id eq ${lawsuitId})`;
 
         try {
             const response = await axios.get<LegalOneDocumentsApiResponse>(url, {
@@ -65,7 +73,7 @@ export class LegalOneDocuments extends LegalOneAuth {
             });
             return response.data.value || [];
         } catch (e: any) {
-            console.error("Erro ao buscar documentos:", e.message);
+            console.error("Erro ao buscar documentos:", e.response?.data || e.message);
             return [];
         }
     }

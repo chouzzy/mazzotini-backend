@@ -112,6 +112,7 @@ model CreditAsset {
   // Tipo da entidade (para sabermos qual API chamar no futuro)
   legalOneType         String? // "Lawsuit", "Appeal", "ProceduralIssue"
   nickname             String? // Apelido/Nome de referência do processo
+  otherParty           String? // Parte Contrária Oficial (Ex: "Construtora X") <--- NOVO
 
   // --- Relações ---
   updates   AssetUpdate[]
@@ -151,7 +152,7 @@ model Investment {
   creditAssetId String      @db.ObjectId
   asset         CreditAsset @relation(fields: [creditAssetId], references: [id])
 
-  documents      String[]
+  documents String[]
 }
 
 // --- Modelo de Documento ---
@@ -171,6 +172,6 @@ model SystemNotification {
   title     String
   message   String
   type      String   @default("info") // 'info', 'success', 'warning', 'new'
-  link      String?  // <--- NOVO: Link opcional (interno ou externo) para saber mais
+  link      String? // <--- NOVO: Link opcional (interno ou externo) para saber mais
   createdAt DateTime @default(now())
 }
