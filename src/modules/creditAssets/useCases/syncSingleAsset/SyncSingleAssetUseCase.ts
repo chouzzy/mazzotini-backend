@@ -75,14 +75,13 @@ class SyncSingleAssetUseCase {
                 if (!appealData.relatedLitigationId) { // Corrigido para relatedLitigationId
                     throw new Error(`Recurso (ID: ${asset.legalOneId}) não possui um ID de Processo (Pai) relacionado.`);
                 }
-                entityIdToFetchFrom = appealData.relatedLitigationId;
+                
 
             } else if (entityType === 'ProceduralIssue') {
                 const issueData = await legalOneApiService.getProceduralIssueDetails(asset.processNumber);
                 if (!issueData.relatedLitigationId) {
                     throw new Error(`Incidente (ID: ${asset.legalOneId}) não possui um ID de Processo (Pai) relacionado.`);
                 }
-                entityIdToFetchFrom = issueData.relatedLitigationId;
             }
 
             // 3. Busca os andamentos e documentos (agora do ID "Pai" correto)

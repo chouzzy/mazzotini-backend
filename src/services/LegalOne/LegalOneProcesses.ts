@@ -130,6 +130,7 @@ export class LegalOneProcesses extends LegalOneAuth {
                 headers: { 'Authorization': `Bearer ${token}` },
                 params: { '$filter': `identifierNumber eq '${cleanProcessNumber}'` }
             });
+
             if (response.data.value?.length > 0) issue = response.data.value[0];
         } catch (e) { }
 
@@ -141,6 +142,7 @@ export class LegalOneProcesses extends LegalOneAuth {
                 headers: { 'Authorization': `Bearer ${token}` },
                 params: { '$expand': 'courtPanel' }
             });
+            console.log('Resposta da busca de Procedural Issues:', details.data);
             issue = details.data;
         } catch (e) { }
 
@@ -152,20 +154,29 @@ export class LegalOneProcesses extends LegalOneAuth {
     }
 
 
-    // --- Updates ---
     public async getProcessUpdates(entityId: number): Promise<LegalOneUpdate[]> {
-        const headers = await this.getAuthHeader();
+        const token = await this.getAccessToken();
+
+
         let allUpdates: LegalOneUpdate[] = [];
+        console.log(`[Legal One API] Buscando andamentos para a entidade ID: ${entityId}`);
         const filter = `relationships/any(r: r/linkType eq 'Litigation' and r/linkId eq ${entityId}) and originType eq 'Manual'`;
         let url: string | null = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/Updates?$filter=${encodeURIComponent(filter)}&$orderby=date desc`;
 
         try {
+            // Loop para percorrer todas as páginas de resultados
             while (url) {
-                const res: AxiosResponse<LegalOneUpdatesApiResponse> = await axios.get(url, { headers });
-                if (res.data.value?.length > 0) allUpdates = allUpdates.concat(res.data.value);
+                const res: AxiosResponse<LegalOneUpdatesApiResponse> = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (res.data.value?.length > 0) {
+                    allUpdates = allUpdates.concat(res.data.value);
+                }
+                // A URL da próxima página é fornecida no campo '@odata.nextLink'
                 url = res.data['@odata.nextLink'] || null;
             }
             return allUpdates;
-        } catch (error: any) { throw error; }
+        } catch (e) {
+            console.error(`Erro ao buscar andamentos para a entidade ${entityId}:`, e);
+            throw e;
+        }
     }
 }
