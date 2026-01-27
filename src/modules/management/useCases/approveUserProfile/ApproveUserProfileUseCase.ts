@@ -19,7 +19,7 @@ class ApproveUserProfileUseCase {
             throw new Error("Perfil incompleto (sem documentos ou e-mail).");
         }
         if (user.status !== 'PENDING_REVIEW') {
-             throw new Error("Este utilizador não está pendente de revisão.");
+            throw new Error("Este utilizador não está pendente de revisão.");
         }
 
         // --- 1. RESOLVER NOME DO ASSOCIADO (Para enviar ao Legal One) ---
@@ -34,11 +34,11 @@ class ApproveUserProfileUseCase {
         } else if (user.indication) {
             associateName = user.indication;
         }
-        
+
         if (associateName) console.log(`[ADMIN] Associado vinculado: "${associateName}"`);
 
         // --- 2. GESTÃO DO CONTATO NO LEGAL ONE ---
-        let legalOneContact: LegalOneContact | null = null; 
+        let legalOneContact: LegalOneContact | null = null;
 
         // Tenta achar por CPF/CNPJ
         if (user.cpfOrCnpj) {
@@ -58,29 +58,29 @@ class ApproveUserProfileUseCase {
             // Cria e já define o associado
             legalOneContact = await legalOneApiService.createContact(user, associateName);
         }
-        
+
         // --- 3. REPLICAÇÃO DOS DOCUMENTOS (GED) ---
         if (user.personalDocumentUrls && user.personalDocumentUrls.length > 0) {
             console.log(`[ADMIN] Replicando ${user.personalDocumentUrls.length} documento(s) para o Legal One...`);
-            
+
             for (const docUrl of user.personalDocumentUrls) {
                 try {
                     // a. Baixa o arquivo do Spaces (Stream/Buffer)
                     const fileResponse = await axios.get(docUrl, { responseType: 'arraybuffer' });
                     const fileBuffer = Buffer.from(fileResponse.data);
-                    
+
                     // b. Prepara metadados
                     const originalFileName = decodeURIComponent(docUrl.split('/').pop()?.split('-').pop() || 'documento.pdf');
-                    const fileExtension = originalFileName.split('.').pop() || 'pdf'; 
+                    const fileExtension = originalFileName.split('.').pop() || 'pdf';
                     const mimeType = fileResponse.headers['content-type'] || 'application/octet-stream';
 
                     // c. Envia para o Legal One (Fluxo de 3 passos)
                     const container = await legalOneApiService.getUploadContainer(fileExtension);
                     await legalOneApiService.uploadFileToContainer(container.externalId, fileBuffer, mimeType);
-                    
+
                     // O finalizeDocument já adiciona a tag #DocumentoMAA automaticamente
                     await legalOneApiService.finalizeDocument(container.fileName, originalFileName, legalOneContact.id);
-                    
+
                     console.log(`[ADMIN] Documento '${originalFileName}' replicado com sucesso.`);
 
                 } catch (docError: any) {
@@ -89,13 +89,14 @@ class ApproveUserProfileUseCase {
                 }
             }
         }
-        
+
         // --- 4. FINALIZAÇÃO LOCAL ---
         await prisma.user.update({
             where: { id: userId },
             data: {
                 status: "ACTIVE",
-                legalOneContactId: legalOneContact.id 
+                legalOneContactId: legalOneContact.id,
+                role: "INVESTOR"
             }
         });
 
