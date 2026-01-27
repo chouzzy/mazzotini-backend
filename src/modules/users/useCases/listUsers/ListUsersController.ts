@@ -11,8 +11,8 @@ class ListUsersController {
 
             // Transformamos os dados para o formato que o frontend espera: { label, value }
             const formattedUsers = users.map(user => ({
-                label: user.name,
-                value: user.id,
+                label: user.label,
+                value: user.value,
             }));
 
             return response.status(200).json(formattedUsers);
