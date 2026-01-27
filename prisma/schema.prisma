@@ -31,6 +31,8 @@ model User {
   // REJECTED: Rejeitado pela Mazzotini.
   status String @default("PENDING_REVIEW")
 
+  role      String?   // Ex: 'ADMIN', 'INVESTOR', 'ASSOCIATE'
+
   // --- NOVOS CAMPOS CADASTRAIS ---
   rg                String?
   birthDate         DateTime?

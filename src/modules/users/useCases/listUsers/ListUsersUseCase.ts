@@ -1,59 +1,35 @@
-// /src/modules/users/useCases/listUsers/ListUsersUseCase.ts
-import { PrismaClient, User } from '@prisma/client';
-import { auth0ManagementService } from '../../../../services/auth0ManagementService'; // Precisamos das roles!
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// Definimos o tipo de retorno completo com todos os dados
-export type UserFullDetails = {
-    id: string; // ID do nosso banco
-    auth0UserId: string; // ID do Auth0
-    name: string;
-    email: string;
-    profilePictureUrl?: string | null;
-    lastLogin?: string;
-    roles: (string | undefined)[];
+export type UserSelectItem = {
+    value: string; // ID do Prisma
+    label: string; // Nome
+    role?: string; 
 };
 
 class ListUsersUseCase {
-    async execute(): Promise<UserFullDetails[]> {
-        console.log("🔍 Buscando todos os usuários (lógica unificada)...");
+    async execute(): Promise<UserSelectItem[]> {
+        console.log("[ListUsers] Buscando usuários para dropdown (Banco Local)...");
 
-        // 1. Busca todos os nossos utilizadores locais
-        const localUsers = await prisma.user.findMany({
+        const users = await prisma.user.findMany({
+            // Se quiser filtrar apenas ativos: where: { status: 'ACTIVE' },
+            orderBy: { name: 'asc' },
             select: {
                 id: true,
                 name: true,
                 email: true,
-                profilePictureUrl: true,
-                auth0UserId: true,
-            },
-            orderBy: { name: 'asc' },
+                role: true
+            }
         });
 
-        // 2. Busca os dados de roles e último login do Auth0
-        const auth0Users = await auth0ManagementService.getUsersWithRoles();
+        const dropdownItems: UserSelectItem[] = users.map(user => ({
+            value: user.id, 
+            label: user.name || user.email,
+            role: user.role || undefined
+        }));
 
-        // 3. Cria um "mapa" de dados do Auth0 para performance
-        const auth0UserMap = new Map(auth0Users.map(u => [u.email, u]));
-
-        // 4. Combina os dados
-        const fullDetailsUsers = localUsers.map(localUser => {
-            const auth0Data = auth0UserMap.get(localUser.email);
-            
-            return {
-                id: localUser.id,
-                auth0UserId: localUser.auth0UserId,
-                name: localUser.name, // O nome do nosso DB é a fonte da verdade
-                email: localUser.email,
-                profilePictureUrl: localUser.profilePictureUrl, // A foto do nosso DB
-                lastLogin: auth0Data?.last_login?.toString(),
-                roles: auth0Data?.roles || []
-            };
-        });
-
-        console.log(`✅ ${fullDetailsUsers.length} usuários encontrados e enriquecidos.`);
-        return fullDetailsUsers;
+        return dropdownItems;
     }
 }
 

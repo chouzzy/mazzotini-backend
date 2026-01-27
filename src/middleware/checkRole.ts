@@ -1,10 +1,7 @@
-// /src/middleware/checkRole.ts
-// 1. Importamos Request, Response, e NextFunction diretamente do Express
 import { Request, Response, NextFunction } from 'express';
-// 2. Importamos apenas a tipagem do payload da biblioteca de autenticação
 import { JWTPayload } from 'express-oauth2-jwt-bearer';
 
-// 3. Mantemos a nossa interface para o payload customizado.
+// Interface estendida para incluir as roles do Auth0 no payload
 interface CustomJWTPayload extends JWTPayload {
   'https://mazzotini.awer.co/roles'?: string[];
 }
@@ -14,28 +11,25 @@ interface CustomJWTPayload extends JWTPayload {
  * @param allowedRoles Array de strings com as roles que têm acesso.
  */
 export const checkRole = (allowedRoles: string[]) => {
-  // 4. O parâmetro 'req' agora usa o tipo 'Request' padrão do Express.
-  // A biblioteca de autenticação já adicionou a propriedade 'auth' a este tipo.
   return (req: Request, res: Response, next: NextFunction) => {
     
-    // 5. Usamos a asserção de tipo para informar ao TypeScript sobre as nossas roles.
-    const payload = req.auth?.payload as CustomJWTPayload;
-    
+    // O 'req.auth' é injetado pelo middleware 'checkJwt' que roda antes deste
+    const payload = (req as any).auth?.payload as CustomJWTPayload;
+
     const roles = payload ? payload['https://mazzotini.awer.co/roles'] : undefined;
 
     if (!roles || !Array.isArray(roles)) {
-      console.warn("Middleware checkRole: Nenhuma role encontrada no token JWT.");
-      return res.status(403).json({ error: 'Permissões insuficientes.' });
+      console.warn("[CheckRole] Nenhuma role encontrada no token JWT. Verifique a Action do Auth0.");
+      return res.status(403).json({ error: 'Permissões insuficientes. (Sem roles)' });
     }
 
     const hasPermission = roles.some(role => allowedRoles.includes(role));
 
     if (!hasPermission) {
-      console.warn(`Middleware checkRole: Acesso negado. Roles do utilizador [${roles}] não incluem nenhuma de [${allowedRoles}].`);
-      return res.status(403).json({ error: 'Acesso negado. Você não tem a permissão necessária para este recurso.' });
+      console.warn(`[CheckRole] Acesso negado. User Roles: [${roles}] | Necessário: [${allowedRoles}]`);
+      return res.status(403).json({ error: 'Acesso negado. Você não tem permissão para este recurso.' });
     }
     
     next();
   };
 };
-

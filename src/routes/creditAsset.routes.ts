@@ -10,6 +10,7 @@ import { ListAllAssetsController } from '../modules/creditAssets/useCases/listAl
 import { LookupAssetFromLegalOneController } from '../modules/users/useCases/lookupAssetFromLegalOne/LookupAssetFromLegalOneController';
 import { GetAssetEstimationController } from '../modules/creditAssets/useCases/getAssetEstimation/GetAssetEstimationController';
 import { UpdateAssetController } from '../modules/creditAssets/useCases/updateAsset/UpdateAssetController';
+import { DeleteCreditAssetController } from '../modules/creditAssets/useCases/deleteCreditAsset/DeleteCreditAssetController';
 
 
 
@@ -23,6 +24,7 @@ const listAllAssetsController = new ListAllAssetsController();
 const lookupAssetFromLegalOneController = new LookupAssetFromLegalOneController();
 const getAssetEstimationController = new GetAssetEstimationController();
 const updateAssetController = new UpdateAssetController();
+const deleteCreditAssetController = new DeleteCreditAssetController();
 
 /**
  * @route   POST /api/assets
@@ -107,6 +109,14 @@ creditAssetRoutes.patch(
     checkJwt,
     checkRole(['OPERATOR', 'ADMIN']), // Protege a rota
     updateAssetController.handle
+);
+
+// Rota de Exclusão (Apenas ADMIN)
+creditAssetRoutes.delete(
+    '/:id', 
+    checkJwt, 
+    checkRole(['ADMIN']), // Proteção extra: só admin pode deletar
+    deleteCreditAssetController.handle
 );
 
 export { creditAssetRoutes };
