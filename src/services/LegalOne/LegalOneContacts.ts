@@ -313,4 +313,23 @@ export class LegalOneContacts extends LegalOneAuth {
             } catch (e: any) { console.error('Erro endereços:', JSON.stringify(e.response?.data || e.message)); }
         }
     }
+
+    /**
+     * Busca um contato genérico (PF ou PJ) pelo ID usando a rota /Contacts.
+     * Útil quando não sabemos se é empresa ou pessoa, mas temos o ID.
+     */
+    public async getContactGeneric(contactId: number): Promise<LegalOneContact> {
+        const headers = await this.getAuthHeader();
+        const url = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/Contacts/${contactId}`;
+
+        console.log(`[Legal One API] Buscando detalhes genéricos do Contato ID: ${contactId}`);
+
+        try {
+            const response = await axios.get<LegalOneContact>(url, { headers });
+            return response.data;
+        } catch (error: any) {
+            console.warn(`[Legal One API] Erro ao buscar contato genérico ${contactId}:`, error.message);
+            throw error;
+        }
+    }
 }

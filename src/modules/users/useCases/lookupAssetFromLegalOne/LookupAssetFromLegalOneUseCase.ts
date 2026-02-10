@@ -1,17 +1,23 @@
 import { 
     legalOneApiService 
 } from "../../../../services/legalOneApiService";
+import { syncParticipantsAsUsers } from "../../../../utils/participantHelper"; // <--- NOVO IMPORT
 
+// A interface de retorno com os dados para o banco
 interface ILookupResult {
     originalCreditor: string;
     origemProcesso: string;
     legalOneId: number;
     legalOneType: 'Lawsuit' | 'Appeal' | 'ProceduralIssue';
-    otherParty?: string; // <--- NOVO CAMPO: Parte Contrária Oficial
+    otherParty?: string;
+    nickname?: string;
 }
 
 class LookupAssetFromLegalOneUseCase {
 
+    /**
+     * Função auxiliar para extrair dados comuns
+     */
     private extractData(
         processData: any,
         entityType: 'Lawsuit' | 'Appeal' | 'ProceduralIssue'
@@ -20,6 +26,7 @@ class LookupAssetFromLegalOneUseCase {
         console.log('[extractData] Iniciando extração de dados...');
         
         let participants = processData.participants;
+        
         if (!participants) {
             participants = [];
         } else if (participants.value && Array.isArray(participants.value)) {
@@ -28,22 +35,25 @@ class LookupAssetFromLegalOneUseCase {
             participants = [];
         }
         
-        // 1. Credor Original (Customer)
+        // 1. Encontrar o Credor Original (Customer)
         const customer = participants.find((p: any) => p.type === "Customer");
         const originalCreditor = customer ? customer.contactName : "Credor não identificado";
         
-        // 2. Parte Contrária (OtherParty)
-        // Prioriza o participante principal (isMainParticipant)
+        // 2. Encontrar a Parte Contrária (OtherParty)
         const otherPartyObj = participants.find((p: any) => p.type === "OtherParty" && p.isMainParticipant) 
                         || participants.find((p: any) => p.type === "OtherParty");
                         
         const otherParty = otherPartyObj ? otherPartyObj.contactName : undefined;
+        // Usa o OtherParty como sugestão de Nickname também
+        const nickname = otherParty;
 
-        // 3. Origem
+        // 3. Montar a Origem do Processo
         let origemProcesso = processData.title || "Origem não identificada"; 
+
         if (processData.courtPanel && processData.courtPanelNumberText) {
             origemProcesso = `${processData.courtPanelNumberText} ${processData.courtPanel.description}`;
-        } else if (processData.courtPanel) {
+        }
+        else if (processData.courtPanel) {
             origemProcesso = processData.courtPanel.description;
         }
 
@@ -54,26 +64,62 @@ class LookupAssetFromLegalOneUseCase {
             origemProcesso,
             legalOneId: processData.id,
             legalOneType: entityType,
-            otherParty // <--- Agora mapeamos para o campo correto
+            otherParty,
+            nickname
         };
     }
 
+    /**
+     * Executa a busca e SINCRONIZA PARTICIPANTES
+     */
     async execute(processNumber: string): Promise<ILookupResult> {
-        console.log(`[Lookup Asset] Buscando: ${processNumber}`);
+        console.log(`[Lookup Asset] Buscando e Sincronizando: ${processNumber}`);
 
+        // --- TENTATIVA 1: Lawsuits ---
         try {
             const lawsuitData = await legalOneApiService.getProcessDetails(processNumber);
+            console.log("[Lookup Asset] Encontrado como 'Lawsuit'.");
+            
+            // MÁGICA AQUI: Sincroniza os clientes encontrados com o nosso banco de usuários
+            if (lawsuitData.participants) {
+                await syncParticipantsAsUsers(lawsuitData.participants);
+            }
+
             return this.extractData(lawsuitData, 'Lawsuit');
+
         } catch (lawsuitError: any) {
+            console.warn(`[Lookup Asset] Não encontrado como 'Lawsuit'. Tentando 'Appeals'...`);
+
+            // --- TENTATIVA 2: Appeals ---
             try {
                 const appealData = await legalOneApiService.getAppealDetails(processNumber);
+                console.log("[Lookup Asset] Encontrado como 'Appeal'.");
+
+                // MÁGICA AQUI
+                if (appealData.participants) {
+                    await syncParticipantsAsUsers(appealData.participants);
+                }
+
                 return this.extractData(appealData, 'Appeal');
+
             } catch (appealError: any) {
+                console.warn(`[Lookup Asset] Não encontrado como 'Appeal'. Tentando 'ProceduralIssues'...`);
+
+                // --- TENTATIVA 3: ProceduralIssues ---
                 try {
                     const issueData = await legalOneApiService.getProceduralIssueDetails(processNumber);
+                    console.log("[Lookup Asset] Encontrado como 'ProceduralIssue'.");
+
+                    // MÁGICA AQUI
+                    if (issueData.participants) {
+                        await syncParticipantsAsUsers(issueData.participants);
+                    }
+
                     return this.extractData(issueData, 'ProceduralIssue');
+
                 } catch (issueError: any) {
-                    throw new Error(`Processo não encontrado.`);
+                    console.error(`[Lookup Asset] Esgotadas todas as tentativas.`);
+                    throw new Error(`Processo ${processNumber} não encontrado em nenhuma categoria.`);
                 }
             }
         }
