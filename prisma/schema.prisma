@@ -31,7 +31,7 @@ model User {
   // REJECTED: Rejeitado pela Mazzotini.
   status String @default("PENDING_REVIEW")
 
-  role      String?   // Ex: 'ADMIN', 'INVESTOR', 'ASSOCIATE'
+  role String? // Ex: 'ADMIN', 'INVESTOR', 'ASSOCIATE'
 
   // --- NOVOS CAMPOS CADASTRAIS ---
   rg                String?
@@ -116,6 +116,9 @@ model CreditAsset {
   nickname             String? // Apelido/Nome de referência do processo
   otherParty           String? // Parte Contrária Oficial (Ex: "Construtora X") <--- NOVO
 
+  folderId String?        @db.ObjectId
+  folder   ProcessFolder? @relation(fields: [folderId], references: [id])
+
   // --- Relações ---
   updates   AssetUpdate[]
   investors Investment[]
@@ -176,4 +179,16 @@ model SystemNotification {
   type      String   @default("info") // 'info', 'success', 'warning', 'new'
   link      String? // <--- NOVO: Link opcional (interno ou externo) para saber mais
   createdAt DateTime @default(now())
+}
+
+// NOVO MODELO
+model ProcessFolder {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  folderCode  String  @unique // Ex: "Proc - 0002356"
+  description String? // Ex: "Ação de Recuperação Judicial" (Pode pegar do título do Lawsuit)
+
+  assets CreditAsset[] // Os processos dentro desta pasta
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

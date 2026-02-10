@@ -1,28 +1,21 @@
-import { LegalOneContacts } from "./LegalOne/LegalOneContacts";
-import { LegalOneDocuments } from "./LegalOne/LegalOneDocuments";
-import { LegalOneProcesses } from "./LegalOne/LegalOneProcesses";
+import { LegalOneContacts } from './LegalOne/LegalOneContacts';
+import { LegalOneProcesses } from './LegalOne/LegalOneProcesses';
+import { LegalOneDocuments } from './LegalOne/LegalOneDocuments';
 
-/**
- * Facade (Fachada) do Serviço Legal One.
- * Agrupa os módulos especializados (Contatos, Processos, Documentos) numa única interface
- * para manter compatibilidade com o resto da aplicação.
- */
 class LegalOneApiService {
-    // Instancia os sub-serviços
     private contacts = new LegalOneContacts();
     private processes = new LegalOneProcesses();
     private documents = new LegalOneDocuments();
 
-    // =================================================================
-    //  DELEGAÇÃO DE MÉTODOS (Binding)
-    // =================================================================
-    
     // --- Contatos (PF/PJ) ---
     public createContact = this.contacts.createContact.bind(this.contacts);
     public updateContact = this.contacts.updateContact.bind(this.contacts);
     public getContactByCPF = this.contacts.getContactByCPF.bind(this.contacts);
     public getContactByRG = this.contacts.getContactByRG.bind(this.contacts);
-    public getContactDetails = this.contacts.getContactDetails.bind(this.contacts);
+    public getContactDetails = this.contacts.getContactDetails.bind(this.contacts); // Busca específica (PF/PJ)
+    
+    // NOVO: Busca Genérica
+    public getContactGeneric = this.contacts.getContactGeneric.bind(this.contacts);
 
     // --- Processos e Andamentos ---
     public getProcessDetails = this.processes.getProcessDetails.bind(this.processes);
@@ -38,5 +31,4 @@ class LegalOneApiService {
     public finalizeDocument = this.documents.finalizeDocument.bind(this.documents);
 }
 
-// Exporta a instância singleton, mantendo a compatibilidade com o código existente
 export const legalOneApiService = new LegalOneApiService();
