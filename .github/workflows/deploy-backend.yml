@@ -42,7 +42,7 @@ jobs:
           # 4. Instalar dependências com limite de memória
           echo "📦 Rodando yarn install..."
           export NODE_OPTIONS="--max-old-space-size=2048"
-          yarn install NODE_OPTIONS="--max-old-space-size=2048"
+          yarn install 
 
           # 5. Sincronizar Banco de Dados (CRÍTICO para as suas mudanças recentes)
           echo "🗄️ Sincronizando banco de dados com Prisma..."
