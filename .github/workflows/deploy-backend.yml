@@ -18,7 +18,6 @@ jobs:
         key: ${{ secrets.SSH_KEY }}
         port: 22
         script: |
-          # Para o script se der erro em qualquer linha
           set -e
           
           echo "🚀 Iniciando Deploy Automatizado..."
@@ -26,14 +25,17 @@ jobs:
           # 1. Acessar a pasta
           cd /var/www/mazzotini-backend
           
-          # 2. Baixar atualizações
-          echo "⬇️ Baixando código..."
-          git pull origin main
+          # 2. Sincronizar código (FORÇADO)
+          echo "⬇️ Baixando código e descartando mudanças locais no servidor..."
+          git fetch origin main
+          # O comando abaixo resolve o erro do yarn.lock
+          git reset --hard origin/main
+          git clean -fd
           
-            # 3. Instalar dependências (caso tenha adicionado lib nova)
-            echo "📦 Instalando dependências..."
-            export NODE_OPTIONS="--max-old-space-size=2048"
-            yarn install --frozen-lockfile
+          # 3. Instalar dependências
+          echo "📦 Instalando dependências..."
+          export NODE_OPTIONS="--max-old-space-size=2048"
+          yarn install --frozen-lockfile
           
           # 4. Atualizar o Prisma (CRÍTICO para as suas mudanças recentes)
           echo "🗄️ Gerando cliente Prisma..."
