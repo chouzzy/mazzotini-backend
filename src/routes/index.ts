@@ -9,7 +9,7 @@ import { managementRoutes } from "./management.routes";
 import { notificationsRoutes } from "./notifications.routes";
 
 const router = Router();
-//test 2
+//test 5 pm2 fix
 router.get('/', (req, res) => res.json({ message: 'API Base está online!' }));
 
 router.use(creditAssetRoutes);
