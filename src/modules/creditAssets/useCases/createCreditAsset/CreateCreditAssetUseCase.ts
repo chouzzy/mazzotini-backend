@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 
 interface InvestorInput { userId: User['id']; share?: number; }
 
-type ICreateCreditAssetDTO = Pick<CreditAsset, 'processNumber' | 'originalCreditor' | 'origemProcesso' | 'legalOneId' | 'legalOneType' | 'originalValue' | 'acquisitionValue' | 'acquisitionDate' | 'updateIndexType' | 'contractualIndexRate' | 'nickname' | 'otherParty'> & { // <--- Adicionado otherParty
+type ICreateCreditAssetDTO = Pick<CreditAsset, 'processNumber' | 'originalCreditor' | 'origemProcesso' | 'legalOneId' | 'legalOneType' | 'originalValue' | 'acquisitionValue' | 'acquisitionDate' | 'updateIndexType' | 'contractualIndexRate' | 'nickname' | 'otherParty' | 'folderId'> & { // <--- Adicionado otherParty
     investors: InvestorInput[]; 
     associateId?: User['id'] | null;
 };

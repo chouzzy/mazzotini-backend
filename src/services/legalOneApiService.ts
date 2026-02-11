@@ -13,7 +13,7 @@ class LegalOneApiService {
     public getContactByCPF = this.contacts.getContactByCPF.bind(this.contacts);
     public getContactByRG = this.contacts.getContactByRG.bind(this.contacts);
     public getContactDetails = this.contacts.getContactDetails.bind(this.contacts); // Busca específica (PF/PJ)
-    
+
     // NOVO: Busca Genérica
     public getContactGeneric = this.contacts.getContactGeneric.bind(this.contacts);
 
@@ -22,6 +22,8 @@ class LegalOneApiService {
     public getAppealDetails = this.processes.getAppealDetails.bind(this.processes);
     public getProceduralIssueDetails = this.processes.getProceduralIssueDetails.bind(this.processes);
     public getProcessUpdates = this.processes.getProcessUpdates.bind(this.processes);
+    public listLawsuits = this.processes.listLawsuits.bind(this.processes);
+
 
     // --- Documentos ---
     public getProcessDocuments = this.documents.getProcessDocuments.bind(this.documents);

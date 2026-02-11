@@ -11,6 +11,8 @@ import { LookupAssetFromLegalOneController } from '../modules/users/useCases/loo
 import { GetAssetEstimationController } from '../modules/creditAssets/useCases/getAssetEstimation/GetAssetEstimationController';
 import { UpdateAssetController } from '../modules/creditAssets/useCases/updateAsset/UpdateAssetController';
 import { DeleteCreditAssetController } from '../modules/creditAssets/useCases/deleteCreditAsset/DeleteCreditAssetController';
+import { ImportNewAssetsController } from '../modules/creditAssets/useCases/importNewAssets/ImportNewAssetsController';
+import { ListAllFoldersController } from '../modules/creditAssets/useCases/listAllFolders/ListAllFoldersController';
 
 
 
@@ -25,6 +27,35 @@ const lookupAssetFromLegalOneController = new LookupAssetFromLegalOneController(
 const getAssetEstimationController = new GetAssetEstimationController();
 const updateAssetController = new UpdateAssetController();
 const deleteCreditAssetController = new DeleteCreditAssetController();
+const importNewAssetsController = new ImportNewAssetsController();
+const listAllFoldersController = new ListAllFoldersController();
+
+
+/**
+ * @route   POST /api/assets/import
+ * @desc    Importa ativos de crédito a partir de um arquivo CSV.
+ * @access  Privado (ADMIN)
+ */
+
+creditAssetRoutes.post(
+    '/api/assets/import',
+    checkJwt,
+    checkRole(['ADMIN']),
+    importNewAssetsController.handle
+);
+
+/**
+ * @route   GET /api/folders
+ * @desc    Lista todas as pastas que possuem ativos de crédito, incluindo um resumo dos ativos em cada pasta.
+ * @access  Privado (OPERATOR, ADMIN)
+ */
+
+creditAssetRoutes.get(
+    '/api/assets/folders',
+    checkJwt,
+    checkRole(['ADMIN', 'OPERATOR', 'INVESTOR']),
+    listAllFoldersController.handle
+);
 
 /**
  * @route   POST /api/assets
@@ -111,12 +142,21 @@ creditAssetRoutes.patch(
     updateAssetController.handle
 );
 
+/**
+ * @route   DELETE /api/assets/:id
+ * @desc    Deleta um ativo de crédito (soft delete).
+ * @access  Privado (ADMIN)
+ */
+
 // Rota de Exclusão (Apenas ADMIN)
 creditAssetRoutes.delete(
-    '/:id', 
-    checkJwt, 
+    '/api/assets/:id',
+    checkJwt,
     checkRole(['ADMIN']), // Proteção extra: só admin pode deletar
     deleteCreditAssetController.handle
 );
+
+
+
 
 export { creditAssetRoutes };

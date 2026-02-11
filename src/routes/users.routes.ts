@@ -15,6 +15,7 @@ import { ListAssociatesController } from '../modules/users/useCases/listAssociat
 import { UploadProfilePictureController } from '../modules/users/useCases/uploadProfilePicture/UploadProfilePictureController';
 import { UploadPersonalDocumentController } from '../modules/users/useCases/uploadPersonalDocument/UploadPersonalDocumentController';
 import { DeletePersonalDocumentController } from '../modules/users/useCases/deletePersonalDocument/DeletePersonalDocumentController';
+import { SyncAuth0UserController } from '../modules/users/useCases/syncAuth0User/SyncAuth0UserController';
 
 
 // Configuração do Multer para guardar os ficheiros em memória
@@ -28,12 +29,11 @@ const listUsersController = new ListUsersController();
 const updateMyProfileController = new UpdateMyProfileController();
 const getMyProfileController = new GetMyProfileController();
 const resendVerificationEmailController = new ResendVerificationEmailController();
-const listAssociatesController = new ListAssociatesController(); // Adicionado da nossa etapa anterior
-// NOVAS INSTÂNCIAS
+const listAssociatesController = new ListAssociatesController();
 const uploadProfilePictureController = new UploadProfilePictureController();
 const uploadPersonalDocumentController = new UploadPersonalDocumentController();
 const deletePersonalDocumentController = new DeletePersonalDocumentController();
-
+const syncAuth0UserController = new SyncAuth0UserController();
 
 // ============================================================================
 //  DEFINIÇÃO DAS ROTAS DE UTILIZADOR
@@ -55,8 +55,8 @@ userRoutes.post(
  */
 userRoutes.get(
     '/api/users',
-    checkJwt, 
-    listUsersController.handle 
+    checkJwt,
+    listUsersController.handle
 );
 
 /**
@@ -133,6 +133,19 @@ userRoutes.delete(
     '/api/users/me/personal-document',
     checkJwt,
     deletePersonalDocumentController.handle
+);
+
+/** 
+ * @route   POST /api/users/sync
+ * @desc    Sincroniza o usuário autenticado com o Auth0.
+ * @access  Privado (Requer token JWT válido)
+ */
+
+//Rota para sincronizar usuário com Auth0 (Criada recentemente)
+userRoutes.post(
+    '/api/users/sync',
+    checkJwt,
+    syncAuth0UserController.handle
 );
 
 export { userRoutes };

@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"legalOneDocumentId":{"$numberInt":"1"}},"name":"Document_legalOneDocumentId_key","unique":true}],"uuid":"24e46e7c6e0a4af69c374ae69fc40bcd","collectionName":"Document","type":"collection"}

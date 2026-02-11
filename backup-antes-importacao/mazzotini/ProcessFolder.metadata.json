@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"folderCode":{"$numberInt":"1"}},"name":"ProcessFolder_folderCode_key","unique":true}],"uuid":"74472a78af8142f888d8bfa162b3d92a","collectionName":"ProcessFolder","type":"collection"}

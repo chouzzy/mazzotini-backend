@@ -4,8 +4,9 @@ import {
     LegalOneLawsuit, LegalOneLawsuitApiResponse,
     LegalOneAppeal, LegalOneAppealApiResponse,
     LegalOneProceduralIssue, LegalOneProceduralIssueApiResponse,
-    LegalOneUpdate, LegalOneUpdatesApiResponse,
-    LegalOneParticipant
+    LegalOneUpdate,
+    LegalOneParticipant,
+    LegalOneUpdatesApiResponse
 } from '../legalOneTypes';
 
 export class LegalOneProcesses extends LegalOneAuth {
@@ -29,6 +30,7 @@ export class LegalOneProcesses extends LegalOneAuth {
 
     public async getProcessDetails(processNumber: string): Promise<LegalOneLawsuit> {
         const token = await this.getAccessToken();
+        console.log('Token obtido para Legal One API.', token);
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/Lawsuits`;
         const cleanProcessNumber = processNumber.trim();
@@ -118,6 +120,7 @@ export class LegalOneProcesses extends LegalOneAuth {
 
     public async getProceduralIssueDetails(processNumber: string): Promise<LegalOneProceduralIssue> {
         const token = await this.getAccessToken();
+        console.log('Token obtido para Legal One API.', token);
         const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
         const requestUrl = `${apiRestUrl}/ProceduralIssues`;
         const cleanProcessNumber = processNumber.trim();
@@ -177,6 +180,50 @@ export class LegalOneProcesses extends LegalOneAuth {
         } catch (e) {
             console.error(`Erro ao buscar andamentos para a entidade ${entityId}:`, e);
             throw e;
+        }
+    }
+
+    // =================================================================
+    //  NOVO MÉTODO: Listar Processos (Com Paginação e Filtro de Data)
+    // =================================================================
+    public async listLawsuits(sinceDate?: Date): Promise<LegalOneLawsuit[]> {
+        const headers = await this.getAuthHeader();
+        const url = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/Lawsuits`;
+
+        let allLawsuits: LegalOneLawsuit[] = [];
+
+        // Filtro: Se passar data, filtra por creationDate. Se não, pega tudo.
+        // Formato OData para data: YYYY-MM-DDTHH:mm:ssZ
+        let filter = "";
+        if (sinceDate) {
+            filter = `creationDate gt ${sinceDate.toISOString()}`;
+        }
+
+        // Params iniciais
+        let requestUrl: string | null = url + (filter ? `?$filter=${encodeURIComponent(filter)}` : "");
+
+        console.log(`[Legal One API] Listando processos... Filtro: ${filter || 'TODOS'}`);
+
+        try {
+            // Loop de paginação (NextLink)
+            while (requestUrl) {
+                const res: AxiosResponse<LegalOneLawsuitApiResponse> = await axios.get<LegalOneLawsuitApiResponse>(requestUrl, { headers });
+
+                if (res.data.value && res.data.value.length > 0) {
+                    allLawsuits = allLawsuits.concat(res.data.value);
+                    console.log(`[Legal One API] +${res.data.value.length} processos encontrados. Total parcial: ${allLawsuits.length}`);
+                }
+
+                // O Legal One usa '@odata.nextLink' para a próxima página
+                // Se for null ou undefined, o loop termina
+                requestUrl = res.data['@odata.nextLink'] || null;
+            }
+
+            console.log(`[Legal One API] Listagem finalizada. Total: ${allLawsuits.length} processos.`);
+            return allLawsuits;
+        } catch (error: any) {
+            console.error("[Legal One API] Erro ao listar processos:", error.message);
+            throw error;
         }
     }
 }
