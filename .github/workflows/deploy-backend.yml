@@ -1,0 +1,54 @@
+name: Deploy Backend Mazzotini
+
+on:
+  push:
+    branches:
+      - main  # Dispara sempre que houver push na main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Executar comandos via SSH
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.DO_HOST }}
+        username: ${{ secrets.DO_USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: 22
+        script: |
+          # Para o script se der erro em qualquer linha
+          set -e
+          
+          echo "🚀 Iniciando Deploy Automatizado..."
+          
+          # 1. Acessar a pasta
+          cd /var/www/mazzotini-backend
+          
+          # 2. Baixar atualizações
+          echo "⬇️ Baixando código..."
+          git pull origin main
+          
+            # 3. Instalar dependências (caso tenha adicionado lib nova)
+            echo "📦 Instalando dependências..."
+            export NODE_OPTIONS="--max-old-space-size=2048"
+            yarn install --frozen-lockfile
+          
+          # 4. Atualizar o Prisma (CRÍTICO para as suas mudanças recentes)
+          echo "🗄️ Gerando cliente Prisma..."
+          npx prisma generate
+          
+          # Opcional: Descomente abaixo se quiser que ele atualize o banco sozinho
+          # echo "🗄️ Atualizando estrutura do banco..."
+          # npx prisma db push
+          
+          # 5. Build
+          echo "🏗️ Compilando projeto..."
+          yarn build
+          
+          # 6. Reiniciar servidor
+          echo "🔄 Reiniciando PM2..."
+          pm2 restart mazzotini-backend
+          
+          echo "✅ Deploy finalizado com sucesso!"
