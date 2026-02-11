@@ -50,7 +50,7 @@ jobs:
           
           # 5. Build
           echo "🏗️ Compilando projeto..."
-          yarn build
+          yarn build || npx babel src --out-dir build --extensions ".ts,.js" --copy-files          
           
           # 6. Reiniciar servidor
           echo "🔄 Reiniciando PM2..."
