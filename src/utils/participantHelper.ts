@@ -6,33 +6,32 @@ import { LegalOneParticipant } from "../services/legalOneTypes";
 const prisma = new PrismaClient();
 
 /**
- * Processa a lista de participantes do Legal One, identifica os clientes ("Customer"),
- * busca o CPF/CNPJ na API se necessário, e cria/sincroniza o usuário no banco local.
- * * @returns Lista de Usuários (do nosso banco) correspondentes aos clientes do processo.
+ * Sincroniza participantes do Legal One com a tabela User do nosso banco.
+ * Se o usuário não existir, cria um "Shadow User" (Usuário Sombra).
  */
 export const syncParticipantsAsUsers = async (participants: LegalOneParticipant[]): Promise<User[]> => {
     if (!participants || participants.length === 0) return [];
 
-    // 1. Filtra apenas Clientes (Credores)
+    // 1. Filtra apenas quem é "Customer" (Cliente)
     const customers = participants.filter(p => p.type === "Customer");
     
     const syncedUsers: User[] = [];
 
-    console.log(`[PARTICIPANTS] Processando ${customers.length} clientes encontrados...`);
+    console.log(`[PARTICIPANTS] Encontrados ${customers.length} clientes no processo. Processando...`);
 
     for (const customer of customers) {
         try {
             if (!customer.contactId) continue;
 
             // -------------------------------------------------------------
-            // A. Tenta encontrar no DB local pelo ID do Legal One (Mais rápido)
+            // A. Tenta encontrar no DB local pelo ID do Legal One
             // -------------------------------------------------------------
             let user = await prisma.user.findFirst({
                 where: { legalOneContactId: customer.contactId }
             });
 
             if (user) {
-                console.log(`[PARTICIPANTS] Usuário encontrado localmente por ID (${user.name}).`);
+                console.log(`[PARTICIPANTS] Usuário já existe (ID LegalOne: ${customer.contactId}).`);
                 syncedUsers.push(user);
                 continue;
             }
@@ -40,27 +39,27 @@ export const syncParticipantsAsUsers = async (participants: LegalOneParticipant[
             // -------------------------------------------------------------
             // B. Se não achou, vai ao Legal One buscar o CPF/CNPJ
             // -------------------------------------------------------------
-            console.log(`[PARTICIPANTS] Usuário novo (ID ${customer.contactId}). Buscando detalhes na API...`);
+            console.log(`[PARTICIPANTS] Usuário novo (ID ${customer.contactId}). Buscando CPF na API...`);
             
-            // Aqui usamos o seu endpoint genérico descoberto
+            // Requer que você tenha implementado o getContactGeneric no passo anterior
             const legalOneContact = await legalOneApiService.getContactGeneric(customer.contactId);
 
             const cpfOrCnpjRaw = legalOneContact.identificationNumber ? unmask(legalOneContact.identificationNumber) : null;
             
             if (!cpfOrCnpjRaw) {
-                 console.warn(`[PARTICIPANTS] Contato "${customer.contactName}" não possui CPF/CNPJ no Legal One. Pulando criação automática.`);
+                 console.warn(`[PARTICIPANTS] Contato "${customer.contactName}" sem CPF/CNPJ. Pulando.`);
                  continue;
             }
 
             // -------------------------------------------------------------
-            // C. Tenta encontrar no DB local pelo CPF/CNPJ (Evita duplicidade)
+            // C. Tenta encontrar no DB local pelo CPF/CNPJ (Para evitar duplicidade)
             // -------------------------------------------------------------
             user = await prisma.user.findFirst({
                 where: { cpfOrCnpj: cpfOrCnpjRaw }
             });
 
             if (user) {
-                // Existe pelo CPF mas não tinha o ID vinculado. Atualizamos.
+                // Achamos pelo CPF! Vamos apenas atualizar o ID do Legal One nele.
                 console.log(`[PARTICIPANTS] Usuário encontrado por CPF. Vinculando ID Legal One.`);
                 user = await prisma.user.update({
                     where: { id: user.id },
@@ -68,27 +67,28 @@ export const syncParticipantsAsUsers = async (participants: LegalOneParticipant[
                 });
             } else {
                 // -------------------------------------------------------------
-                // D. Criar novo usuário "Shadow" (Sem Login Auth0 ainda)
+                // D. CRIAR O "SHADOW USER" (AQUI ESTÁ A MÁGICA)
                 // -------------------------------------------------------------
-                console.log(`[PARTICIPANTS] Criando novo usuário no sistema: ${legalOneContact.name}`);
+                console.log(`[PARTICIPANTS] Criando SHADOW USER para: ${legalOneContact.name}`);
                 
-                // Geramos um ID temporário para o Auth0UserId pois é campo único obrigatório.
-                // Quando ele se cadastrar de verdade, o fluxo de "Approve" vai reconciliar pelo CPF.
+                // Criamos um ID fake para satisfazer o campo único do Prisma
+                // Quando ele logar de verdade, o '/api/users/sync' vai substituir isso.
                 const tempAuth0Id = `legalone|import|${customer.contactId}`;
 
                 user = await prisma.user.create({
                     data: {
                         name: legalOneContact.name,
+                        // Email é obrigatório? Se não tiver no Legal One, criamos um placeholder
                         email: legalOneContact.email || `pendente_${customer.contactId}@mazzotini.placeholder`, 
                         cpfOrCnpj: cpfOrCnpjRaw,
                         // Se for PF, tenta salvar RG
                         rg: legalOneContact.personStateIdentificationNumber ? unmask(legalOneContact.personStateIdentificationNumber) : null,
                         
-                        auth0UserId: tempAuth0Id,
+                        auth0UserId: tempAuth0Id, // <--- O ID TEMPORÁRIO
                         legalOneContactId: customer.contactId,
                         
-                        status: 'ACTIVE', // Já vem "aprovado" pois é cliente oficial do Legal One
-                        role: 'INVESTOR', // Assume papel de investidor
+                        status: 'ACTIVE', // Já consideramos ativo pois é cliente oficial
+                        role: 'INVESTOR', 
                     }
                 });
             }
@@ -96,7 +96,7 @@ export const syncParticipantsAsUsers = async (participants: LegalOneParticipant[
             syncedUsers.push(user);
 
         } catch (error: any) {
-            console.error(`[PARTICIPANTS] Erro ao processar participante ${customer.contactName}:`, error.message);
+            console.error(`[PARTICIPANTS] Erro ao processar ${customer.contactName}:`, error.message);
         }
     }
 

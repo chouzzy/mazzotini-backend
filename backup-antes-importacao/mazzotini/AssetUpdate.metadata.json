@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"legalOneUpdateId":{"$numberInt":"1"}},"name":"AssetUpdate_legalOneUpdateId_key","unique":true}],"uuid":"ddb3ac12432348d186c8836fcac39315","collectionName":"AssetUpdate","type":"collection"}

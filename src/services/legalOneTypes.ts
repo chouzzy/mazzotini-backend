@@ -19,10 +19,10 @@ export interface LegalOneParticipant {
 // ============================================================================
 
 export interface LegalOneLawsuit { id: number; folder: string; title: string; identifierNumber: string; otherNumber?: string | null; participants: LegalOneParticipant[]; courtPanel?: { id: number; description: string }; courtPanelNumberText?: string; }
-export interface LegalOneLawsuitApiResponse { value: LegalOneLawsuit[]; }
+export interface LegalOneLawsuitApiResponse { value: LegalOneLawsuit[];  '@odata.nextLink'?: string;}
 export interface LegalOneAppeal { id: number; folder: string; title: string; identifierNumber: string; otherNumber?: string | null; participants: LegalOneParticipant[]; courtPanel?: { id: number; description: string }; courtPanelNumberText?: string; relatedLitigationType?: 'Lawsuit' | string; relatedLitigationId?: number; }
 export interface LegalOneAppealApiResponse { value: LegalOneAppeal[]; }
-export interface LegalOneProceduralIssue { id: number; title: string; identifierNumber: string; otherNumber?: string | null; participants: LegalOneParticipant[]; courtPanel?: { id: number; description: string }; courtPanelNumberText?: string; relatedLitigationId?: number; relatedLitigationType?: 'Lawsuit' | string; }
+export interface LegalOneProceduralIssue { id: number; folder: string; title: string; identifierNumber: string; otherNumber?: string | null; participants: LegalOneParticipant[]; courtPanel?: { id: number; description: string }; courtPanelNumberText?: string; relatedLitigationId?: number; relatedLitigationType?: 'Lawsuit' | string; }
 export interface LegalOneProceduralIssueApiResponse { value: LegalOneProceduralIssue[]; }
 
 // ============================================================================
