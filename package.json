@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "ts-node-dev --inspect --transpile-only --ignore-watch node_modules --respawn src/server.ts",
     "production": "node ./build/src/server.js",
-    "build": "tsc",
+    "build": "tsc --noEmit && npx babel src --out-dir dist --extensions \".ts,.js\" || tsc --skipLibCheck --declaration false",
     "db:push": "dotenv -e .env -o -- prisma db push",
     "typeorm": "ts-node-dev ./node_modules/typeorm/cli",
     "test": "jest"
