@@ -18,6 +18,14 @@ jobs:
         key: ${{ secrets.SSH_KEY }}
         port: 22
         script: |
+          # 1. Forçar o carregamento do NVM no ambiente não-interativo
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          
+          # 2. Garantir o uso da versão 22
+          nvm use 22 || nvm install 22
+          
+          echo "🚀 Iniciando Deploy Automatizado com Node $(node -v)..."
           set -e
           
           echo "🚀 Iniciando Deploy Automatizado..."
