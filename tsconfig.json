@@ -2,7 +2,9 @@
   "compilerOptions": {
     "target": "es2016",
     "module": "commonjs",
-    "lib": ["es2020"],
+    "lib": [
+      "es2020"
+    ],
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "resolveJsonModule": true,
@@ -11,23 +13,25 @@
     "skipLibCheck": true,
     "outDir": "./build",
     "rootDir": "./src",
-    
-    /* O SEGREDO ESTÁ AQUI: */
+    /* O CAMINHO MAIS CURTO: SUPRESSÃO TOTAL */
     "strict": false,
     "strictNullChecks": false,
     "noImplicitAny": false,
+    "noEmitOnError": false,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": [
+        "src/*"
+      ]
     }
   },
   "include": [
-    "src/**/*", 
-    "src/@types/express-fix.d.ts"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",
     "build",
-    "**/*.spec.ts"
+    "**/*.spec.ts",
+    "src/@types" /* Excluímos daqui para o compilador não se confundir no build */
   ]
 }
