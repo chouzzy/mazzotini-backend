@@ -3,7 +3,7 @@ name: Deploy Backend Mazzotini
 on:
   push:
     branches:
-      - main  # Dispara sempre que houver push na main
+      - main
 
 jobs:
   deploy:
@@ -18,40 +18,35 @@ jobs:
         key: ${{ secrets.SSH_KEY }}
         port: 22
         script: |
-          # 1. Forçar o carregamento do NVM no ambiente não-interativo
+          # 1. Configurar o ambiente (Obrigatório para o robô achar node/yarn)
           export NVM_DIR="$HOME/.nvm"
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-          
-          # 2. Garantir o uso da versão 22
           nvm use 22 || nvm install 22
           
-          echo "🚀 Iniciando Deploy Automatizado com Node $(node -v)..."
+          # Garante que o Yarn também esteja no PATH
+          export PATH="$PATH:$(yarn global bin):$HOME/.yarn/bin"
+
+          # Interrompe o script se qualquer comando falhar
           set -e
           
-          echo "🚀 Iniciando Deploy Automatizado..."
+          echo "🚀 Iniciando Deploy na pasta /var/www/mazzotini-backend..."
           
-          # 1. Acessar a pasta
+          # 2. Acessar a pasta do projeto
           cd /var/www/mazzotini-backend
-          
-          # 2. Sincronizar código (FORÇADO)
-          echo "⬇️ Baixando código e descartando mudanças locais no servidor..."
+
+          # 3. Atualizar código
+          echo "⬇️ Fazendo git pull..."
           git fetch origin main
-          # O comando abaixo resolve o erro do yarn.lock
           git reset --hard origin/main
-          git clean -fd
           
-          # 3. Instalar dependências
-          echo "📦 Instalando dependências..."
+          # 4. Instalar dependências com limite de memória
+          echo "📦 Rodando yarn install..."
           export NODE_OPTIONS="--max-old-space-size=2048"
-          yarn install --frozen-lockfile
-          
-          # 4. Atualizar o Prisma (CRÍTICO para as suas mudanças recentes)
-          echo "🗄️ Gerando cliente Prisma..."
-          npx prisma generate
-          
-          # Opcional: Descomente abaixo se quiser que ele atualize o banco sozinho
-          # echo "🗄️ Atualizando estrutura do banco..."
-          # npx prisma db push
+          yarn install NODE_OPTIONS="--max-old-space-size=2048"
+
+          # 5. Sincronizar Banco de Dados (CRÍTICO para as suas mudanças recentes)
+          echo "🗄️ Sincronizando banco de dados com Prisma..."
+          yarn db:push
           
           # 5. Build
           echo "🏗️ Compilando projeto..."
@@ -59,6 +54,6 @@ jobs:
           
           # 6. Reiniciar servidor
           echo "🔄 Reiniciando PM2..."
-          pm2 restart mazzotini-backend
+          pm2 restart /var/www/ecosystem.config.js
           
           echo "✅ Deploy finalizado com sucesso!"
