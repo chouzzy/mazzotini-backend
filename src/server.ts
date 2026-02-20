@@ -20,6 +20,7 @@ const allowedOrigins = [
     'https://mazzotini-frontend.vercel.app',
     'https://portal.mazzotiniadvogados.com.br',
     'https://mazzotini-backup.netlify.app' // (Caso você renomeie, já deixe pronto)
+
     // Adicione a sua URL de deploy da Vercel aqui
 ];
 
