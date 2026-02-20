@@ -32,6 +32,7 @@ model User {
   status String @default("PENDING_REVIEW")
 
   role String? // Ex: 'ADMIN', 'INVESTOR', 'ASSOCIATE'
+  associateSequence Int?
 
   // --- NOVOS CAMPOS CADASTRAIS ---
   rg                String?

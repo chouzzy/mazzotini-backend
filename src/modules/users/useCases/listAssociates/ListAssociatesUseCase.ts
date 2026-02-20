@@ -8,6 +8,9 @@ const prisma = new PrismaClient();
 export type AssociateSummary = {
     id: string; // O ID do nosso banco de dados
     name: string;
+    associateSequence: number | null; // O número de associado, se aplicável
+    email: string;
+    role: string;
 };
 
 // Lê a role das variáveis de ambiente
@@ -23,7 +26,7 @@ class ListAssociatesUseCase {
 
         // 1. Busca no Auth0 todos os utilizadores que SÃO associados
         const associatesFromAuth0 = await auth0ManagementService.getUsersByRole(ROLE_ASSOCIATE);
-        
+
         if (!associatesFromAuth0 || associatesFromAuth0.length === 0) {
             console.log(`[USERS] Nenhum utilizador encontrado com a role ${ROLE_ASSOCIATE} no Auth0.`);
             return [];
@@ -40,6 +43,9 @@ class ListAssociatesUseCase {
             select: {
                 id: true, // O ID do nosso banco (MongoDB)
                 name: true,
+                associateSequence: true,
+                email: true,
+                role: true
             },
             orderBy: {
                 name: 'asc'

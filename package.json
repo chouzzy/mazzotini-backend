@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && npx babel src --out-dir dist --extensions \".ts,.js\" || tsc --skipLibCheck --declaration false",
     "db:push": "dotenv -e .env -o -- prisma db push",
     "typeorm": "ts-node-dev ./node_modules/typeorm/cli",
-    "test": "jest"
+    "test": "jest",
+    "import": "node build/import-all-assets.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.914.0",

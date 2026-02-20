@@ -1,5 +1,4 @@
 // src/modules/users/useCases/createUser/CreateUserUseCase.ts
-// Renomeado mentalmente para SyncUserUseCase, mas mantendo o nome do ficheiro para consistência
 
 import { PrismaClient, User } from "@prisma/client";
 import { ManagementClient } from "auth0";
@@ -14,7 +13,6 @@ const management = new ManagementClient({
 });
 
 // Define a estrutura dos dados que esperamos receber da Action do Auth0.
-// Exatamente como você mostrou no seu prompt.
 type ISyncUserDTO = {
     email: string;
     auth0UserId: string;
@@ -22,6 +20,7 @@ type ISyncUserDTO = {
     phone?: string;
     cellPhone?: string;
     cpfOrCnpj?: string;
+    role?: string; // Adicionado para suportar a lógica de associado
 };
 
 /**
@@ -34,10 +33,9 @@ class CreateUserUseCase {
      * @param {ISyncUserDTO} data - Os dados do utilizador vindos da Action do Auth0.
      * @returns {Promise<User>} O utilizador recém-criado ou já existente no nosso banco de dados.
      */
-    async execute({ email, auth0UserId, name, phone, cellPhone, cpfOrCnpj }: ISyncUserDTO): Promise<User> {
+    async execute({ email, auth0UserId, name, phone, cellPhone, cpfOrCnpj, role }: ISyncUserDTO): Promise<User> {
 
-        // 1. Validação: Verifica se um utilizador com este auth0UserId já foi sincronizado.
-        // Isto torna a operação segura contra chamadas de webhook duplicadas.
+        // 1. Validação: Verifica se um utilizador com este e-mail já foi sincronizado.
         const userAlreadyExists = await prisma.user.findUnique({
             where: { email },
         });
@@ -47,37 +45,59 @@ class CreateUserUseCase {
             return userAlreadyExists;
         }
 
-        // 2. Criação: Se o utilizador for novo para o nosso sistema, cria o registo local.
-        // Não criamos mais utilizadores no Auth0 a partir daqui, apenas espelhamos o que já foi criado.
+        // =================================================================
+        // 2. Lógica de Geração de Código para Associados
+        // =================================================================
+        let associateSequence: number | null = null;
+
+        // Se o utilizador estiver a ser criado como ASSOCIATE, gera o próximo número da sequência
+        if (role === 'ASSOCIATE') {
+            const lastAssociate = await prisma.user.findFirst({
+                where: { associateSequence: { not: null } },
+                orderBy: { associateSequence: 'desc' },
+                select: { associateSequence: true }
+            });
+
+            // Se não houver nenhum, começa com 1. Se houver, soma 1 ao maior valor.
+            associateSequence = (lastAssociate?.associateSequence || 0) + 1;
+            console.log(`[SYNC] Gerando sequência para novo associado: ${associateSequence}`);
+        }
+        // =================================================================
+
+        // 3. Criação: Cria o registo local espelhando os dados do Auth0.
         const newUserInDb = await prisma.user.create({
             data: {
                 email,
                 auth0UserId,
-                name: name || email, // Usa o nome vindo do Auth0, ou o e-mail como fallback
-                phone: phone || null, // Inicialmente nulo, pode ser atualizado depois
+                name: name || email,
+                phone: phone || null,
                 cellPhone: cellPhone || null,
                 cpfOrCnpj: cpfOrCnpj || null,
+                role: (role as any) || 'INVESTOR',
+                associateSequence, // Grava o código gerado ou null
             },
         });
 
-        // 3. Atribui a role de 'INVESTOR' automaticamente a cada novo utilizador que se regista.
+        // 4. Atribui a role no Auth0 se for um novo utilizador (padrão INVESTOR se não especificado)
         const investorRoleId = process.env.AUTH0_INVESTOR_ROLE_ID;
-        if (investorRoleId) {
-            try {
-                await management.roles.assignUsers(
-                    { id: investorRoleId },
-                    { users: [auth0UserId] }
-                );
-                console.log(`✅ Role 'INVESTOR' atribuída automaticamente ao novo utilizador ${email}`);
-            } catch (error) {
-                console.error(`❌ Erro ao atribuir role ao utilizador ${auth0UserId}:`, error);
-                // Continua mesmo se a atribuição da role falhar, para não quebrar o fluxo principal.
+        // Só atribuímos automaticamente se não foi passado uma role específica ou se for explicitamente INVESTOR
+        if (!role || role === 'INVESTOR') {
+            if (investorRoleId) {
+                try {
+                    await management.roles.assignUsers(
+                        { id: investorRoleId },
+                        { users: [auth0UserId] }
+                    );
+                    console.log(`✅ Role 'INVESTOR' atribuída automaticamente ao novo utilizador ${email}`);
+                } catch (error) {
+                    console.error(`❌ Erro ao atribuir role ao utilizador ${auth0UserId}:`, error);
+                }
+            } else {
+                console.warn("⚠️ A variável AUTH0_INVESTOR_ROLE_ID não está definida.");
             }
-        } else {
-            console.warn("⚠️ A variável AUTH0_INVESTOR_ROLE_ID não está definida. A role não foi atribuída.");
         }
 
-        console.log(`✅ Novo utilizador sincronizado com sucesso: ${email}`);
+        console.log(`✅ Novo utilizador sincronizado com sucesso: ${email} (Seq: ${associateSequence || 'N/A'})`);
         
         return newUserInDb;
     }

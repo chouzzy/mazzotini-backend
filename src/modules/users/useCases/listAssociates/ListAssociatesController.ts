@@ -7,14 +7,17 @@ class ListAssociatesController {
         const useCase = new ListAssociatesUseCase();
         try {
             const associates = await useCase.execute();
-            
+
             // A API do Chakra Select espera um formato { value, label }
             // Formatamos os dados aqui para poupar trabalho ao frontend.
             const formattedAssociates = associates.map(a => ({
                 value: a.id,
-                label: a.name
+                label: a.name,
+                associateSequence: a.associateSequence,
+                email: a.email,
+                role: a.role
             }));
-            
+
             return response.status(200).json(formattedAssociates);
         } catch (err: any) {
             console.error("[LIST ASSOCIATES] Erro ao buscar associados:", err.message);
