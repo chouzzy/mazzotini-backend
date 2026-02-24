@@ -1,3 +1,5 @@
+// src/modules/creditAssets/useCases/importNewAssets/ImportNewAssetsUseCase.ts
+
 import { PrismaClient } from "@prisma/client";
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { CreateCreditAssetUseCase } from "../createCreditAsset/CreateCreditAssetUseCase";
@@ -7,19 +9,25 @@ const prisma = new PrismaClient();
 
 class ImportNewAssetsUseCase {
     /**
-     * Executa a importação massiva ou incremental de processos.
-     * @param sinceDate (Opcional) Se fornecido, busca apenas processos criados após essa data (Monitoramento).
+     * Executa a importação massiva ou incremental de processos, recursos e incidentes.
+     * @param startDate (Opcional) Busca processos criados APÓS essa data.
+     * @param endDate (Opcional) Busca processos criados ANTES dessa data.
      */
-    async execute(sinceDate?: Date): Promise<void> {
+    async execute(startDate?: Date, endDate?: Date): Promise<void> {
+
+        const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
         console.log(`\n==================================================`);
-        console.log(`[IMPORT ROBOT] Iniciando execução (Desde: ${sinceDate ? sinceDate.toISOString() : 'Início dos tempos'})...`);
+        console.log(`[IMPORT ROBOT] Iniciando execução...`);
+        if (startDate) console.log(`   - Desde: ${startDate.toISOString()}`);
+        if (endDate) console.log(`   - Até:   ${endDate.toISOString()}`);
         console.log(`==================================================\n`);
 
-        // 1. Busca lista no Legal One
-        let lawsuits = [];
+        // 1. Busca lista UNIFICADA no Legal One (Lawsuits, Appeals, ProceduralIssues)
+        let legalOneEntities: any[] = [];
         try {
-            lawsuits = await legalOneApiService.listLawsuits(sinceDate);
-            console.log(`[IMPORT ROBOT] Total de processos encontrados na API: ${lawsuits.length}`);
+            // O seu listLawsuits atualizado agora deve suportar startDate e endDate
+            legalOneEntities = await legalOneApiService.listLawsuits(startDate, endDate);
+            console.log(`[IMPORT ROBOT] Total de entidades encontradas na API: ${legalOneEntities.length}`);
         } catch (error: any) {
             console.error(`[IMPORT ROBOT] Falha fatal ao listar processos: ${error.message}`);
             return;
@@ -32,83 +40,83 @@ class ImportNewAssetsUseCase {
         let errorCount = 0;
         let skippedCount = 0;
 
-        for (const lawsuit of lawsuits) {
-            const processNumber = lawsuit.identifierNumber;
+        for (const entity of legalOneEntities) {
+            // O Legal One usa 'identifierNumber' (Lawsuits) ou 'number' (Appeals/Issues)
+            const processNumber = entity.identifierNumber || entity.number;
             
             // =================================================================
-            //  A CORREÇÃO: Validação de Nulo
+            //  Validação de Nulo
             // =================================================================
             if (!processNumber) {
-                console.warn(`⚠️ [IMPORT ROBOT] Processo com ID ${lawsuit.id} não possui número (identifierNumber). Pulando.`);
+                console.warn(`⚠️ [IMPORT ROBOT] Entidade ID ${entity.id} não possui número de processo. Pulando.`);
                 skippedCount++;
                 continue;
             }
-            // =================================================================
 
-            // 2. Verifica se já existe no nosso banco (Evita duplicidade)
+            // 2. Verifica se já existe no banco (Evita duplicidade)
             const exists = await prisma.creditAsset.findUnique({ 
                 where: { processNumber } 
             });
 
             if (exists) {
-                // console.log(`[IMPORT ROBOT] Processo ${processNumber} já existe. Pulando.`);
                 skippedCount++;
                 continue;
             }
 
-            console.log(`[IMPORT ROBOT] 🚀 Importando novo processo: ${processNumber}`);
+            const typeLabel = entity.__legalOneType || 'Lawsuit';
+            console.log(`[IMPORT ROBOT] 🚀 Importando novo [${typeLabel}]: ${processNumber}`);
 
             try {
                 // 3. Faz o Lookup 
-                // (Isso já chama os helpers que criam a PASTA e os USUÁRIOS SOMBRA automaticamente!)
                 const lookupData = await lookupUseCase.execute(processNumber);
 
-                // 4. Prepara dados para Criação
-                // Mapeia os usuários retornados pelo helper para o formato de investidores
-                const investors = (lookupData.suggestedInvestors || []).map(inv => ({
+                // 4. Prepara investidores sugeridos
+                const investors = (lookupData.suggestedInvestors || []).map((inv: any) => ({
                     userId: inv.userId,
                     share: inv.share || 0
                 }));
 
                 // 5. Cria o Ativo
-                // Usamos valores padrão pois o "Sync" (Enriquecimento) vai corrigir os valores monetários depois
                 await createUseCase.execute({
                     processNumber: processNumber,
                     
-                    // Dados do Lookup
-                    legalOneId: lookupData.legalOneId,
-                    legalOneType: lookupData.legalOneType,
+                    legalOneId: lookupData.legalOneId || entity.id,
+                    legalOneType: typeLabel, // 'Lawsuit', 'Appeal' ou 'ProceduralIssue'
+                    
                     originalCreditor: lookupData.originalCreditor,
                     origemProcesso: lookupData.origemProcesso,
                     otherParty: lookupData.otherParty || "Parte Contrária não identificada",
-                    nickname: lookupData.nickname || null, // Opcional
+                    nickname: lookupData.nickname || null,
+                    
+                    // Nota: O folderId pode vir vazio aqui se o Lookup não o encontrar.
+                    // O seu script `sync-folders.ts` rodará depois para organizar isso.
                     folderId: lookupData.processFolderId || null,
 
-                    // Valores padrão (placeholder)
                     originalValue: 0, 
                     acquisitionValue: 0,
-                    acquisitionDate: new Date(), // Data de hoje como placeholder
+                    acquisitionDate: new Date(), 
                     
-                    // Configurações padrão
                     updateIndexType: 'OUTRO', 
                     contractualIndexRate: 0,
                     investors: investors,
-                    associateId: null // Sem vendedor vinculado na importação automática
+                    associateId: null
                 });
 
                 importedCount++;
-                console.log(`✅ [IMPORT ROBOT] Sucesso: ${processNumber} importado com ${investors.length} investidores.`);
+                console.log(`✅ [IMPORT ROBOT] Sucesso: ${processNumber} (${typeLabel}) importado.`);
 
             } catch (err: any) {
                 errorCount++;
                 console.error(`❌ [IMPORT ROBOT] Falha em ${processNumber}:`, err.message);
             }
+
+            await wait(3000);
         }
 
         console.log(`\n==================================================`);
         console.log(`[IMPORT ROBOT] Finalizado.`);
         console.log(`✅ Importados: ${importedCount}`);
-        console.log(`⏩ Pulados (Já existiam ou inválidos): ${skippedCount}`);
+        console.log(`⏩ Pulados: ${skippedCount}`);
         console.log(`❌ Erros: ${errorCount}`);
         console.log(`==================================================\n`);
     }

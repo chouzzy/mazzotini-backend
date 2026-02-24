@@ -16,7 +16,7 @@ class ListAllFoldersUseCase {
                 where: { auth0UserId },
                 select: { id: true }
             });
-            
+
             if (!user) throw new Error("Usuário não encontrado.");
             currentUserId = user.id;
 
@@ -41,7 +41,7 @@ class ListAllFoldersUseCase {
                 assets: {
                     include: {
                         investors: {
-                            include: { 
+                            include: {
                                 user: { select: { id: true, name: true } } // Incluímos o ID para filtrar no JS
                             }
                         }
@@ -55,11 +55,11 @@ class ListAllFoldersUseCase {
         // Formata e FILTRA OS ATIVOS DENTRO DA PASTA
         // (Isso impede que o investidor veja outros processos da mesma pasta que não são dele)
         const formattedFolders = folders.map(folder => {
-            
+
             // Se for Admin, vê todos os assets da pasta.
             // Se for Investidor, vê apenas os assets onde ele está na lista de investidores.
-            const visibleAssets = isAdmin 
-                ? folder.assets 
+            const visibleAssets = isAdmin
+                ? folder.assets
                 : folder.assets.filter(asset => asset.investors.some(inv => inv.user?.id === currentUserId));
 
             // Recalcula totais baseado apenas no que é visível
@@ -68,7 +68,7 @@ class ListAllFoldersUseCase {
 
             const assetsFormatted = visibleAssets.map(asset => {
                 const mainInvestor = asset.investors[0]?.user?.name || 'N/A';
-                
+
                 // Calcula o valor investido por ESSE usuário (se não for admin)
                 let userInvestedValue = asset.acquisitionValue;
                 if (!isAdmin) {
@@ -83,12 +83,13 @@ class ListAllFoldersUseCase {
                     processNumber: asset.processNumber,
                     nickname: asset.nickname,
                     originalCreditor: asset.originalCreditor,
-                    currentValue: asset.currentValue, // Valor total do ativo
+                    currentValue: asset.currentValue,
                     status: asset.status,
                     acquisitionDate: asset.acquisitionDate,
                     mainInvestorName: mainInvestor,
-                    investedValue: userInvestedValue, // Valor proporcional (ou total para admin)
-                    updateIndexType: asset.updateIndexType
+                    investedValue: userInvestedValue,
+                    updateIndexType: asset.updateIndexType,
+                    legalOneType: asset.legalOneType
                 };
             });
 
