@@ -32,7 +32,7 @@ class ImportNewAssetsUseCase {
             console.error(`[IMPORT ROBOT] Falha fatal ao listar processos: ${error.message}`);
             return;
         }
-
+        // t
         const lookupUseCase = new LookupAssetFromLegalOneUseCase();
         const createUseCase = new CreateCreditAssetUseCase();
         
