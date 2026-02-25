@@ -4,7 +4,7 @@ import * as yup from 'yup';
 
 class UpdateUserInvestmentsController {
     async handle(request: Request, response: Response): Promise<Response> {
-        const { id } = request.params;
+        const id = request.params.id as string;
         const { investments } = request.body;
 
         const schema = yup.object().shape({

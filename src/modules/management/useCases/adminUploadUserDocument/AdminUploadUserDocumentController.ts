@@ -3,7 +3,7 @@ import { AdminUploadUserDocumentUseCase } from './AdminUploadUserDocumentUseCase
 
 class AdminUploadUserDocumentController {
     async handle(request: Request, response: Response): Promise<Response> {
-        const { id } = request.params; // ID do Usuário alvo
+        const id = request.params.id as string; // ID do Usuário alvo
         const file = request.file;
 
         if (!file) {

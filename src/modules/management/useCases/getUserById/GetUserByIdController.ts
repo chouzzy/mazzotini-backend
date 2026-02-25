@@ -3,7 +3,7 @@ import { GetUserByIdUseCase } from './GetUserByIdUseCase';
 
 class GetUserByIdController {
     handle = async (request: Request, response: Response): Promise<Response> => {
-        const { id } = request.params;
+        const id = request.params.id as string;
 
         const useCase = new GetUserByIdUseCase();
 

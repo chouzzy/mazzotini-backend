@@ -3,7 +3,7 @@ import { AdminDeleteUserDocumentUseCase } from './AdminDeleteUserDocumentUseCase
 
 class AdminDeleteUserDocumentController {
     handle = async (request: Request, response: Response): Promise<Response> => {
-        const { id } = request.params; // ID do usuário alvo
+        const id = request.params.id as string;
         const { url } = request.body; 
 
         if (!url) {

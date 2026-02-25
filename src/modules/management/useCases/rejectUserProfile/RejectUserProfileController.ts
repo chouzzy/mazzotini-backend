@@ -4,14 +4,14 @@ import { RejectUserProfileUseCase } from './RejectUserProfileUseCase';
 
 class RejectUserProfileController {
     async handle(request: Request, response: Response): Promise<Response> {
-        const { id: userId } = request.params;
+        const id = request.params.id as string;
         const useCase = new RejectUserProfileUseCase();
 
         try {
-            await useCase.execute(userId);
+            await useCase.execute(id);
             return response.status(204).send();
         } catch (err: any) {
-            console.error(`[REJECT USER] Erro ao rejeitar o utilizador ${userId}:`, err.message);
+            console.error(`[REJECT USER] Erro ao rejeitar o utilizador ${id}:`, err.message);
             return response.status(500).json({ error: err.message });
         }
     }

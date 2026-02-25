@@ -3,7 +3,7 @@ import { UploadInvestmentDocumentUseCase } from './UploadInvestmentDocumentUseCa
 
 class UploadInvestmentDocumentController {
     async handle(request: Request, response: Response): Promise<Response> {
-        const { id } = request.params; // ID do Usuário (da rota)
+        const id = request.params.id as string;
         const file = request.file;
         
         // O assetId vem no corpo da requisição (multipart/form-data)

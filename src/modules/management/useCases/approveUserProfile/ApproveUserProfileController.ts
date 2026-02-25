@@ -4,14 +4,14 @@ import { ApproveUserProfileUseCase } from './ApproveUserProfileUseCase';
 
 class ApproveUserProfileController {
     async handle(request: Request, response: Response): Promise<Response> {
-        const { id: userId } = request.params; // O ID é o do *nosso* banco de dados
+        const id = request.params.id as string;
         const useCase = new ApproveUserProfileUseCase();
 
         try {
-            await useCase.execute(userId);
+            await useCase.execute(id);
             return response.status(204).send();
         } catch (err: any) {
-            console.error(`[APPROVE USER] Erro ao aprovar o utilizador ${userId}:`, err.message);
+            console.error(`[APPROVE USER] Erro ao aprovar o utilizador ${id}:`, err.message);
             return response.status(500).json({ error: err.message });
         }
     }

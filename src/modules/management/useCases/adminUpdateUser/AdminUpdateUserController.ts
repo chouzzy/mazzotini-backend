@@ -45,7 +45,7 @@ class AdminUpdateUserController {
     }).noUnknown(true);
 
     handle = async (request: Request, response: Response): Promise<Response> => {
-        const { id } = request.params;
+        const id = request.params.id as string;
         const bodyData = request.body;
 
         try {

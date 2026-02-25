@@ -13,7 +13,7 @@ class EnrichAssetFromLegalOneController {
      */
     async handle(request: Request, response: Response): Promise<Response> {
         // 1. Extrai o ID do ativo dos parâmetros da rota (ex: /api/assets/:id/enrich)
-        const { id } = request.params;
+        const id = request.params.id as string;
 
         if (!id) {
             return response.status(400).json({ error: 'O ID do ativo é obrigatório.' });

@@ -4,7 +4,7 @@ import { GetDownloadUrlUseCase } from './GetDownloadUrlUseCase';
 
 class GetDownloadUrlController {
   async handle(request: Request, response: Response): Promise<Response> {
-    const { id } = request.params;
+    const id = request.params.id as string;
     const useCase = new GetDownloadUrlUseCase();
 
     try {

@@ -4,7 +4,7 @@ import { GetAssetEstimationUseCase } from './GetAssetEstimationUseCase';
 
 class GetAssetEstimationController {
     async handle(request: Request, response: Response): Promise<Response> {
-        const { assetId } = request.params;
+        const assetId = request.params.assetId as string;
         const useCase = new GetAssetEstimationUseCase();
 
         try {
