@@ -24,7 +24,7 @@ class UpdateAssetController {
     }).stripUnknown();
 
     handle = async (request: Request, response: Response): Promise<Response> => {
-        const { processNumber } = request.params;
+        const processNumber = request.params.processNumber as string;
         const bodyData = request.body; 
 
         try {

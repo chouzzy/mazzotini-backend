@@ -4,7 +4,7 @@ import { UpdateUserRolesUseCase } from './UpdateUserRolesUseCase';
 
 class UpdateUserRolesController {
     async handle(request: Request, response: Response): Promise<Response> {
-        const { auth0UserId } = request.params;
+        const auth0UserId = request.params.auth0UserId as string;
         const { roles } = request.body; // Espera um array de nomes de roles, ex: ["OPERATOR", "INVESTOR"]
 
         if (!Array.isArray(roles)) {

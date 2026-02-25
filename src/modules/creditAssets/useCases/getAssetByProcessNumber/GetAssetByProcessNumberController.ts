@@ -7,7 +7,7 @@ import { GetAssetByProcessNumberUseCase } from './GetAssetByProcessNumberUseCase
  */
 class GetAssetByProcessNumberController {
   async handle(request: Request, response: Response): Promise<Response> {
-    const { processNumber } = request.params;
+    const processNumber = request.params.processNumber as string;
     const getAssetUseCase = new GetAssetByProcessNumberUseCase();
 
     try {
