@@ -7,11 +7,13 @@ import { investmentRoutes } from "./investment.routes";
 import { documentRoutes } from "./document.routes";
 import { managementRoutes } from "./management.routes";
 import { notificationsRoutes } from "./notifications.routes";
+import { assetsRoutes } from "./assets.routes";
 
 const router = Router();
 //test 5 pm2 fix
 router.get('/', (req, res) => res.json({ message: 'API Base está online!' }));
 
+router.use(assetsRoutes);
 router.use(creditAssetRoutes);
 router.use(userRoutes);
 router.use(investmentRoutes);

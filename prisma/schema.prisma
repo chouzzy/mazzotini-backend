@@ -1,195 +1,223 @@
-// /prisma/schema.prisma
-
-// Define o gerador de cliente do Prisma.
 generator client {
   provider = "prisma-client-js"
 }
 
-// Define a fonte de dados (MongoDB).
 datasource db {
   provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
-// ============================================================================
-//  MODELOS PRINCIPAIS (Versão Aprimorada)
-// ============================================================================
-
-// --- Modelo de Usuário ---
-model User {
-  id          String @id @default(auto()) @map("_id") @db.ObjectId
-  email       String @unique
-  auth0UserId String @unique
-  name        String
-
-  legalOneContactId Int? //test
-
-  // --- FLUXO DE APROVAÇÃO ---
-  // Substitui 'profileCompleted' para um status mais granular.
-  // PENDING_REVIEW: O utilizador completou o perfil e aguarda aprovação do Admin.
-  // ACTIVE: Aprovado e pode aceder à plataforma.
-  // REJECTED: Rejeitado pela Mazzotini.
-  status String @default("PENDING_REVIEW")
-
-  role String? // Ex: 'ADMIN', 'INVESTOR', 'ASSOCIATE'
-  associateSequence Int?
-
-  // --- NOVOS CAMPOS CADASTRAIS ---
-  rg                String?
-  birthDate         DateTime?
-  profession        String? // Atividade (profissão)
-  contactPreference String? // "email", "whatsapp", ou "both"
-  infoEmail         String? // Email secundário para informações
-  profilePictureUrl String? // URL da foto de perfil (Cloudinary, S3, etc.)
-  gender            String? // "Male" ou "Female", conforme API Legal One
-
-  // Endereço Residencial (Estruturado)
-  residentialCep          String?
-  residentialStreet       String?
-  residentialNumber       String?
-  residentialComplement   String?
-  residentialNeighborhood String?
-  residentialCity         String?
-  residentialState        String?
-
-  // Endereço Comercial (Estruturado)
-  commercialCep          String?
-  commercialStreet       String?
-  commercialNumber       String?
-  commercialComplement   String?
-  commercialNeighborhood String?
-  commercialCity         String?
-  commercialState        String?
-
-  // NOVO: Escolha do endereço de correspondência
-  correspondenceAddress String? @default("residential") // "residential" ou "commercial"
-
-  // Documentos
-  personalDocumentUrls String[]
-
-  // --- Campos Antigos ---
-  cpfOrCnpj     String?
-  phone         String?
-  cellPhone     String?
-  address       String? // Depreciado, será substituído pelos endereços estruturados
-  nationality   String?
-  maritalStatus String?
-  indication    String? // Depreciado, será substituído pelo 'referredBy'
-
-  // --- Relações ---
-  investments Investment[] // Os investimentos que este utilizador (se Investidor) fez
-
-  // Relação com o Associado (Vendedor) que o indicou
-  // A CORREÇÃO ESTÁ AQUI: Adicionamos onDelete e onUpdate
-  referredBy   User?   @relation("UserReferrals", fields: [referredById], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  referredById String? @db.ObjectId
-  referrals    User[]  @relation("UserReferrals") // Lista de utilizadores que este Associado indicou
-
-  // Relação com os Ativos que este Associado gere
-  associatedAssets CreditAsset[] @relation("AssociatedAssets")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ==========================================
+//  ENUMS
+// ==========================================
+enum Role {
+  ADMIN
+  OPERATOR
+  INVESTOR
+  ASSOCIATE
 }
 
-// --- Modelo de Ativo de Crédito ---
+// ==========================================
+//  MODEL: USUÁRIO (User)
+// ==========================================
+model User {
+  id                    String       @id @default(auto()) @map("_id") @db.ObjectId
+  auth0UserId           String       @unique
+  email                 String       @unique
+  name                  String
+  role                  Role         @default(INVESTOR)
+  status                String?      @default("PENDING_ONBOARDING")
+
+  cpfOrCnpj             String?
+  rg                    String?
+  birthDate             DateTime?
+  gender                String?
+  cellPhone             String?
+  phone                 String?
+  profession            String?
+  contactPreference     String?
+  infoEmail             String?
+
+  nationality           String?
+  maritalStatus         String?
+
+  // Endereços
+  residentialCep        String?
+  residentialStreet     String?
+  residentialNumber     String?
+  residentialComplement String?
+  residentialNeighborhood String?
+  residentialCity       String?
+  residentialState      String?
+
+  commercialCep         String?
+  commercialStreet      String?
+  commercialNumber      String?
+  commercialComplement  String?
+  commercialNeighborhood String?
+  commercialCity        String?
+  commercialState       String?
+
+  correspondenceAddress String?
+
+  // Arquivos
+  pictureUrl            String?
+  profilePictureUrl     String?
+  personalDocumentUrls  String[]     @default([])
+
+  // Integração
+  legalOneContactId     Int?         
+
+  // Indicação e Associação
+  indication            String?
+  referredById          String?      @db.ObjectId
+  referredBy            User?        @relation("UserReferral", fields: [referredById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  referrals             User[]       @relation("UserReferral")
+  associateSequence     Int?
+
+  // Relacionamentos Inversos
+  investments           Investment[]
+  associateInvestments  Investment[] @relation("AssociateInvestment")
+  
+  // CORREÇÃO: Relação reversa para o associado principal do processo
+  associateAssets       CreditAsset[] @relation("CreditAssetAssociate")
+
+  // CORREÇÃO: Nulos permitidos
+  createdAt             DateTime?    @default(now())
+  updatedAt             DateTime?    @updatedAt
+}
+
+// ==========================================
+//  MODEL: PASTA DE PROCESSOS (ProcessFolder)
+// ==========================================
+model ProcessFolder {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  folderCode  String        @unique
+  description String?
+  assets      CreditAsset[]
+
+  // CORREÇÃO: Nulos permitidos
+  createdAt   DateTime?     @default(now())
+  updatedAt   DateTime?     @updatedAt
+}
+
+// ==========================================
+//  MODEL: ATIVO JUDICIAL (CreditAsset)
+// ==========================================
 model CreditAsset {
-  id                   String    @id @default(auto()) @map("_id") @db.ObjectId
-  processNumber        String    @unique
-  origemProcesso       String
+  id                   String        @id @default(auto()) @map("_id") @db.ObjectId
+  processNumber        String        @unique
+  nickname             String?
+  otherParty           String?
   originalCreditor     String
+  origemProcesso       String
+  
+  legalOneId           Int?
+  legalOneType         String?
+  
   originalValue        Float
   acquisitionValue     Float
   currentValue         Float
   acquisitionDate      DateTime
-  settlementDate       DateTime?
+
+  updateIndexType      String
   contractualIndexRate Float?
-  updateIndexType      String?
-  informacaoExtra      String?
-  status               String
-  lawsuitType          String?
-  lawyerResponsible    String?
-  // --- NOVOS CAMPOS PARA INTEGRAÇÃO ---
-  // ID do Processo/Recurso/Incidente no Legal One
-  legalOneId           Int?
-  // Tipo da entidade (para sabermos qual API chamar no futuro)
-  legalOneType         String? // "Lawsuit", "Appeal", "ProceduralIssue"
-  nickname             String? // Apelido/Nome de referência do processo
-  otherParty           String? // Parte Contrária Oficial (Ex: "Construtora X") <--- NOVO
 
-  folderId String?        @db.ObjectId
-  folder   ProcessFolder? @relation(fields: [folderId], references: [id])
+  status               String        @default("PENDING_ENRICHMENT")
+  
+  strategyText         String?
 
-  // --- Relações ---
-  updates   AssetUpdate[]
-  investors Investment[]
-  documents Document[]
+  folderId             String?       @db.ObjectId
+  folder               ProcessFolder? @relation(fields: [folderId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  associateId          String?       @db.ObjectId
+  // CORREÇÃO: Mapeamento explícito da relação do Associado do Processo
+  associate            User?         @relation("CreditAssetAssociate", fields: [associateId], references: [id])
 
-  // Relação com o Associado (Vendedor)
-  associateId String? @db.ObjectId
-  associate   User?   @relation("AssociatedAssets", fields: [associateId], references: [id])
+  investors            Investment[]
+  updates              AssetUpdate[]
+  documents            Document[]
+
+  // CORREÇÃO: Nulos permitidos
+  createdAt            DateTime?     @default(now())
+  updatedAt            DateTime?     @updatedAt
 }
 
-// --- Modelo de Atualização do Ativo ---
+// ==========================================
+//  MODEL: INVESTIMENTOS (Investment)
+// ==========================================
+model Investment {
+  id              String      @id @default(auto()) @map("_id") @db.ObjectId
+  investorShare   Float
+  mazzotiniShare  Float
+
+  userId          String      @db.ObjectId
+  creditAssetId   String      @db.ObjectId
+
+  associateId     String?     @db.ObjectId
+  acquisitionDate DateTime?
+
+  user            User        @relation(fields: [userId], references: [id])
+  asset           CreditAsset @relation(fields: [creditAssetId], references: [id]) 
+  associate       User?       @relation("AssociateInvestment", fields: [associateId], references: [id])
+
+  documents       String[]    @default([])
+  
+  // CORREÇÃO: Nulos permitidos
+  createdAt       DateTime?   @default(now())
+  updatedAt       DateTime?   @updatedAt
+}
+
+// ==========================================
+//  MODEL: ANDAMENTOS (AssetUpdate)
+// ==========================================
 model AssetUpdate {
-  id               String   @id @default(auto()) @map("_id") @db.ObjectId
-  legalOneUpdateId Int?     @unique // ID original do "Update" do Legal One
-  date             DateTime @default(now())
+  id               String      @id @default(auto()) @map("_id") @db.ObjectId
+  date             DateTime
+  description      String
   updatedValue     Float
-  description      String?
   source           String
 
-  assetId String      @db.ObjectId
-  asset   CreditAsset @relation(fields: [assetId], references: [id])
+  assetId          String      @db.ObjectId
+  asset            CreditAsset @relation(fields: [assetId], references: [id])
+
+  legalOneUpdateId Int?
+
+  // CORREÇÃO: Nulos permitidos
+  createdAt        DateTime?   @default(now())
+  updatedAt        DateTime?   @updatedAt
 }
 
-// --- Modelo de Relação (Investidor <-> Ativo) ---
-model Investment {
-  id             String @id @default(auto()) @map("_id") @db.ObjectId
-  investorShare  Float
-  mazzotiniShare Float
-
-  userId String @db.ObjectId
-  user   User?  @relation(fields: [userId], references: [id]) // <-- 'User' virou 'User?'
-
-  creditAssetId String      @db.ObjectId
-  asset         CreditAsset @relation(fields: [creditAssetId], references: [id])
-
-  documents String[]
-}
-
-// --- Modelo de Documento ---
+// ==========================================
+//  MODEL: DOCUMENTOS LEGAIS (Document)
+// ==========================================
 model Document {
   id                 String      @id @default(auto()) @map("_id") @db.ObjectId
-  legalOneDocumentId Int?        @unique // ID original do Legal One
   name               String
   url                String
   category           String
+
   assetId            String      @db.ObjectId
   asset              CreditAsset @relation(fields: [assetId], references: [id])
-  uploadedAt         DateTime    @default(now())
+
+  legalOneDocumentId Int?
+
+  // CORREÇÃO: Nulos permitidos
+  createdAt          DateTime?   @default(now())
+  updatedAt          DateTime?   @updatedAt
 }
 
+// ==========================================
+//  MODEL: NOTIFICAÇÕES (SystemNotification)
+// ==========================================
 model SystemNotification {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   title     String
   message   String
-  type      String   @default("info") // 'info', 'success', 'warning', 'new'
-  link      String? // <--- NOVO: Link opcional (interno ou externo) para saber mais
-  createdAt DateTime @default(now())
-}
+  type      String   @default("info")
+  link      String?
 
-// NOVO MODELO
-model ProcessFolder {
-  id          String  @id @default(auto()) @map("_id") @db.ObjectId
-  folderCode  String  @unique // Ex: "Proc - 0002356"
-  description String? // Ex: "Ação de Recuperação Judicial" (Pode pegar do título do Lawsuit)
-
-  assets CreditAsset[] // Os processos dentro desta pasta
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // CORREÇÃO: Nulos permitidos
+  createdAt DateTime? @default(now())
+  updatedAt DateTime? @updatedAt
 }

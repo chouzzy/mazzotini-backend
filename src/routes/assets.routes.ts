@@ -1,30 +1,19 @@
 import { Router } from 'express';
+import { UpdateAssetStrategyController } from '../modules/assets/useCases/updateAssetStrategy/UpdateAssetStrategyController';
+import { checkRole } from '../middleware/checkRole';
 import { checkJwt } from '../middleware/auth';
-import { CreateCreditAssetController } from '../modules/creditAssets/useCases/createCreditAsset/CreateCreditAssetController';
-import { EnrichAssetFromLegalOneController } from '../modules/creditAssets/useCases/enrichAssetFromLegalOne/EnrichAssetFromLegalOneController';
-import { GetAssetByProcessNumberController } from '../modules/creditAssets/useCases/getAssetByProcessNumber/GetAssetByProcessNumberController';
-import { SyncSingleAssetController } from '../modules/creditAssets/useCases/syncSingleAsset/SyncSingleAssetController'; // 1. Importa o novo controller
 
-const creditAssetRoutes = Router();
+const assetsRoutes = Router();
 
-const createCreditAssetController = new CreateCreditAssetController();
-const enrichAssetFromLegalOneController = new EnrichAssetFromLegalOneController();
-const getAssetByProcessNumberController = new GetAssetByProcessNumberController();
-const syncSingleAssetController = new SyncSingleAssetController(); // 2. Cria a instância
+const updateAssetStrategyController = new UpdateAssetStrategyController();
 
-// ... (outras rotas)
 
-/**
- * @route   POST /api/assets/:processNumber/sync
- * @desc    Aciona manualmente a sincronização de andamentos para um ativo específico.
- * @access  Privado (Requer token JWT válido)
- */
-creditAssetRoutes.post(
-    '/api/assets/:processNumber/sync', // 3. Adiciona a nova rota
+assetsRoutes.patch(
+    '/api/assets/:id/strategy',
     checkJwt,
-    syncSingleAssetController.handle
+    checkRole(['ADMIN', 'OPERATOR']), 
+    updateAssetStrategyController.handle
 );
 
-// ... (outras rotas)
 
-export { creditAssetRoutes };
+export { assetsRoutes };

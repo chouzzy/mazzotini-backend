@@ -3,9 +3,15 @@ import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/Enric
 
 const prisma = new PrismaClient();
 
-interface InvestorInput { userId: User['id']; share?: number; }
+// 1. ATUALIZAÇÃO DA INTERFACE: Recebendo os novos campos individuais
+interface InvestorInput { 
+    userId: User['id']; 
+    share?: number; 
+    associateId?: string | null;
+    acquisitionDate?: Date | null;
+}
 
-type ICreateCreditAssetDTO = Pick<CreditAsset, 'processNumber' | 'originalCreditor' | 'origemProcesso' | 'legalOneId' | 'legalOneType' | 'originalValue' | 'acquisitionValue' | 'acquisitionDate' | 'updateIndexType' | 'contractualIndexRate' | 'nickname' | 'otherParty' | 'folderId'> & { // <--- Adicionado otherParty
+type ICreateCreditAssetDTO = Pick<CreditAsset, 'processNumber' | 'originalCreditor' | 'origemProcesso' | 'legalOneId' | 'legalOneType' | 'originalValue' | 'acquisitionValue' | 'acquisitionDate' | 'updateIndexType' | 'contractualIndexRate' | 'nickname' | 'otherParty' | 'folderId'> & {
     investors: InvestorInput[]; 
     associateId?: User['id'] | null;
 };
@@ -14,7 +20,6 @@ class CreateCreditAssetUseCase {
     async execute(data: ICreateCreditAssetDTO): Promise<CreditAsset> {
         const { processNumber, investors, associateId, ...assetData } = data;
 
-        // ... (Validações mantidas)
         const assetAlreadyExists = await prisma.creditAsset.findFirst({
             where: { OR: [{ processNumber }, { legalOneId: assetData.legalOneId }] },
         });
@@ -26,7 +31,7 @@ class CreateCreditAssetUseCase {
         const newCreditAsset = await prisma.$transaction(async (tx) => {
             const createdAsset = await tx.creditAsset.create({
                 data: {
-                    ...assetData, // Já inclui otherParty e nickname
+                    ...assetData, 
                     processNumber,
                     status: 'PENDING_ENRICHMENT',
                     currentValue: assetData.originalValue, 
@@ -41,6 +46,10 @@ class CreateCreditAssetUseCase {
                         mazzotiniShare: idx === 0 ? mazzotiniShare : 0,
                         userId: inv.userId,
                         creditAssetId: createdAsset.id,
+                        
+                        // 2. SALVANDO OS NOVOS CAMPOS INDIVIDUAIS
+                        associateId: inv.associateId || undefined,
+                        acquisitionDate: inv.acquisitionDate || undefined
                     }))
                 });
             }
