@@ -10,7 +10,10 @@ import { notificationsRoutes } from "./notifications.routes";
 import { assetsRoutes } from "./assets.routes";
 
 const router = Router();
-//test 5 pm2 fix
+
+
+
+// Welcome route
 router.get('/', (req, res) => res.json({ message: 'API Base está online!' }));
 
 router.use(assetsRoutes);

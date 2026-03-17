@@ -1,8 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// Tipagem para o formato que enviaremos ao frontend
 export type UserManagementInfo = {
     id: string;
     auth0UserId: string;
@@ -15,39 +14,51 @@ export type UserManagementInfo = {
     status?: string;
 };
 
-/**
- * @class ListManagementUsersUseCase
- * @description Busca utilizadores do banco local.
- * Inclui gerador de avatar (UI Avatars) para quem não tem foto.
- */
+interface IListUsersRequest {
+    page?: number;
+    limit?: number;
+    search?: string;
+    role?: string;
+    status?: string;
+}
+
 class ListManagementUsersUseCase {
-    async execute(): Promise<UserManagementInfo[]> {
-        console.log("[ListManagementUsers] Buscando utilizadores e roles do banco local...");
+    async execute({ page = 1, limit = 10, search, role, status }: IListUsersRequest) {
+        const skip = (page - 1) * limit;
 
-        const localUsers = await prisma.user.findMany({
-            orderBy: { name: 'asc' },
-            select: {
-                id: true,
-                auth0UserId: true,
-                email: true,
-                name: true,
-                // pictureUrl: true, // Removido pois nem sempre existe no schema
-                profilePictureUrl: true, 
-                status: true,
-                role: true, 
-                createdAt: true,
-                updatedAt: true
-            }
-        });
+        // 1. CONSTRUÇÃO DO FILTRO (WHERE)
+        const where: Prisma.UserWhereInput = {};
 
-        const formattedUsers: UserManagementInfo[] = localUsers.map(user => {
+        if (status && status !== 'ALL') {
+            where.status = status;
+        }
+
+        if (role && role !== 'ALL') {
+            where.role = role as Prisma.EnumRoleFilter;
+        }
+
+        if (search) {
+            where.OR = [
+                { name: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } },
+            ];
+        }
+
+        // 2. BUSCA E CONTAGEM EM PARALELO
+        const [users, total] = await Promise.all([
+            prisma.user.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: { name: 'asc' },
+            }),
+            prisma.user.count({ where })
+        ]);
+
+        // 3. MAPEAMENTO COM FALLBACK DE AVATAR (Sua lógica original)
+        const items: UserManagementInfo[] = users.map(user => {
             const roles = user.role ? [user.role] : [];
             const displayName = user.name || user.email;
-
-            // =================================================================
-            // SOLUÇÃO: UI Avatars (API Gratuita)
-            // Gera um avatar com as iniciais se não houver foto
-            // =================================================================
             const fallbackAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&color=fff&size=128`;
 
             return {
@@ -55,19 +66,23 @@ class ListManagementUsersUseCase {
                 auth0UserId: user.auth0UserId,
                 email: user.email,
                 name: displayName,
-                
-                // Usa a foto do perfil se existir, senão usa o gerador de avatar
                 picture: user.profilePictureUrl || fallbackAvatar, 
-                
                 profilePictureUrl: user.profilePictureUrl,
                 lastLogin: user.updatedAt.toISOString(), 
                 roles: roles, 
-                status: user.status,
+                status: user.status || 'ACTIVE',
             };
         });
 
-        console.log(`[ListManagementUsers] ${formattedUsers.length} utilizadores retornados.`);
-        return formattedUsers;
+        return {
+            items,
+            meta: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
+        };
     }
 }
 

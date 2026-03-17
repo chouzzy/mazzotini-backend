@@ -1,52 +1,68 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-/**
- * @class GetAssetByProcessNumberUseCase
- * @description Lógica de negócio para buscar um ativo pelo número do processo,
- * incluindo suas relações (investidores, associado, atualizações, etc.).
- */
 class GetAssetByProcessNumberUseCase {
-  async execute(processNumber: string) {
-    console.log(`🔍 Buscando detalhes do ativo para o processo: ${processNumber}`);
+    async execute(processNumber: string, auth0UserId: string, roles: string[]) {
+        
+        // 1. Busca o processo com todas as relações
+        const asset = await prisma.creditAsset.findUnique({
+            where: { processNumber },
+            include: {
+                investors: {
+                    include: {
+                        user: { select: { id: true, name: true, email: true } },
+                        associate: { select: { id: true, name: true, email: true } }
+                    }
+                },
+                associate: { select: { id: true, name: true, email: true } },
+                updates: { orderBy: { date: "desc" } },
+                documents: true,
+                folder: true
+            }
+        });
 
-    // Usamos findUniqueOrThrow para que o Prisma lance um erro se o ativo não for encontrado,
-    // o que podemos traduzir para um erro 404 (Not Found) no controller.
-    const asset = await prisma.creditAsset.findUniqueOrThrow({
-      where: { processNumber },
-      // O 'include' é poderoso: ele traz todos os dados relacionados em uma única query.
-      include: {
-        investors: {
-          include: {
-            user: { // Para cada investimento, inclua os detalhes do usuário investidor.
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        },
-        associate: { // Inclui os detalhes do usuário associado.
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        updates: { // Inclui o histórico de atualizações, ordenado pela data mais recente.
-          orderBy: {
-            date: 'desc',
-          },
-        },
-        documents: true, // Inclui a lista de documentos.
-      },
-    });
+        if (!asset) {
+            throw new Error("Processo não encontrado.");
+        }
 
-    console.log(`✅ Ativo encontrado: ${asset.processNumber}`);
-    return asset;
-  }
+        // 2. AUDITORIA DE ACESSO (O Cadeado)
+        const isAdminOrOperator = roles.includes('ADMIN') || roles.includes('OPERATOR');
+
+        // Se NÃO for Admin/Operador, temos de garantir que ele está vinculado ao processo
+        if (!isAdminOrOperator) {
+            const user = await prisma.user.findUnique({
+                where: { auth0UserId },
+                select: { id: true }
+            });
+
+            if (!user) {
+                throw new Error("Acesso negado.");
+            }
+
+            if (roles.includes('INVESTOR')) {
+                // Verifica se o ID do investidor está dentro da lista de investidores DESTE processo
+                const isInvestorInThisAsset = asset.investors.some(inv => inv.user?.id === user.id);
+                if (!isInvestorInThisAsset) {
+                    console.warn(`[SEGURANÇA] Investidor ${user.id} tentou aceder ao processo ${processNumber} sem estar vinculado.`);
+                    throw new Error("Acesso negado.");
+                }
+            } 
+            else if (roles.includes('ASSOCIATE')) {
+                // Verifica se ele é o associado global do processo OU o associado de algum investidor específico
+                const isMainAssociate = asset.associate?.id === user.id;
+                const isInvestorAssociate = asset.investors.some(inv => inv.associate?.id === user.id);
+                
+                if (!isMainAssociate && !isInvestorAssociate) {
+                    console.warn(`[SEGURANÇA] Associado ${user.id} tentou aceder ao processo ${processNumber} sem estar vinculado.`);
+                    throw new Error("Acesso negado.");
+                }
+            }
+        }
+
+        // Se passou pela auditoria (ou é admin), devolve os dados
+        return asset;
+    }
 }
 
 export { GetAssetByProcessNumberUseCase };

@@ -37,9 +37,20 @@ class UpdateAssetUseCase {
         if (!asset) throw new Error("Ativo não encontrado.");
         
         const updatedAsset = await prisma.$transaction(async (tx) => {
+            
+            const updateData: any = { ...assetUpdateData };
+            
+            // Verifica se o processo já tem algum andamento/update registado
+            const hasUpdates = await tx.assetUpdate.count({ where: { assetId: asset.id } });
+            
+            // Se NÃO tem andamentos, o Valor Atual (currentValue) acompanha o Valor Original na edição!
+            if (hasUpdates === 0 && updateData.originalValue !== undefined) {
+                updateData.currentValue = updateData.originalValue;
+            }
+
             const updatedAssetTx = await tx.creditAsset.update({
                 where: { id: asset.id },
-                data: { ...assetUpdateData } 
+                data: updateData 
             });
 
             if (investors && investors.length > 0) {

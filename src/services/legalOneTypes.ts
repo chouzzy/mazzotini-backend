@@ -19,7 +19,7 @@ export interface LegalOneParticipant {
 // ============================================================================
 
 export interface LegalOneLawsuit { id: number; folder: string; title: string; identifierNumber: string; otherNumber?: string | null; participants: LegalOneParticipant[]; courtPanel?: { id: number; description: string }; courtPanelNumberText?: string; }
-export interface LegalOneLawsuitApiResponse { value: LegalOneLawsuit[];  '@odata.nextLink'?: string;}
+export interface LegalOneLawsuitApiResponse { value: LegalOneLawsuit[]; '@odata.nextLink'?: string; }
 export interface LegalOneAppeal { id: number; folder: string; title: string; identifierNumber: string; otherNumber?: string | null; participants: LegalOneParticipant[]; courtPanel?: { id: number; description: string }; courtPanelNumberText?: string; relatedLitigationType?: 'Lawsuit' | string; relatedLitigationId?: number; }
 export interface LegalOneAppealApiResponse { value: LegalOneAppeal[]; }
 export interface LegalOneProceduralIssue { id: number; folder: string; title: string; identifierNumber: string; otherNumber?: string | null; participants: LegalOneParticipant[]; courtPanel?: { id: number; description: string }; courtPanelNumberText?: string; relatedLitigationId?: number; relatedLitigationType?: 'Lawsuit' | string; }
@@ -57,7 +57,7 @@ export interface LegalOneContact {
     id: number;
     name: string; // Nome ou Razão Social
     tradeName?: string; // Nome Fantasia (PJ)
-    email?: string; 
+    email?: string;
     identificationNumber?: string;        // CPF/CNPJ
     personStateIdentificationNumber?: string; // RG
     // Campos detalhados
@@ -77,7 +77,7 @@ export interface LegalOneCreatePersonPayload {
     birthDate?: string;
     gender?: 'Male' | 'Female';
     nacionality?: string;
-    
+
     emails: any[];
     phones: any[];
     addresses: any[];
@@ -90,34 +90,50 @@ export interface LegalOneUpdatesApiResponse { value: LegalOneUpdate[]; '@odata.n
 // ============================================================================
 //  INTERFACES DE DOCUMENTOS (CORRIGIDA)
 // ============================================================================
-
-export interface LegalOneDocument { id: number; archive: string; type: string; }
+export interface LegalOneDocument { 
+    id: number; 
+    archive?: string; 
+    description?: string;
+    generateUrlDownload?: string;
+    typeId?: string;
+    type?: string;
+    repository?: string;
+    notes?: string;
+    isPhysicallyStored?: boolean;
+    phisicalLocalization?: string;
+    author?: string;
+    beginDate?: string;
+    endDate?: string;
+    isModel?: boolean;
+    fileName?: string;
+    relationships?: any[];
+}
 export interface LegalOneDocumentsApiResponse { value: LegalOneDocument[]; }
 export interface LegalOneDocumentDownload { id: number; url: string; }
 export interface LegalOneUploadContainer { id: number; fileName: string; externalId: string; uploadedFileSize: number; }
 
-export interface LegalOneDocumentPayload { 
-    archive: string; 
-    fileName: string; 
-    description: string; 
-    generateUrlDownload: string; 
-    typeId: string | null; 
-    author: string | null; 
-    type: string; 
-    isPhysicallyStored: boolean | null; 
-    isModel: boolean | null; 
-    fileUploader: string | null; 
-    beginDate: string | null; 
-    endDate: string | null; 
-    notes: string | null; 
-    phisicalLocalization: string | null; 
+export interface LegalOneDocumentPayload {
+    archive: string;
+    fileName: string;
+    description: string;
+    generateUrlDownload: string;
+    typeId: string | null;
+    author: string | null;
+    type: string;
+    isPhysicallyStored: boolean | null;
+    isModel: boolean | null;
+    fileUploader: string | null;
+    beginDate: string | null;
+    endDate: string | null;
+    notes: string | null;
+    phisicalLocalization: string | null;
     repository: string;
-    
+
     // CORREÇÃO: camelCase nas propriedades de relacionamento
-    relationships: { 
-        link: 'Contact'; 
-        linkItem: { id: number; description: string }; 
-    }[]; 
+    relationships: {
+        link: 'Contact';
+        linkItem: { id: number; description: string };
+    }[];
 }
 
 export interface LegalOneState { id: number; name: string; stateCode: string; }

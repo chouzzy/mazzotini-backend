@@ -8,9 +8,10 @@ class CreateCreditAssetController {
         
         const validationSchema = yup.object().shape({
             processNumber: yup.string().required(),
+            nickname: yup.string().optional(),
+            otherParty: yup.string().required(),
             
-            nickname: yup.string().optional(), // Apelido (Opcional)
-            otherParty: yup.string().required("A Parte Contrária é obrigatória."), // <--- NOVO (Obrigatório pois vem do Legal One)
+            folderId: yup.string().optional().nullable(),
 
             originalCreditor: yup.string().required(),
             origemProcesso: yup.string().required(),
@@ -23,22 +24,28 @@ class CreateCreditAssetController {
             investors: yup.array().of(
                 yup.object().shape({
                     userId: yup.string().required(),
-                    share: yup.number().required()
+                    share: yup.number().required(),
+                    // ==========================================
+                    // CORREÇÃO: Campos adicionados ao schema
+                    // Garante que o Prisma recebe um objeto 'Date' válido
+                    // ==========================================
+                    associateId: yup.string().optional().nullable(),
+                    acquisitionDate: yup.date().optional().nullable()
                 })
             ).min(1).required(),
             
             updateIndexType: yup.string().required(),
-            contractualIndexRate: yup.number().nullable().optional(), 
+            contractualIndexRate: yup.number().nullable(), 
             associateId: yup.string().nullable().optional(),
         });
 
         try {
             await validationSchema.validate(request.body, { abortEarly: false });
-            const createCreditAssetUseCase = new CreateCreditAssetUseCase();
-            const newAsset = await createCreditAssetUseCase.execute(request.body);
+            const createUseCase = new CreateCreditAssetUseCase();
+            const newAsset = await createUseCase.execute(request.body);
             return response.status(201).json(newAsset);
         } catch (err: any) {
-            return response.status(400).json({ error: err.message });
+            return response.status(400).json({ error: err.message, details: err.errors });
         }
     }
 }

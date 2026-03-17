@@ -1,29 +1,32 @@
 import { Request, Response } from 'express';
 import { GetAssetByProcessNumberUseCase } from './GetAssetByProcessNumberUseCase';
 
-/**
- * @class GetAssetByProcessNumberController
- * @description Lida com a requisição HTTP para buscar os detalhes de um ativo.
- */
-class GetAssetByProcessNumberController {
-  async handle(request: Request, response: Response): Promise<Response> {
-    const processNumber = request.params.processNumber as string;
-    const getAssetUseCase = new GetAssetByProcessNumberUseCase();
-
-    try {
-      const asset = await getAssetUseCase.execute(processNumber);
-      return response.status(200).json(asset);
-
-    } catch (err: any) {
-      // O erro 'P2025' é o código do Prisma para "registro não encontrado" com findUniqueOrThrow.
-      if (err.code === 'P2025') {
-        return response.status(404).json({ error: 'Ativo de crédito não encontrado.' });
-      }
-      
-      console.error("❌ Erro ao buscar detalhes do ativo:", err.message);
-      return response.status(500).json({ error: 'Erro interno ao buscar o ativo.' });
-    }
-  }
+interface CustomJWTPayload {
+    sub: string;
+    'https://mazzotini.awer.co/roles'?: string[];
 }
 
+class GetAssetByProcessNumberController {
+    async handle(request: Request, response: Response): Promise<Response> {
+        const processNumber = String(request.params.processNumber);
+        
+        // Pega os dados do usuário que fez a requisição
+        const payload = (request as any).auth.payload as CustomJWTPayload;
+        const auth0UserId = payload.sub;
+        const roles = payload['https://mazzotini.awer.co/roles'] || [];
+
+        const getUseCase = new GetAssetByProcessNumberUseCase();
+        
+        try {
+            // Passa o usuário e a role para o UseCase auditar
+            const asset = await getUseCase.execute(processNumber, auth0UserId, roles);
+            return response.json(asset);
+        } catch (err: any) {
+            if (err.message === "Acesso negado.") {
+                return response.status(403).json({ error: "Você não tem permissão para visualizar este processo." });
+            }
+            return response.status(404).json({ error: err.message });
+        }
+    }
+}
 export { GetAssetByProcessNumberController };

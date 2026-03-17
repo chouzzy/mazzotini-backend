@@ -1,19 +1,25 @@
-// /src/modules/management/useCases/listUsers/ListManagementUsersController.ts
 import { Request, Response } from 'express';
 import { ListManagementUsersUseCase } from './ListManagementUsersUseCase';
 
 class ListManagementUsersController {
     async handle(request: Request, response: Response): Promise<Response> {
+        const { page, limit, search, role, status } = request.query;
+        
         const useCase = new ListManagementUsersUseCase();
+        
         try {
-            // Executa o UseCase que já construímos
-            const users = await useCase.execute();
+            const result = await useCase.execute({
+                page: page ? Number(page) : 1,
+                limit: limit ? Number(limit) : 10,
+                search: search ? String(search) : undefined,
+                role: role ? String(role) : undefined,
+                status: status ? String(status) : undefined,
+            });
             
-            // Retorna os dados formatados para o frontend
-            return response.status(200).json(users);
+            return response.status(200).json(result);
         } catch (err: any) {
-            console.error("[LIST MGMT USERS] Erro ao buscar utilizadores:", err.message);
-            return response.status(500).json({ error: 'Erro interno ao comunicar com a API de gestão.' });
+            console.error("[LIST MGMT USERS] Erro:", err.message);
+            return response.status(500).json({ error: 'Erro ao buscar lista de usuários.' });
         }
     }
 }

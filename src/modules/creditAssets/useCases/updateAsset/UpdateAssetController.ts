@@ -7,40 +7,43 @@ class UpdateAssetController {
         originalValue: yup.number().positive().optional(),
         acquisitionValue: yup.number().positive().optional(),
         acquisitionDate: yup.date().optional(),
-
+        
         nickname: yup.string().optional().nullable(),
-        otherParty: yup.string().optional().nullable(), // <--- NOVO CAMPO EDITÁVEL
+        otherParty: yup.string().optional().nullable(), 
 
         investors: yup.array().of(
             yup.object().shape({
                 userId: yup.string().required(),
-                share: yup.number().min(0).max(100).required()
+                share: yup.number().min(0).max(100).optional(),
+                // ==========================================
+                // CORREÇÃO: Campos adicionados ao schema
+                // Assim o Yup não os apaga (stripUnknown) e converte as datas
+                // ==========================================
+                associateId: yup.string().optional().nullable(),
+                acquisitionDate: yup.date().optional().nullable()
             })
         ).min(1).optional(),
-
+        
         associateId: yup.string().optional().nullable(),
         updateIndexType: yup.string().optional(),
         contractualIndexRate: yup.number().optional().nullable(),
     }).stripUnknown();
 
     handle = async (request: Request, response: Response): Promise<Response> => {
-        const processNumber = request.params.processNumber as string;
-        const bodyData = request.body;
+        const { processNumber } = request.params;
+        const bodyData = request.body; 
 
         try {
             const validatedData = await this.validationSchema.validate(bodyData, { abortEarly: false, stripUnknown: true });
             const useCase = new UpdateAssetUseCase();
-
-            // =========================================================
-            // A CORREÇÃO: Forçamos a tipagem correta apenas no 'investors' 
-            // para bater com o que o IUpdateAssetDTO espera
-            // =========================================================
-            const updatedAsset = await useCase.execute({
-                processNumber,
+            
+            const updatedAsset = await useCase.execute({ 
+                processNumber, 
                 ...validatedData,
-                investors: validatedData.investors as { userId: string; share: number }[] | undefined
+                // Asserção de tipo para contornar a inferência imprecisa do Yup no TypeScript
+                investors: validatedData.investors as any 
             });
-
+            
             return response.status(200).json(updatedAsset);
         } catch (err: any) {
             return response.status(400).json({ error: err.message });

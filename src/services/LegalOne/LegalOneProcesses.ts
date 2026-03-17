@@ -28,9 +28,9 @@ export class LegalOneProcesses extends LegalOneAuth {
     //  BUSCAS DE PROCESSO (ATUALIZADAS COM A LÓGICA DE 3 ETAPAS)
     // ============================================================================
 
-/**
-     * Helper para lidar com Rate Limit (429) usando Exponential Backoff
-     */
+    /**
+         * Helper para lidar com Rate Limit (429) usando Exponential Backoff
+         */
     private async requestWithRetry<T>(requestFn: () => Promise<any>, maxRetries = 5): Promise<any> {
         let attempt = 0;
         let baseDelay = 2000; // Começa a esperar 2 segundos
@@ -44,7 +44,7 @@ export class LegalOneProcesses extends LegalOneAuth {
                 if (error.response && error.response.status === 429) {
                     attempt++;
                     console.warn(`[RATE LIMIT] ⚠️ 429 Too Many Requests. Tentativa ${attempt}/${maxRetries}...`);
-                    
+
                     if (attempt >= maxRetries) {
                         console.error(`[RATE LIMIT] ❌ Limite de tentativas excedido.`);
                         throw error;
@@ -52,7 +52,7 @@ export class LegalOneProcesses extends LegalOneAuth {
 
                     // Verifica se a API informou quanto tempo devemos esperar (header Retry-After)
                     const retryAfter = error.response.headers['retry-after'];
-                    
+
                     // Se tiver header, usa ele. Se não, dobra o tempo de espera (2s, 4s, 8s, 16s...)
                     const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : baseDelay * Math.pow(2, attempt - 1);
 
@@ -123,81 +123,63 @@ export class LegalOneProcesses extends LegalOneAuth {
 
     public async getAppealDetails(processNumber: string): Promise<LegalOneAppeal> {
         const token = await this.getAccessToken();
-        // console.log('Token obtido para Legal One API.', token);
-        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/appeals`;
-        const cleanProcessNumber = processNumber.trim();
+        const url = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/Appeals`;
+        const cleanNumber = processNumber.trim();
 
-        let appeal: LegalOneAppeal | null = null;
-
-        // 1. Busca ID
+        // Tentativa 1: Com a formatação original
         try {
-            const response = await this.requestWithRetry(() => axios.get<LegalOneAppealApiResponse>(requestUrl, {
+            const res = await axios.get<LegalOneAppealApiResponse>(url, {
                 headers: { 'Authorization': `Bearer ${token}` },
-                params: { '$filter': `identifierNumber eq '${cleanProcessNumber}'` }
-            }));
-            if (response.data.value?.length > 0) appeal = response.data.value[0];
+                params: { '$filter': `identifierNumber eq '${cleanNumber}' or oldNumber eq '${cleanNumber}'` }
+            });
+            if (res.data.value?.length > 0) return res.data.value[0];
         } catch (e) { }
 
-        if (!appeal) throw new Error("Recurso não encontrado");
-
-        // 2. Detalhes (courtPanel)
+        // Tentativa 2: Sem pontuação
+        const unmasked = cleanNumber.replace(/[.\-/]/g, '');
         try {
-            const details = await this.requestWithRetry(() => axios.get<LegalOneAppeal>(`${requestUrl}/${appeal.id}`, {
+            const res = await axios.get<LegalOneAppealApiResponse>(url, {
                 headers: { 'Authorization': `Bearer ${token}` },
-                params: { '$expand': 'courtPanel' }
-            }));
-            appeal = details.data;
+                params: { '$filter': `identifierNumber eq '${unmasked}' or oldNumber eq '${unmasked}'` }
+            });
+            if (res.data.value?.length > 0) return res.data.value[0];
         } catch (e) { }
 
-        // 3. Participantes
-        const participants = await this.getEntityParticipants('appeals', appeal.id);
-        appeal.participants = participants;
-
-        return appeal;
+        throw new Error(`Recurso ${processNumber} não encontrado.`);
     }
 
+    // =================================================================
+    // CORREÇÃO: getProceduralIssueDetails com Busca Dupla
+    // =================================================================
     public async getProceduralIssueDetails(processNumber: string): Promise<LegalOneProceduralIssue> {
         const token = await this.getAccessToken();
-        // console.log('Token obtido para Legal One API.', token);
-        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
-        const requestUrl = `${apiRestUrl}/ProceduralIssues`;
-        const cleanProcessNumber = processNumber.trim();
+        const url = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/ProceduralIssues`;
+        const cleanNumber = processNumber.trim();
 
-        let issue: LegalOneProceduralIssue | null = null;
-
-        // 1. Busca ID
         try {
-            const response = await this.requestWithRetry(() => axios.get<LegalOneProceduralIssueApiResponse>(requestUrl, {
+            const res = await axios.get<LegalOneProceduralIssueApiResponse>(url, {
                 headers: { 'Authorization': `Bearer ${token}` },
-                params: { '$filter': `identifierNumber eq '${cleanProcessNumber}'` }
-            }));
-
-            if (response.data.value?.length > 0) issue = response.data.value[0];
+                params: { '$filter': `identifierNumber eq '${cleanNumber}' or oldNumber eq '${cleanNumber}'` }
+            });
+            if (res.data.value?.length > 0) return res.data.value[0];
         } catch (e) { }
 
-        if (!issue) throw new Error("Incidente não encontrado");
-
-        // 2. Detalhes
+        const unmasked = cleanNumber.replace(/[.\-/]/g, '');
         try {
-            const details = await this.requestWithRetry(() => axios.get<LegalOneProceduralIssue>(`${requestUrl}/${issue.id}`, {
+            const res = await axios.get<LegalOneProceduralIssueApiResponse>(url, {
                 headers: { 'Authorization': `Bearer ${token}` },
-                params: { '$expand': 'courtPanel' }
-            }));
-            console.log('Resposta da busca de Procedural Issues:', details.data);
-            issue = details.data;
+                params: { '$filter': `identifierNumber eq '${unmasked}' or oldNumber eq '${unmasked}'` }
+            });
+            if (res.data.value?.length > 0) return res.data.value[0];
         } catch (e) { }
 
-        // 3. Participantes
-        const participants = await this.getEntityParticipants('proceduralissues', issue.id);
-        issue.participants = participants;
-
-        return issue;
+        throw new Error(`Incidente ${processNumber} não encontrado.`);
     }
 
 
     public async getProcessUpdates(entityId: number): Promise<LegalOneUpdate[]> {
         const token = await this.getAccessToken();
+        // console.log(token)
 
 
         let allUpdates: LegalOneUpdate[] = [];
@@ -291,5 +273,33 @@ export class LegalOneProcesses extends LegalOneAuth {
         }
     }
 
-    
+    public async getAppealsByLawsuitId(lawsuitId: number): Promise<LegalOneAppeal[]> {
+        const headers = await this.getAuthHeader();
+        const url = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/Appeals`;
+        try {
+            const res = await axios.get<LegalOneAppealApiResponse>(url, {
+                headers,
+                params: { '$filter': `relatedLitigationId eq ${lawsuitId}` }
+            });
+            return res.data.value || [];
+        } catch (e: any) {
+            return [];
+        }
+    }
+
+    public async getProceduralIssuesByLawsuitId(lawsuitId: number): Promise<LegalOneProceduralIssue[]> {
+        const headers = await this.getAuthHeader();
+        const url = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/ProceduralIssues`;
+        try {
+            const res = await axios.get<LegalOneProceduralIssueApiResponse>(url, {
+                headers,
+                params: { '$filter': `relatedLitigationId eq ${lawsuitId}` }
+            });
+            return res.data.value || [];
+        } catch (e: any) {
+            return [];
+        }
+    }
+
+
 }

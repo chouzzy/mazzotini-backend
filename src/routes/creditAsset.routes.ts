@@ -13,9 +13,7 @@ import { UpdateAssetController } from '../modules/creditAssets/useCases/updateAs
 import { DeleteCreditAssetController } from '../modules/creditAssets/useCases/deleteCreditAsset/DeleteCreditAssetController';
 import { ImportNewAssetsController } from '../modules/creditAssets/useCases/importNewAssets/ImportNewAssetsController';
 import { ListAllFoldersController } from '../modules/creditAssets/useCases/listAllFolders/ListAllFoldersController';
-
-
-
+import { ROLES } from '../types';
 
 const creditAssetRoutes = Router();
 const createCreditAssetController = new CreateCreditAssetController();
@@ -32,42 +30,30 @@ const listAllFoldersController = new ListAllFoldersController();
 
 
 /**
+ * @route   GET /api/folders
+ * @desc    Lista todas as pastas que possuem ativos de crédito, incluindo um resumo dos ativos em cada pasta.
+ * @access  Privado (OPERATOR, ADMIN, INVESTOR)
+ */
+creditAssetRoutes.get(
+    '/api/assets/folders',
+    checkJwt,
+    checkRole([ROLES.ADMIN, ROLES.OPERATOR, ROLES.INVESTOR]),
+    listAllFoldersController.handle
+);
+
+
+/**
  * @route   POST /api/assets/import
  * @desc    Importa ativos de crédito a partir de um arquivo CSV.
  * @access  Privado (ADMIN)
  */
-
 creditAssetRoutes.post(
-    '/api/assets/import',
-    checkJwt,
-    checkRole(['ADMIN']),
+    '/api/assets/import', 
+    checkJwt, 
+    checkRole([ROLES.ADMIN]), 
     importNewAssetsController.handle
 );
 
-/**
- * @route   GET /api/folders
- * @desc    Lista todas as pastas que possuem ativos de crédito, incluindo um resumo dos ativos em cada pasta.
- * @access  Privado (OPERATOR, ADMIN)
- */
-
-creditAssetRoutes.get(
-    '/api/assets/folders',
-    checkJwt,
-    checkRole(['ADMIN', 'OPERATOR', 'INVESTOR']),
-    listAllFoldersController.handle
-);
-
-/**
- * @route   POST /api/assets
- * @desc    Cria um novo ativo de crédito.
- * @access  Privado (OPERATOR, ADMIN)
- */
-creditAssetRoutes.post(
-    '/api/assets',
-    checkJwt,
-    checkRole(['OPERATOR', 'ADMIN']),
-    createCreditAssetController.handle
-);
 
 /**
  * @route   GET /api/assets
@@ -77,7 +63,7 @@ creditAssetRoutes.post(
 creditAssetRoutes.get(
     '/api/assets',
     checkJwt,
-    checkRole(['OPERATOR', 'ADMIN', 'ASSOCIATE', 'INVESTOR']),
+    checkRole([ROLES.ADMIN, ROLES.OPERATOR, ROLES.INVESTOR, ROLES.ASSOCIATE]),
     listAllAssetsController.handle
 );
 
@@ -86,12 +72,13 @@ creditAssetRoutes.get(
 /**
  * @route   GET /api/assets/lookup/:processNumber
  * @desc    Busca dados de um processo no Legal One para pré-preenchimento.
- * @access  Privado (Todos autenticados)
+ * @access  Privado (ADMIN, OPERATOR)
  */
 creditAssetRoutes.get(
     '/api/assets/lookup/:processNumber',
     checkJwt, // Garante que o usuário está logado
-    lookupAssetFromLegalOneController.handle // 3. USAR O CONTROLLER
+    checkRole([ROLES.ADMIN, ROLES.OPERATOR]), // Bloqueia investidores de buscarem processos aleatórios
+    lookupAssetFromLegalOneController.handle 
 );
 // --- FIM DA NOVA ROTA ---
 
@@ -99,11 +86,12 @@ creditAssetRoutes.get(
 /**
  * @route   GET /api/assets/:processNumber
  * @desc    Busca os detalhes completos de um ativo de crédito específico.
- * @access  Privado (Todos os autenticados)
+ * @access  Privado (Todos os perfis)
  */
 creditAssetRoutes.get(
     '/api/assets/:processNumber',
     checkJwt,
+    checkRole([ROLES.ADMIN, ROLES.OPERATOR, ROLES.INVESTOR, ROLES.ASSOCIATE]), // Proteção de perfil
     getAssetByProcessNumberController.handle
 );
 
@@ -115,7 +103,7 @@ creditAssetRoutes.get(
 creditAssetRoutes.post(
     '/api/assets/:processNumber/sync',
     checkJwt,
-    checkRole(['OPERATOR', 'ADMIN']),
+    checkRole([ROLES.OPERATOR, ROLES.ADMIN]), // Padronizado para usar o enum
     syncSingleAssetController.handle
 );
 
@@ -138,7 +126,7 @@ creditAssetRoutes.get(
 creditAssetRoutes.patch(
     '/api/assets/:processNumber',
     checkJwt,
-    checkRole(['OPERATOR', 'ADMIN']), // Protege a rota
+    checkRole([ROLES.OPERATOR, ROLES.ADMIN]), // Padronizado para usar o enum
     updateAssetController.handle
 );
 
@@ -152,11 +140,22 @@ creditAssetRoutes.patch(
 creditAssetRoutes.delete(
     '/api/assets/:id',
     checkJwt,
-    checkRole(['ADMIN']), // Proteção extra: só admin pode deletar
+    checkRole([ROLES.ADMIN]), // Padronizado para usar o enum
     deleteCreditAssetController.handle
 );
 
 
+/**
+ * @route   POST /api/assets
+ * @desc    Cria um novo ativo de crédito.
+ * @access  Privado (OPERATOR, ADMIN)
+ */
+creditAssetRoutes.post(
+    '/api/assets',
+    checkJwt,
+    checkRole([ROLES.OPERATOR, ROLES.ADMIN]), // Padronizado para usar o enum
+    createCreditAssetController.handle
+);
 
 
 export { creditAssetRoutes };

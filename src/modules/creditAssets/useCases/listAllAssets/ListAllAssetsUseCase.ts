@@ -1,4 +1,3 @@
-// /src/modules/creditAssets/useCases/listAllAssets/ListAllAssetsUseCase.ts
 import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -10,10 +9,10 @@ const ROLES = {
     ASSOCIATE: process.env.ROLE_ASSOCIATE || 'ASSOCIATE',
 };
 
-// Tipagem para o retorno (sem mudanças)
 export type AssetSummary = {
     id: string;
     processNumber: string;
+    nickname?: string | null;
     originalCreditor: string;
     currentValue: number;
     status: string;
@@ -26,15 +25,20 @@ export type AssetSummary = {
     updateIndexType: string | null;
 };
 
-// O Payload do Prisma (sem mudanças)
+interface IListAssetsRequest {
+    auth0UserId: string;
+    roles: string[];
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+}
+
 const assetWithInvestorPayload = {
     include: { 
         investors: { 
-            take: 1, 
             include: { 
-                user: { // Agora que o schema é 'User?', isto retornará 'null' em vez de quebrar
-                    select: { name: true, id: true }
-                } 
+                user: { select: { name: true, id: true } }
             } 
         } 
     }
@@ -43,94 +47,86 @@ const assetWithInvestorPayload = {
 type AssetWithInvestor = Prisma.CreditAssetGetPayload<typeof assetWithInvestorPayload>;
 
 class ListAllAssetsUseCase {
-    async execute(auth0UserId: string, roles: string[]): Promise<AssetSummary[]> {
+    async execute({ auth0UserId, roles, page = 1, limit = 10, search, status }: IListAssetsRequest) {
         const primaryRole = roles[0];
-        console.log(`[GET ASSETS] Utilizador ${auth0UserId} com role [${primaryRole}] a solicitar a lista de ativos.`);
+        const skip = (page - 1) * limit;
 
         const user = await prisma.user.findUnique({
             where: { auth0UserId },
             select: { id: true }
         });
 
-        if (!user) {
-            console.warn(`[GET ASSETS] Utilizador com auth0UserId ${auth0UserId} não encontrado na base de dados local.`);
-            return [];
+        if (!user) return { items: [], meta: { total: 0, page, limit, totalPages: 0 } };
+
+        // 1. CONSTRUÇÃO DO FILTRO (WHERE) BASEADO NA ROLE E BUSCA
+        const where: Prisma.CreditAssetWhereInput = {};
+
+        // Filtro de Role
+        if (primaryRole === ROLES.INVESTOR) {
+            where.investors = { some: { userId: user.id } };
+        } else if (primaryRole === ROLES.ASSOCIATE) {
+            where.OR = [
+                { associateId: user.id },
+                { investors: { some: { associateId: user.id } } }
+            ];
         }
 
-        let assets: AssetWithInvestor[] = [];
-        let isAdminOrOperator = false; 
-
-        // 1. BUSCA (A sua lógica, que já está correta)
-        switch (primaryRole) {
-            case ROLES.ADMIN:
-            case ROLES.OPERATOR:
-                isAdminOrOperator = true; 
-                assets = await prisma.creditAsset.findMany({
-                    orderBy: { acquisitionDate: 'desc' },
-                    ...assetWithInvestorPayload
-                });
-                break;
-            
-            case ROLES.INVESTOR:
-                assets = await prisma.creditAsset.findMany({
-                    where: { investors: { some: { userId: user.id } } },
-                    orderBy: { acquisitionDate: 'desc' },
-                    ...assetWithInvestorPayload
-                });
-                break;
-
-            case ROLES.ASSOCIATE:
-                assets = await prisma.creditAsset.findMany({
-                    where: { associateId: user.id },
-                    orderBy: { acquisitionDate: 'desc' },
-                    ...assetWithInvestorPayload
-                });
-                break;
-
-            default:
-                console.warn(`[GET ASSETS] Role [${primaryRole}] desconhecida. A retornar uma lista vazia.`);
-                break;
+        // Filtro de Status
+        if (status) {
+            where.status = status;
         }
-        
-        // =================================================================
-        //  A CORREÇÃO (Mapeamento Defensivo)
-        // =================================================================
-        const summarizedAssets = assets.map(asset => {
-            
-            // 2. A CORREÇÃO: 'mainInvestment' pode ser 'undefined' (se 'investors' for [])
+
+        // Filtro de Busca (Search)
+        if (search) {
+            where.OR = [
+                ...(where.OR || []),
+                { processNumber: { contains: search, mode: 'insensitive' } },
+                { originalCreditor: { contains: search, mode: 'insensitive' } },
+                { nickname: { contains: search, mode: 'insensitive' } },
+            ];
+        }
+
+        // 2. BUSCA PAGINADA E CONTAGEM EM PARALELO
+        const [assets, total] = await Promise.all([
+            prisma.creditAsset.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: { acquisitionDate: 'desc' },
+                ...assetWithInvestorPayload
+            }),
+            prisma.creditAsset.count({ where })
+        ]);
+
+        // 3. MAPEAMENTO DEFENSIVO (Seu código original)
+        const items = assets.map(asset => {
             const mainInvestment = asset.investors?.[0]; 
-
-            const investorShare = mainInvestment?.investorShare || 0;
-            let investedValue = 0;
-
-            if (isAdminOrOperator) {
-                investedValue = asset.acquisitionValue;
-            } else {
-                investedValue = asset.acquisitionValue * (investorShare / 100);
-            }
-
             return {
                 id: asset.id,
                 processNumber: asset.processNumber,
+                nickname: asset.nickname,
                 originalCreditor: asset.originalCreditor,
                 currentValue: asset.currentValue,
                 status: asset.status,
                 acquisitionDate: asset.acquisitionDate,
-                
-                // 3. A CORREÇÃO: Adicionamos '?' para verificar se 'user' não é 'null'
                 mainInvestorName: mainInvestment?.user?.name || 'N/A', 
                 investorId: mainInvestment?.user?.id || null, 
-                
                 associateId: asset.associateId || null,
-                
-                investorShare: investorShare,
-                investedValue: investedValue, 
+                investorShare: 0,
+                investedValue: asset.acquisitionValue, 
                 updateIndexType: asset.updateIndexType || null,
             };
         });
-        
-        console.log(`[GET ASSETS] ${summarizedAssets.length} ativos encontrados e formatados.`);
-        return summarizedAssets;
+
+        return {
+            items,
+            meta: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
+        };
     }
 }
 

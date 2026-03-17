@@ -1,15 +1,15 @@
 import axios from 'axios';
 import { LegalOneAuth } from './LegalOneAuth';
-import { 
-    LegalOneUploadContainer, 
-    LegalOneDocumentPayload, 
-    LegalOneDocumentsApiResponse, 
+import {
+    LegalOneUploadContainer,
+    LegalOneDocumentPayload,
+    LegalOneDocumentsApiResponse,
     LegalOneDocument,
     LegalOneDocumentDownload
 } from '../legalOneTypes';
 
 export class LegalOneDocuments extends LegalOneAuth {
-    
+
     public async getUploadContainer(fileExtension: string): Promise<LegalOneUploadContainer> {
         const headers = await this.getAuthHeader();
         const url = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/documents/getcontainer(fileExtension='${fileExtension}')`;
@@ -26,7 +26,7 @@ export class LegalOneDocuments extends LegalOneAuth {
     public async finalizeDocument(fileNameInContainer: string, originalFileName: string, contactId: number): Promise<void> {
         const headers = await this.getAuthHeader();
         const url = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/Documents`;
-        
+
         const taggedName = `#DocumentoMAA ${originalFileName}`;
 
         const payload: LegalOneDocumentPayload = {
@@ -45,26 +45,26 @@ export class LegalOneDocuments extends LegalOneAuth {
             fileUploader: null,
             isPhysicallyStored: false,
             isModel: false,
-            relationships: [{ 
+            relationships: [{
                 link: 'Contact', // camelCase aqui para POST/PATCH (JSON)
-                linkItem: { id: contactId, description: taggedName } 
+                linkItem: { id: contactId, description: taggedName }
             }]
         };
-        
-        await axios.post(url, payload, { 
-            headers: { ...headers, 'Content-Type': 'application/json' } 
+
+        await axios.post(url, payload, {
+            headers: { ...headers, 'Content-Type': 'application/json' }
         });
     }
 
-    public async getProcessDocuments(lawsuitId: number): Promise<LegalOneDocument[]> {
+   public async getProcessDocuments(lawsuitId: number): Promise<LegalOneDocument[]> {
         const headers = await this.getAuthHeader();
         const url = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/Documents`;
 
         // =================================================================
-        // A CORREÇÃO: Filtro OData ajustado para a estrutura real
-        // 'Link' e 'LinkItem/Id' (PascalCase é comum em queries OData .NET)
+        // CORREÇÃO DEFINITIVA: Inconsistência da API do Legal One!
+        // Ao contrário dos Andamentos, Documentos ainda usam 'link' e 'linkItem/id'
         // =================================================================
-        const filterQuery = `relationships/any(r: r/Link eq 'Litigation' and r/LinkItem/Id eq ${lawsuitId})`;
+        const filterQuery = `relationships/any(r: r/link eq 'Litigation' and r/linkItem/id eq ${lawsuitId})`;
 
         try {
             const response = await axios.get<LegalOneDocumentsApiResponse>(url, {
@@ -73,10 +73,11 @@ export class LegalOneDocuments extends LegalOneAuth {
             });
             return response.data.value || [];
         } catch (e: any) {
-            console.error("Erro ao buscar documentos:", e.response?.data || e.message);
+            console.error("[Legal One API] Erro ao buscar documentos:", e.response?.data || e.message);
             return [];
         }
     }
+
 
     public async getDocumentDownloadUrl(documentId: number): Promise<string> {
         const headers = await this.getAuthHeader();
