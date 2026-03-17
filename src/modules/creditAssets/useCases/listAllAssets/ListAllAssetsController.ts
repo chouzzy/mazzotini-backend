@@ -1,3 +1,5 @@
+// Caminho: src/modules/creditAssets/useCases/listAllAssets/ListAllAssetsController.ts
+
 import { Request, Response } from 'express';
 import { ListAllAssetsUseCase } from './ListAllAssetsUseCase';
 
@@ -12,8 +14,8 @@ class ListAllAssetsController {
         const auth0UserId = payload.sub;
         const roles = payload['https://mazzotini.awer.co/roles'] || [];
 
-        // Extrai parâmetros da query string
-        const { page, limit, search, status } = request.query;
+        // Extrai o novo parâmetro "type"
+        const { page, limit, search, status, type } = request.query;
 
         const useCase = new ListAllAssetsUseCase();
 
@@ -25,6 +27,7 @@ class ListAllAssetsController {
                 limit: limit ? Number(limit) : 10,
                 search: search ? String(search) : undefined,
                 status: status ? String(status) : undefined,
+                type: type ? String(type) : undefined, // <-- NOVO FILTRO
             });
 
             return response.json(result);

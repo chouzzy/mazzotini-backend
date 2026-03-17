@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient, Prisma, Role } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -20,10 +20,11 @@ interface IListUsersRequest {
     search?: string;
     role?: string;
     status?: string;
+    onlyPlaceholders?: boolean; // <-- NOVO PARÂMETRO
 }
 
 class ListManagementUsersUseCase {
-    async execute({ page = 1, limit = 10, search, role, status }: IListUsersRequest) {
+    async execute({ page = 1, limit = 10, search, role, status, onlyPlaceholders }: IListUsersRequest) {
         const skip = (page - 1) * limit;
 
         // 1. CONSTRUÇÃO DO FILTRO (WHERE)
@@ -34,10 +35,16 @@ class ListManagementUsersUseCase {
         }
 
         if (role && role !== 'ALL') {
-            where.role = role as Prisma.EnumRoleFilter;
+            where.role = role as Role;
+        }
+
+        // Se o filtro de placeholders estiver ativo, forçamos a busca pelo domínio
+        if (onlyPlaceholders) {
+            where.email = { contains: '@mazzotini.placeholder', mode: 'insensitive' };
         }
 
         if (search) {
+            // Se já houver um filtro de placeholder, o search vira um AND implícito
             where.OR = [
                 { name: { contains: search, mode: 'insensitive' } },
                 { email: { contains: search, mode: 'insensitive' } },
@@ -55,7 +62,7 @@ class ListManagementUsersUseCase {
             prisma.user.count({ where })
         ]);
 
-        // 3. MAPEAMENTO COM FALLBACK DE AVATAR (Sua lógica original)
+        // 3. MAPEAMENTO
         const items: UserManagementInfo[] = users.map(user => {
             const roles = user.role ? [user.role] : [];
             const displayName = user.name || user.email;
@@ -68,7 +75,7 @@ class ListManagementUsersUseCase {
                 name: displayName,
                 picture: user.profilePictureUrl || fallbackAvatar, 
                 profilePictureUrl: user.profilePictureUrl,
-                lastLogin: user.updatedAt.toISOString(), 
+                lastLogin: user.updatedAt?.toISOString() || '', 
                 roles: roles, 
                 status: user.status || 'ACTIVE',
             };

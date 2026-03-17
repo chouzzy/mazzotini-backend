@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { legalOneApiService } from "../../../../services/legalOneApiService";
+import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/EnrichAssetFromLegalOneUseCase";
 
 const prisma = new PrismaClient();
 
@@ -61,7 +62,8 @@ class SyncSingleAssetUseCase {
             where: { processNumber },
             include: {
                 updates: { select: { legalOneUpdateId: true } },
-                documents: { select: { legalOneDocumentId: true } }
+                documents: { select: { legalOneDocumentId: true } },
+                investors: true // <--- ADICIONADO: Necessário para a Malha Fina clonar os investidores
             }
         });
 
@@ -82,24 +84,7 @@ class SyncSingleAssetUseCase {
             legalOneApiService.getProcessDocuments(entityIdToFetchFrom)
         ]);
 
-        console.log(`[SYNC MANUAL] ${legalOneUpdates.length} andamentos e ${legalOneDocuments.length} documentos encontrados no Legal One (ID Pai: ${entityIdToFetchFrom}).`);
-
-        // =================================================================
-        // BLOCO DE DEBUG (Espião): Removido o 'title', adicionado o 'notes'
-        // =================================================================
-        if (legalOneDocuments.length > 0) {
-            console.log(`\n[DEBUG DOCUMENTOS] --- Analisando o conteúdo recebido ---`);
-            legalOneDocuments.forEach((doc, index) => {
-                console.log(`Doc ${index + 1}:`);
-                console.log(` - ID: ${doc.id}`);
-                console.log(` - Archive (Nome do ficheiro): "${doc.archive}"`);
-                console.log(` - Description (Descrição): "${doc.description}"`);
-                // Fazemos cast temporário para any caso o notes ainda não esteja na interface
-                console.log(` - Notes (Notas): "${(doc as any).notes}"`);
-                console.log(`--------------------------------------------------`);
-            });
-        }
-        // =================================================================
+        console.log(`[SYNC MANUAL] ${legalOneUpdates.length} andamentos e ${legalOneDocuments.length} documentos encontrados no Legal One.`);
 
         // Filtro de Andamentos
         const existingUpdateIds = new Set(asset.updates.map(u => u.legalOneUpdateId));
@@ -109,7 +94,7 @@ class SyncSingleAssetUseCase {
             return desc.toLowerCase().includes(TAG_RELATORIO.toLowerCase()) || desc.toLowerCase().includes(TAG_RELATORIO_SEM_ACENTO.toLowerCase());
         });
 
-        // Filtro de Documentos (Detetive)
+        // Filtro de Documentos
         const existingDocIds = new Set(asset.documents.map(d => d.legalOneDocumentId));
         const documentsToProcess = legalOneDocuments.filter(doc => {
             if (existingDocIds.has(doc.id)) return false;
@@ -124,6 +109,15 @@ class SyncSingleAssetUseCase {
 
         if (updatesToProcess.length === 0 && documentsToProcess.length === 0) {
             console.log(`[SYNC MANUAL] Processo ${asset.processNumber}: Nenhuma novidade encontrada (com as tags corretas).`);
+            
+            // =================================================================
+            // REFORÇO DE MALHA FINA (Se não houver andamentos novos)
+            // =================================================================
+            if ((asset.legalOneType === 'Lawsuit' || !asset.legalOneType) && asset.legalOneId) {
+                await this.syncChildren(asset).catch(err => 
+                    console.error(`[SYNC MANUAL] Erro no reforço de filhos:`, err)
+                );
+            }
             return;
         }
 
@@ -159,17 +153,10 @@ class SyncSingleAssetUseCase {
 
             // Salva Documentos
             for (const doc of documentsToProcess) {
-                // O nome do arquivo na API do Legal One sempre reside no 'archive'
                 let rawName = doc.archive || `Documento ${doc.id}`;
-                
-                // Removemos a tag caso ela venha no nome do arquivo
                 const regexTag = new RegExp(TAG_DOCUMENTO, 'i');
                 let cleanName = rawName.replace(regexTag, '').replace(/^-/, '').trim();
-                
-                // Fallback para garantir que nunca fique com o nome vazio
-                if (!cleanName) {
-                    cleanName = "Documento Sincronizado";
-                }
+                if (!cleanName) cleanName = "Documento Sincronizado";
                 
                 await tx.document.create({
                     data: {
@@ -194,6 +181,95 @@ class SyncSingleAssetUseCase {
         }, { maxWait: 30000, timeout: 30000 });
 
         console.log(`[SYNC MANUAL] ✅ Sucesso! ${updatesToProcess.length} andamentos e ${documentsToProcess.length} documentos salvos.`);
+
+        // =================================================================
+        // REFORÇO DE MALHA FINA (Se houver andamentos novos)
+        // =================================================================
+        if ((asset.legalOneType === 'Lawsuit' || !asset.legalOneType) && asset.legalOneId) {
+            await this.syncChildren(asset).catch(err => 
+                console.error(`[SYNC MANUAL] Erro no reforço de filhos:`, err)
+            );
+        }
+    }
+
+    private async syncChildren(parent: any) {
+        console.log(`[SYNC MANUAL] 🕵️ Reforço de Malha Fina: Buscando família do processo pai ID: ${parent.legalOneId}`);
+        
+        const [appeals, issues] = await Promise.all([
+            legalOneApiService.getAppealsByLawsuitId(parent.legalOneId!),
+            legalOneApiService.getProceduralIssuesByLawsuitId(parent.legalOneId!)
+        ]);
+
+        const children = [
+            ...appeals.map(a => ({ ...a, type: 'Appeal' })),
+            ...issues.map(i => ({ ...i, type: 'ProceduralIssue' }))
+        ];
+
+        if (children.length === 0) {
+            console.log(`[SYNC MANUAL] ℹ️ Reforço: Nenhum filho encontrado no Legal One.`);
+            return;
+        }
+
+        for (const child of children) {
+            const childNumber = child.identifierNumber || child.oldNumber;
+            if (!childNumber) continue;
+
+            const exists = await prisma.creditAsset.findUnique({ where: { processNumber: childNumber } });
+            if (exists) continue; 
+
+            console.log(`[SYNC MANUAL] ➡ Reforço Encontrou Filho Perdido: Cadastrando ${childNumber} (${child.type})`);
+
+            const courtPanelDesc = (child as any).courtPanel?.description || "Tribunal não identificado";
+            const courtNumber = (child as any).courtPanelNumberText || "";
+            const origem = courtNumber ? `${courtNumber} ${courtPanelDesc}` : courtPanelDesc;
+
+            try {
+                const createdChild = await prisma.$transaction(async (tx) => {
+                    const newAsset = await tx.creditAsset.create({
+                        data: {
+                            processNumber: childNumber,
+                            originalCreditor: parent.originalCreditor,
+                            otherParty: parent.otherParty,
+                            nickname: parent.nickname,
+                            origemProcesso: origem,
+                            legalOneId: child.id,
+                            legalOneType: child.type as any,
+                            folderId: parent.folderId, 
+                            originalValue: 0,
+                            acquisitionValue: 0,
+                            currentValue: 0,
+                            acquisitionDate: parent.acquisitionDate,
+                            updateIndexType: parent.updateIndexType,
+                            contractualIndexRate: parent.contractualIndexRate,
+                            status: 'PENDING_ENRICHMENT',
+                            associateId: parent.associateId,
+                        }
+                    });
+
+                    if (parent.investors && parent.investors.length > 0) {
+                        await tx.investment.createMany({
+                            data: parent.investors.map((inv: any) => ({
+                                investorShare: inv.investorShare || 0,
+                                mazzotiniShare: inv.mazzotiniShare || 0,
+                                userId: inv.userId,
+                                creditAssetId: newAsset.id,
+                                associateId: inv.associateId || undefined,
+                                acquisitionDate: inv.acquisitionDate || undefined
+                            }))
+                        });
+                    }
+                    return newAsset;
+                });
+
+                const enrichChild = new EnrichAssetFromLegalOneUseCase();
+                await enrichChild.execute(createdChild.id);
+
+            } catch (err: any) {
+                console.error(`[SYNC MANUAL] ❌ Falha ao recuperar filho ${childNumber} no reforço:`, err.message);
+            }
+        }
+        
+        console.log(`[SYNC MANUAL] ✅ Reforço de Malha Fina concluído.`);
     }
 }
 

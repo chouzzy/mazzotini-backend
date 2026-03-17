@@ -1,3 +1,5 @@
+// Caminho: src/modules/creditAssets/useCases/listAllAssets/ListAllAssetsUseCase.ts
+
 import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -23,6 +25,8 @@ export type AssetSummary = {
     investorShare: number;
     investedValue: number;
     updateIndexType: string | null;
+    legalOneType?: string | null;
+    parentProcessNumber?: string | null;
 };
 
 interface IListAssetsRequest {
@@ -32,6 +36,7 @@ interface IListAssetsRequest {
     limit?: number;
     search?: string;
     status?: string;
+    type?: string; // <-- NOVO FILTRO
 }
 
 const assetWithInvestorPayload = {
@@ -40,14 +45,20 @@ const assetWithInvestorPayload = {
             include: { 
                 user: { select: { name: true, id: true } }
             } 
-        } 
+        },
+        folder: {
+            include: {
+                assets: {
+                    where: { legalOneType: 'Lawsuit' },
+                    select: { processNumber: true }
+                }
+            }
+        }
     }
 };
 
-type AssetWithInvestor = Prisma.CreditAssetGetPayload<typeof assetWithInvestorPayload>;
-
 class ListAllAssetsUseCase {
-    async execute({ auth0UserId, roles, page = 1, limit = 10, search, status }: IListAssetsRequest) {
+    async execute({ auth0UserId, roles, page = 1, limit = 10, search, status, type }: IListAssetsRequest) {
         const primaryRole = roles[0];
         const skip = (page - 1) * limit;
 
@@ -58,10 +69,8 @@ class ListAllAssetsUseCase {
 
         if (!user) return { items: [], meta: { total: 0, page, limit, totalPages: 0 } };
 
-        // 1. CONSTRUÇÃO DO FILTRO (WHERE) BASEADO NA ROLE E BUSCA
         const where: Prisma.CreditAssetWhereInput = {};
 
-        // Filtro de Role
         if (primaryRole === ROLES.INVESTOR) {
             where.investors = { some: { userId: user.id } };
         } else if (primaryRole === ROLES.ASSOCIATE) {
@@ -71,22 +80,34 @@ class ListAllAssetsUseCase {
             ];
         }
 
-        // Filtro de Status
         if (status) {
             where.status = status;
         }
 
-        // Filtro de Busca (Search)
+        // --- NOVO: Lógica de Filtro por Tipo ---
+        if (type && type !== 'ALL') {
+            if (type === 'LAWSUIT') {
+                where.AND = [
+                    ...(where.AND as any[] || []),
+                    { OR: [{ legalOneType: 'Lawsuit' }, { legalOneType: null }] }
+                ];
+            } else if (type === 'APPEAL') {
+                where.legalOneType = 'Appeal';
+            } else if (type === 'INCIDENT') {
+                where.legalOneType = 'ProceduralIssue';
+            }
+        }
+
         if (search) {
+            const searchFilter = { contains: search, mode: 'insensitive' as Prisma.QueryMode };
             where.OR = [
-                ...(where.OR || []),
-                { processNumber: { contains: search, mode: 'insensitive' } },
-                { originalCreditor: { contains: search, mode: 'insensitive' } },
-                { nickname: { contains: search, mode: 'insensitive' } },
+                ...(where.OR as any[] || []),
+                { processNumber: searchFilter },
+                { originalCreditor: searchFilter },
+                { nickname: searchFilter },
             ];
         }
 
-        // 2. BUSCA PAGINADA E CONTAGEM EM PARALELO
         const [assets, total] = await Promise.all([
             prisma.creditAsset.findMany({
                 where,
@@ -98,9 +119,12 @@ class ListAllAssetsUseCase {
             prisma.creditAsset.count({ where })
         ]);
 
-        // 3. MAPEAMENTO DEFENSIVO (Seu código original)
         const items = assets.map(asset => {
             const mainInvestment = asset.investors?.[0]; 
+            const parentProcessNumber = (asset.legalOneType === 'Appeal' || asset.legalOneType === 'ProceduralIssue') && asset.folder?.assets?.length
+                ? asset.folder.assets[0].processNumber
+                : null;
+
             return {
                 id: asset.id,
                 processNumber: asset.processNumber,
@@ -115,18 +139,12 @@ class ListAllAssetsUseCase {
                 investorShare: 0,
                 investedValue: asset.acquisitionValue, 
                 updateIndexType: asset.updateIndexType || null,
+                legalOneType: asset.legalOneType || 'Lawsuit',
+                parentProcessNumber: parentProcessNumber
             };
         });
 
-        return {
-            items,
-            meta: {
-                total,
-                page,
-                limit,
-                totalPages: Math.ceil(total / limit)
-            }
-        };
+        return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
     }
 }
 
