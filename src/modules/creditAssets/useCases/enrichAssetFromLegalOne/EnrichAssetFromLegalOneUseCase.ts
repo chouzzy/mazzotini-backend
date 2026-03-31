@@ -200,13 +200,22 @@ class EnrichAssetFromLegalOneUseCase {
             const origem = courtNumber ? `${courtNumber} ${courtPanelDesc}` : courtPanelDesc;
 
             try {
+                // Busca as partes reais do filho no Legal One
+                const endpointType = child.type === 'Appeal' ? 'appeals' : 'proceduralissues';
+                const childParticipants = await legalOneApiService.getEntityParticipants(endpointType, child.id).catch(() => []);
+                const customerP = childParticipants.find((p: any) => p.type === "Customer");
+                const otherPartyP = childParticipants.find((p: any) => p.type === "OtherParty" && p.isMainParticipant)
+                    || childParticipants.find((p: any) => p.type === "OtherParty");
+                const childOriginalCreditor = customerP?.contactName || parent.originalCreditor;
+                const childOtherParty = otherPartyP?.contactName || parent.otherParty;
+
                 const createdChild = await prisma.$transaction(async (tx) => {
                     const newAsset = await tx.creditAsset.create({
                         data: {
                             processNumber: childNumber,
-                            originalCreditor: parent.originalCreditor,
-                            otherParty: parent.otherParty,
-                            nickname: parent.nickname,
+                            originalCreditor: childOriginalCreditor,
+                            otherParty: childOtherParty,
+                            nickname: childOtherParty,
                             origemProcesso: origem,
                             legalOneId: child.id,
                             legalOneType: child.type as any,

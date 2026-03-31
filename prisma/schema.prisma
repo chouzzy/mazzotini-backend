@@ -78,9 +78,12 @@ model User {
   // Relacionamentos Inversos
   investments           Investment[]
   associateInvestments  Investment[] @relation("AssociateInvestment")
-  
+
   // CORREÇÃO: Relação reversa para o associado principal do processo
   associateAssets       CreditAsset[] @relation("CreditAssetAssociate")
+
+  // Solicitações de alteração de perfil
+  profileChangeRequests UserProfileChangeRequest[] @relation("UserProfileChanges")
 
   // CORREÇÃO: Nulos permitidos
   createdAt             DateTime?    @default(now())
@@ -205,6 +208,24 @@ model Document {
   // CORREÇÃO: Nulos permitidos
   createdAt          DateTime?   @default(now())
   updatedAt          DateTime?   @updatedAt
+}
+
+// ==========================================
+//  MODEL: SOLICITAÇÃO DE ALTERAÇÃO DE PERFIL
+// ==========================================
+model UserProfileChangeRequest {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  user        User     @relation("UserProfileChanges", fields: [userId], references: [id])
+
+  // Snapshot dos campos propostos (JSON livre)
+  proposedData Json
+
+  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  rejectionReason String?
+
+  createdAt   DateTime? @default(now())
+  updatedAt   DateTime? @updatedAt
 }
 
 // ==========================================

@@ -40,21 +40,11 @@ class GetAssetByProcessNumberUseCase {
                 throw new Error("Acesso negado.");
             }
 
-            if (roles.includes('INVESTOR')) {
-                // Verifica se o ID do investidor está dentro da lista de investidores DESTE processo
+            if (roles.includes('INVESTOR') || roles.includes('ASSOCIATE')) {
+                // Verifica se o ID do usuário está dentro da lista de investidores DESTE processo
                 const isInvestorInThisAsset = asset.investors.some(inv => inv.user?.id === user.id);
                 if (!isInvestorInThisAsset) {
-                    console.warn(`[SEGURANÇA] Investidor ${user.id} tentou aceder ao processo ${processNumber} sem estar vinculado.`);
-                    throw new Error("Acesso negado.");
-                }
-            } 
-            else if (roles.includes('ASSOCIATE')) {
-                // Verifica se ele é o associado global do processo OU o associado de algum investidor específico
-                const isMainAssociate = asset.associate?.id === user.id;
-                const isInvestorAssociate = asset.investors.some(inv => inv.associate?.id === user.id);
-                
-                if (!isMainAssociate && !isInvestorAssociate) {
-                    console.warn(`[SEGURANÇA] Associado ${user.id} tentou aceder ao processo ${processNumber} sem estar vinculado.`);
+                    console.warn(`[SEGURANÇA] Usuário ${user.id} tentou aceder ao processo ${processNumber} sem estar vinculado.`);
                     throw new Error("Acesso negado.");
                 }
             }

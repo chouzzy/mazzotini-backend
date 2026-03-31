@@ -71,13 +71,8 @@ class ListAllAssetsUseCase {
 
         const where: Prisma.CreditAssetWhereInput = {};
 
-        if (primaryRole === ROLES.INVESTOR) {
+        if (primaryRole === ROLES.INVESTOR || primaryRole === ROLES.ASSOCIATE) {
             where.investors = { some: { userId: user.id } };
-        } else if (primaryRole === ROLES.ASSOCIATE) {
-            where.OR = [
-                { associateId: user.id },
-                { investors: { some: { associateId: user.id } } }
-            ];
         }
 
         if (status) {

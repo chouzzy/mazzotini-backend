@@ -25,6 +25,7 @@ class LegalOneApiService {
     public listLawsuits = this.processes.listLawsuits.bind(this.processes);
     public getAppealsByLawsuitId = this.processes.getAppealsByLawsuitId.bind(this.processes);
     public getProceduralIssuesByLawsuitId = this.processes.getProceduralIssuesByLawsuitId.bind(this.processes);
+    public getEntityParticipants = this.processes.getEntityParticipants.bind(this.processes);
 
 
 

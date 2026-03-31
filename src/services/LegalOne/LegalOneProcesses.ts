@@ -11,16 +11,22 @@ import {
 
 export class LegalOneProcesses extends LegalOneAuth {
 
-    // --- Helper Privado ---
-    private async getEntityParticipants(endpointType: 'lawsuits' | 'appeals' | 'proceduralissues', entityId: number): Promise<LegalOneParticipant[]> {
-        const headers = await this.getAuthHeader();
-        const url = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/${endpointType}/${entityId}/participants`;
+    // --- Helper ---
+    public async getEntityParticipants(endpointType: 'lawsuits' | 'appeals' | 'proceduralissues', entityId: number): Promise<LegalOneParticipant[]> {
+        const baseUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/${endpointType}/${entityId}/participants`;
+        let all: LegalOneParticipant[] = [];
+        let url: string | null = baseUrl;
         try {
-            const response = await axios.get<{ value: LegalOneParticipant[] }>(url, { headers });
-            return response.data.value || [];
+            while (url) {
+                const headers = await this.getAuthHeader();
+                const response = await axios.get<{ value: LegalOneParticipant[]; '@odata.nextLink'?: string }>(url, { headers });
+                all = all.concat(response.data.value || []);
+                url = response.data['@odata.nextLink'] || null;
+            }
+            return all;
         } catch (error: any) {
             console.warn(`[Legal One API] Falha ao buscar participantes:`, error.message);
-            return [];
+            return all; // retorna o que já coletou antes do erro
         }
     }
 

@@ -12,12 +12,12 @@ const prisma = new PrismaClient();
 export const syncParticipantsAsUsers = async (participants: LegalOneParticipant[]): Promise<User[]> => {
     if (!participants || participants.length === 0) return [];
 
-    // 1. Filtra apenas quem é "Customer" (Cliente)
-    const customers = participants.filter(p => p.type === "Customer");
-    
+    // Todos os tipos de participante são tratados como clientes
+    const customers = participants;
+
     const syncedUsers: User[] = [];
 
-    console.log(`[PARTICIPANTS] Encontrados ${customers.length} clientes no processo. Processando...`);
+    console.log(`[PARTICIPANTS] Encontrados ${customers.length} participantes no processo. Processando...`);
 
     for (const customer of customers) {
         try {
@@ -31,6 +31,28 @@ export const syncParticipantsAsUsers = async (participants: LegalOneParticipant[
             });
 
             if (user) {
+                // Se o encontrado for um shadow user, verifica se há um usuário real com mesmo CPF
+                const isShadowUser = user.auth0UserId.startsWith('legalone|import|');
+                if (isShadowUser && user.cpfOrCnpj) {
+                    const realUser = await prisma.user.findFirst({
+                        where: {
+                            cpfOrCnpj: user.cpfOrCnpj,
+                            NOT: { auth0UserId: { startsWith: 'legalone|import|' } }
+                        }
+                    });
+                    if (realUser) {
+                        console.log(`[PARTICIPANTS] Shadow user detectado para CPF ${user.cpfOrCnpj}. Preferindo usuário real: ${realUser.email}`);
+                        // Garante que o usuário real tem o legalOneContactId vinculado
+                        if (!realUser.legalOneContactId) {
+                            await prisma.user.update({
+                                where: { id: realUser.id },
+                                data: { legalOneContactId: customer.contactId }
+                            });
+                        }
+                        syncedUsers.push(realUser);
+                        continue;
+                    }
+                }
                 console.log(`[PARTICIPANTS] Usuário já existe (ID LegalOne: ${customer.contactId}).`);
                 syncedUsers.push(user);
                 continue;

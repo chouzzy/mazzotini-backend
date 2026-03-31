@@ -19,6 +19,9 @@ import { UploadInvestmentDocumentController } from '../modules/management/useCas
 import uploadConfig from '../config/upload';
 import multer from 'multer';
 import { AdminUploadUserDocumentController } from '../modules/management/useCases/adminUploadUserDocument/AdminUploadUserDocumentController';
+import { RequestProfileChangeController } from '../modules/management/useCases/requestProfileChange/RequestProfileChangeController';
+import { ReviewProfileChangeController } from '../modules/management/useCases/reviewProfileChange/ReviewProfileChangeController';
+import { ListPendingProfileChangesController } from '../modules/management/useCases/listPendingProfileChanges/ListPendingProfileChangesController';
 
 
 const managementRoutes = Router();
@@ -37,6 +40,9 @@ const adminDeleteUserDocumentController = new AdminDeleteUserDocumentController(
 const updateUserInvestmentsController = new UpdateUserInvestmentsController();
 const uploadInvestmentDocumentController = new UploadInvestmentDocumentController();
 const adminUploadUserDocumentController = new AdminUploadUserDocumentController();
+const requestProfileChangeController = new RequestProfileChangeController();
+const reviewProfileChangeController = new ReviewProfileChangeController();
+const listPendingProfileChangesController = new ListPendingProfileChangesController();
 const upload = multer(uploadConfig);
 
 
@@ -247,6 +253,54 @@ managementRoutes.post(
     checkRole([ROLES.ADMIN]),
     upload.single('document'), // Usa o middleware do multer configurado
     adminUploadUserDocumentController.handle
+);
+
+/**
+ * @route   POST /api/management/users/:id/request-change
+ * @desc    Solicita alteração de perfil (fica pendente até aprovação do ADM)
+ * @access  Privado (ADMIN)
+ */
+managementRoutes.post(
+    '/api/management/users/:id/request-change',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    requestProfileChangeController.handle
+);
+
+/**
+ * @route   GET /api/management/profile-changes
+ * @desc    Lista todas as solicitações de alteração de perfil pendentes
+ * @access  Privado (ADMIN)
+ */
+managementRoutes.get(
+    '/api/management/profile-changes',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    listPendingProfileChangesController.handle
+);
+
+/**
+ * @route   PATCH /api/management/profile-changes/:requestId/approve
+ * @desc    Aprova uma solicitação de alteração de perfil e aplica os dados
+ * @access  Privado (ADMIN)
+ */
+managementRoutes.patch(
+    '/api/management/profile-changes/:requestId/approve',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    reviewProfileChangeController.approve
+);
+
+/**
+ * @route   PATCH /api/management/profile-changes/:requestId/reject
+ * @desc    Rejeita uma solicitação de alteração de perfil
+ * @access  Privado (ADMIN)
+ */
+managementRoutes.patch(
+    '/api/management/profile-changes/:requestId/reject',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    reviewProfileChangeController.reject
 );
 
 export { managementRoutes };

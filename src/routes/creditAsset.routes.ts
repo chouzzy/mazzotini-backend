@@ -37,7 +37,7 @@ const listAllFoldersController = new ListAllFoldersController();
 creditAssetRoutes.get(
     '/api/assets/folders',
     checkJwt,
-    checkRole([ROLES.ADMIN, ROLES.OPERATOR, ROLES.INVESTOR]),
+    checkRole([ROLES.ADMIN, ROLES.OPERATOR, ROLES.INVESTOR, ROLES.ASSOCIATE]),
     listAllFoldersController.handle
 );
 

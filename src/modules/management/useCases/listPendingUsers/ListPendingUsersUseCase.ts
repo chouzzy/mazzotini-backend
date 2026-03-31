@@ -15,6 +15,9 @@ class ListPendingUsersUseCase {
             },
             orderBy: {
                 updatedAt: 'asc' // Mostra os mais antigos primeiro
+            },
+            include: {
+                referredBy: { select: { name: true } }
             }
         });
 
