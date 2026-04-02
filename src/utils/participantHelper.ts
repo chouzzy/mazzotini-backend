@@ -1,6 +1,6 @@
 import { PrismaClient, User } from "@prisma/client";
 import { legalOneApiService } from "../services/legalOneApiService";
-import { unmask } from "./masks"; 
+import { unmask } from "./masks";
 import { LegalOneParticipant } from "../services/legalOneTypes";
 
 const prisma = new PrismaClient();
@@ -8,18 +8,18 @@ const prisma = new PrismaClient();
 /**
  * Sincroniza participantes do Legal One com a tabela User do nosso banco.
  * Se o usuário não existir, cria um "Shadow User" (Usuário Sombra).
+ *
+ * Regra: o shadow user é sempre criado se o participante tiver contactId.
+ * CPF/CNPJ é opcional — preenchido quando disponível.
  */
 export const syncParticipantsAsUsers = async (participants: LegalOneParticipant[]): Promise<User[]> => {
     if (!participants || participants.length === 0) return [];
 
-    // Todos os tipos de participante são tratados como clientes
-    const customers = participants;
-
     const syncedUsers: User[] = [];
 
-    console.log(`[PARTICIPANTS] Encontrados ${customers.length} participantes no processo. Processando...`);
+    console.log(`[PARTICIPANTS] Encontrados ${participants.length} participantes no processo. Processando...`);
 
-    for (const customer of customers) {
+    for (const customer of participants) {
         try {
             if (!customer.contactId) continue;
 
@@ -42,7 +42,6 @@ export const syncParticipantsAsUsers = async (participants: LegalOneParticipant[
                     });
                     if (realUser) {
                         console.log(`[PARTICIPANTS] Shadow user detectado para CPF ${user.cpfOrCnpj}. Preferindo usuário real: ${realUser.email}`);
-                        // Garante que o usuário real tem o legalOneContactId vinculado
                         if (!realUser.legalOneContactId) {
                             await prisma.user.update({
                                 where: { id: realUser.id },
@@ -59,61 +58,83 @@ export const syncParticipantsAsUsers = async (participants: LegalOneParticipant[
             }
 
             // -------------------------------------------------------------
-            // B. Se não achou, vai ao Legal One buscar o CPF/CNPJ
+            // B. Usuário não existe. Tenta buscar CPF/CNPJ no Legal One
+            //    (opcional — o shadow user é criado mesmo sem CPF)
             // -------------------------------------------------------------
-            console.log(`[PARTICIPANTS] Usuário novo (ID ${customer.contactId}). Buscando CPF na API...`);
-            
-            // Requer que você tenha implementado o getContactGeneric no passo anterior
-            const legalOneContact = await legalOneApiService.getContactGeneric(customer.contactId);
+            console.log(`[PARTICIPANTS] Usuário novo (ID ${customer.contactId}). Buscando dados na API...`);
 
-            const cpfOrCnpjRaw = legalOneContact.identificationNumber ? unmask(legalOneContact.identificationNumber) : null;
-            
-            if (!cpfOrCnpjRaw) {
-                 console.warn(`[PARTICIPANTS] Contato "${customer.contactName}" sem CPF/CNPJ. Pulando.`);
-                 continue;
+            let cpfOrCnpjRaw: string | null = null;
+            let contactName = customer.contactName || `Contato ${customer.contactId}`;
+            let contactEmail: string | null = null;
+            let contactRg: string | null = null;
+
+            try {
+                const legalOneContact = await legalOneApiService.getContactGeneric(customer.contactId);
+                contactName = legalOneContact.name || contactName;
+                contactEmail = legalOneContact.email || null;
+                cpfOrCnpjRaw = legalOneContact.identificationNumber
+                    ? unmask(legalOneContact.identificationNumber)
+                    : null;
+                contactRg = legalOneContact.personStateIdentificationNumber
+                    ? unmask(legalOneContact.personStateIdentificationNumber)
+                    : null;
+            } catch (contactErr: any) {
+                // getContactGeneric falhou (ex: endpoint não disponível, 404, etc.)
+                // Não bloqueia — criamos o shadow user com os dados disponíveis do participante
+                console.warn(`[PARTICIPANTS] Não foi possível buscar detalhes do contato ${customer.contactId}: ${contactErr.message}. Criando shadow user com dados básicos.`);
             }
 
             // -------------------------------------------------------------
-            // C. Tenta encontrar no DB local pelo CPF/CNPJ (Para evitar duplicidade)
+            // C. Se tiver CPF/CNPJ, verifica se já existe usuário com esse documento
             // -------------------------------------------------------------
-            user = await prisma.user.findFirst({
-                where: { cpfOrCnpj: cpfOrCnpjRaw }
+            if (cpfOrCnpjRaw) {
+                user = await prisma.user.findFirst({
+                    where: { cpfOrCnpj: cpfOrCnpjRaw }
+                });
+
+                if (user) {
+                    console.log(`[PARTICIPANTS] Usuário encontrado por CPF. Vinculando ID Legal One.`);
+                    user = await prisma.user.update({
+                        where: { id: user.id },
+                        data: { legalOneContactId: customer.contactId }
+                    });
+                    syncedUsers.push(user);
+                    continue;
+                }
+            }
+
+            // -------------------------------------------------------------
+            // D. CRIAR O "SHADOW USER"
+            //    Sempre criado se tiver contactId (CPF é opcional aqui)
+            // -------------------------------------------------------------
+            console.log(`[PARTICIPANTS] Criando SHADOW USER para: ${contactName}`);
+
+            const tempAuth0Id = `legalone|import|${customer.contactId}`;
+            const placeholderEmail = contactEmail || `pendente_${customer.contactId}@mazzotini.placeholder`;
+
+            // Verifica se já existe placeholder com esse email (concorrência)
+            const existingByEmail = await prisma.user.findFirst({
+                where: { email: placeholderEmail }
             });
 
-            if (user) {
-                // Achamos pelo CPF! Vamos apenas atualizar o ID do Legal One nele.
-                console.log(`[PARTICIPANTS] Usuário encontrado por CPF. Vinculando ID Legal One.`);
-                user = await prisma.user.update({
-                    where: { id: user.id },
-                    data: { legalOneContactId: customer.contactId }
-                });
-            } else {
-                // -------------------------------------------------------------
-                // D. CRIAR O "SHADOW USER" (AQUI ESTÁ A MÁGICA)
-                // -------------------------------------------------------------
-                console.log(`[PARTICIPANTS] Criando SHADOW USER para: ${legalOneContact.name}`);
-                
-                // Criamos um ID fake para satisfazer o campo único do Prisma
-                // Quando ele logar de verdade, o '/api/users/sync' vai substituir isso.
-                const tempAuth0Id = `legalone|import|${customer.contactId}`;
-
-                user = await prisma.user.create({
-                    data: {
-                        name: legalOneContact.name,
-                        // Email é obrigatório? Se não tiver no Legal One, criamos um placeholder
-                        email: legalOneContact.email || `pendente_${customer.contactId}@mazzotini.placeholder`, 
-                        cpfOrCnpj: cpfOrCnpjRaw,
-                        // Se for PF, tenta salvar RG
-                        rg: legalOneContact.personStateIdentificationNumber ? unmask(legalOneContact.personStateIdentificationNumber) : null,
-                        
-                        auth0UserId: tempAuth0Id, // <--- O ID TEMPORÁRIO
-                        legalOneContactId: customer.contactId,
-                        
-                        status: 'ACTIVE', // Já consideramos ativo pois é cliente oficial
-                        role: 'INVESTOR', 
-                    }
-                });
+            if (existingByEmail) {
+                console.log(`[PARTICIPANTS] Shadow user com email placeholder já existe. Reutilizando.`);
+                syncedUsers.push(existingByEmail);
+                continue;
             }
+
+            user = await prisma.user.create({
+                data: {
+                    name: contactName,
+                    email: placeholderEmail,
+                    cpfOrCnpj: cpfOrCnpjRaw || null,
+                    rg: contactRg,
+                    auth0UserId: tempAuth0Id,
+                    legalOneContactId: customer.contactId,
+                    status: 'ACTIVE',
+                    role: 'INVESTOR',
+                }
+            });
 
             syncedUsers.push(user);
 
@@ -122,5 +143,6 @@ export const syncParticipantsAsUsers = async (participants: LegalOneParticipant[
         }
     }
 
+    console.log(`[PARTICIPANTS] Sincronização concluída. ${syncedUsers.length}/${participants.length} usuários processados.`);
     return syncedUsers;
 };
