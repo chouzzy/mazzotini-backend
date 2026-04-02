@@ -32,6 +32,7 @@ jest.mock('../../services/legalOneApiService', () => ({
         getProcessUpdates: jest.fn(),
         getProcessDocuments: jest.fn(),
         getAllByProcessNumber: jest.fn(),
+        getEntitiesByFolderCode: jest.fn(),
     }
 }));
 
@@ -146,8 +147,12 @@ describe('CreateCreditAssetUseCase', () => {
         mockedService.getAppealById.mockResolvedValue(mockAppeal);
         mockedService.getLawsuitById.mockResolvedValue(mockLawsuit);
 
-        // Antes não existe o pai no banco (MOCK_LAWSUIT_ID já criado, usando ID novo)
-        await testPrisma.creditAsset.deleteMany({ where: { legalOneId: MOCK_LAWSUIT_ID } });
+        // Remove o Lawsuit criado pelo teste 1 (com seus investimentos) para testar a criação automática
+        const parentToDelete = await testPrisma.creditAsset.findUnique({ where: { legalOneId: MOCK_LAWSUIT_ID } });
+        if (parentToDelete) {
+            await testPrisma.investment.deleteMany({ where: { creditAssetId: parentToDelete.id } });
+            await testPrisma.creditAsset.deleteMany({ where: { legalOneId: MOCK_LAWSUIT_ID } });
+        }
 
         await useCase.execute({
             processNumber: mockAppeal.identifierNumber,

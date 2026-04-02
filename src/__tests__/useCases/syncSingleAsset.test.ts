@@ -32,6 +32,7 @@ jest.mock('../../services/legalOneApiService', () => ({
         getProcessDocuments: jest.fn(),
         getProcessDetails: jest.fn(),
         getAllByProcessNumber: jest.fn(),
+        getEntitiesByFolderCode: jest.fn(),
     }
 }));
 

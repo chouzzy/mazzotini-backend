@@ -14,7 +14,14 @@ const TEST_LEGAL_ONE_IDS = [900001, 900002, 900003, 900099];
 
 export async function cleanTestDb() {
     // MongoDB não suporta filtro por relação em deleteMany.
-    // Primeiro buscamos os IDs dos assets de teste, depois deletamos os filhos.
+    // Buscamos IDs dos assets E dos usuários de teste antes de deletar.
+
+    const testUsers = await prisma.user.findMany({
+        where: { auth0UserId: { startsWith: 'test|' } },
+        select: { id: true }
+    });
+    const testUserIds = testUsers.map(u => u.id);
+
     const testAssets = await prisma.creditAsset.findMany({
         where: { legalOneId: { in: TEST_LEGAL_ONE_IDS } },
         select: { id: true }
@@ -24,10 +31,27 @@ export async function cleanTestDb() {
     if (testAssetIds.length > 0) {
         await prisma.assetUpdate.deleteMany({ where: { assetId: { in: testAssetIds } } });
         await prisma.document.deleteMany({ where: { assetId: { in: testAssetIds } } });
+    }
+
+    // Deleta investimentos por userId (captura órfãos de assets deletados manualmente nos testes)
+    // e por creditAssetId (belt & suspenders)
+    if (testUserIds.length > 0) {
+        await prisma.investment.deleteMany({ where: { userId: { in: testUserIds } } });
+    }
+    if (testAssetIds.length > 0) {
         await prisma.investment.deleteMany({ where: { creditAssetId: { in: testAssetIds } } });
     }
 
     await prisma.creditAsset.deleteMany({ where: { legalOneId: { in: TEST_LEGAL_ONE_IDS } } });
+
+    // Nulifica referências UserReferral apontando para os test users antes de deletá-los
+    if (testUserIds.length > 0) {
+        await prisma.user.updateMany({
+            where: { referredById: { in: testUserIds } },
+            data: { referredById: null }
+        });
+    }
+
     await prisma.user.deleteMany({ where: { auth0UserId: { startsWith: 'test|' } } });
     await prisma.processFolder.deleteMany({ where: { folderCode: { startsWith: 'Proc-Test-' } } });
 }

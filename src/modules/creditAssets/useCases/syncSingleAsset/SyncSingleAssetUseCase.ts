@@ -155,7 +155,7 @@ class SyncSingleAssetUseCase {
             for (const doc of documentsToProcess) {
                 let rawName = doc.archive || `Documento ${doc.id}`;
                 const regexTag = new RegExp(TAG_DOCUMENTO, 'i');
-                let cleanName = rawName.replace(regexTag, '').replace(/^-/, '').trim();
+                let cleanName = rawName.replace(regexTag, '').replace(/^\s*-\s*/, '').trim();
                 if (!cleanName) cleanName = "Documento Sincronizado";
                 
                 await tx.document.create({
