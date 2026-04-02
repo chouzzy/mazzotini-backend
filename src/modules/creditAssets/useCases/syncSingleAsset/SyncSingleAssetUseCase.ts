@@ -55,11 +55,11 @@ const extractFreeText = (description: string | null | undefined): string => {
 };
 
 class SyncSingleAssetUseCase {
-    async execute(processNumber: string): Promise<void> {
-        console.log(`[SYNC MANUAL] Iniciando sincronização para o processo: ${processNumber}`);
-        
+    async execute(legalOneId: number): Promise<void> {
+        console.log(`[SYNC MANUAL] Iniciando sincronização para o legalOneId: ${legalOneId}`);
+
         const asset = await prisma.creditAsset.findUnique({
-            where: { processNumber },
+            where: { legalOneId },
             include: {
                 updates: { select: { legalOneUpdateId: true } },
                 documents: { select: { legalOneDocumentId: true } },
@@ -214,7 +214,7 @@ class SyncSingleAssetUseCase {
             const childNumber = child.identifierNumber || child.oldNumber;
             if (!childNumber) continue;
 
-            const exists = await prisma.creditAsset.findUnique({ where: { processNumber: childNumber } });
+            const exists = await prisma.creditAsset.findUnique({ where: { legalOneId: child.id } });
             if (exists) continue; 
 
             console.log(`[SYNC MANUAL] ➡ Reforço Encontrou Filho Perdido: Cadastrando ${childNumber} (${child.type})`);

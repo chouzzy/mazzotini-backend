@@ -68,7 +68,19 @@ creditAssetRoutes.get(
 );
 
 
-// --- NOVA ROTA DE BUSCA ---
+/**
+ * @route   GET /api/assets/lookup/folder/:folderCode
+ * @desc    Busca dados de um processo no Legal One pelo código da pasta (ex: Proc-0002091/032).
+ * @access  Privado (ADMIN, OPERATOR)
+ * Nota: Esta rota DEVE vir antes de lookup/:processNumber para não ser capturada pelo parâmetro genérico.
+ */
+creditAssetRoutes.get(
+    '/api/assets/lookup/folder/:folderCode(*)',
+    checkJwt,
+    checkRole([ROLES.ADMIN, ROLES.OPERATOR]),
+    (req, res) => lookupAssetFromLegalOneController.handleByFolder(req, res)
+);
+
 /**
  * @route   GET /api/assets/lookup/:processNumber
  * @desc    Busca dados de um processo no Legal One para pré-preenchimento.
@@ -76,11 +88,10 @@ creditAssetRoutes.get(
  */
 creditAssetRoutes.get(
     '/api/assets/lookup/:processNumber',
-    checkJwt, // Garante que o usuário está logado
-    checkRole([ROLES.ADMIN, ROLES.OPERATOR]), // Bloqueia investidores de buscarem processos aleatórios
-    lookupAssetFromLegalOneController.handle 
+    checkJwt,
+    checkRole([ROLES.ADMIN, ROLES.OPERATOR]),
+    lookupAssetFromLegalOneController.handle
 );
-// --- FIM DA NOVA ROTA ---
 
 
 /**
@@ -89,19 +100,19 @@ creditAssetRoutes.get(
  * @access  Privado (Todos os perfis)
  */
 creditAssetRoutes.get(
-    '/api/assets/:processNumber',
+    '/api/assets/:legalOneId',
     checkJwt,
     checkRole([ROLES.ADMIN, ROLES.OPERATOR, ROLES.INVESTOR, ROLES.ASSOCIATE]), // Proteção de perfil
     getAssetByProcessNumberController.handle
 );
 
 /**
- * @route   POST /api/assets/:processNumber/sync
+ * @route   POST /api/assets/:legalOneId/sync
  * @desc    Aciona manualmente a sincronização de andamentos para um ativo específico.
  * @access  Privado (OPERATOR, ADMIN)
  */
 creditAssetRoutes.post(
-    '/api/assets/:processNumber/sync',
+    '/api/assets/:legalOneId/sync',
     checkJwt,
     checkRole([ROLES.OPERATOR, ROLES.ADMIN]), // Padronizado para usar o enum
     syncSingleAssetController.handle
@@ -124,7 +135,7 @@ creditAssetRoutes.get(
  * @access  Privado (OPERATOR, ADMIN)
  */
 creditAssetRoutes.patch(
-    '/api/assets/:processNumber',
+    '/api/assets/:legalOneId',
     checkJwt,
     checkRole([ROLES.OPERATOR, ROLES.ADMIN]), // Padronizado para usar o enum
     updateAssetController.handle

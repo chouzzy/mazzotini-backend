@@ -10,7 +10,7 @@ interface InvestorInput {
 }
 
 type IUpdateAssetDTO = {
-    processNumber: string; 
+    legalOneId: number;
     acquisitionValue?: number;
     originalValue?: number;
     acquisitionDate?: Date;
@@ -26,11 +26,11 @@ type IUpdateAssetDTO = {
 
 class UpdateAssetUseCase {
     async execute(data: IUpdateAssetDTO): Promise<CreditAsset> {
-        const { processNumber, investors, ...assetUpdateData } = data;
+        const { legalOneId, investors, ...assetUpdateData } = data;
 
         // 2. INCLUI OS INVESTIDORES NA BUSCA PARA PODERMOS COMPARAR
-        const asset = await prisma.creditAsset.findUnique({ 
-            where: { processNumber },
+        const asset = await prisma.creditAsset.findUnique({
+            where: { legalOneId },
             include: { investors: true } 
         });
         

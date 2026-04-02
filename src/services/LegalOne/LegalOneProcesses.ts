@@ -110,14 +110,18 @@ export class LegalOneProcesses extends LegalOneAuth {
         if (!lawsuit) throw new Error(`Nenhum Processo encontrado: ${cleanProcessNumber}`);
 
         // 2. Busca Detalhes (Etapa 2: Com CourtPanel)
+        // Preserva o identifierNumber do resultado do filtro, pois o endpoint /byId
+        // pode não retorná-lo dependendo da versão da API.
+        const preservedIdentifierNumber = lawsuit.identifierNumber;
         try {
-            // Opcional: Se 'courtPanel' vier no getById, ótimo. Se precisar expandir, faça aqui.
-            // A maioria das vezes o getById traz tudo, menos listas grandes.
             const detailsResponse = await axios.get<LegalOneLawsuit>(`${requestUrl}/${lawsuit.id}`, {
                 headers: { 'Authorization': `Bearer ${token}` },
-                params: { '$expand': 'courtPanel' } // Expandimos courtPanel aqui
+                params: { '$expand': 'courtPanel' }
             });
-            lawsuit = detailsResponse.data;
+            lawsuit = {
+                ...detailsResponse.data,
+                identifierNumber: detailsResponse.data.identifierNumber || preservedIdentifierNumber,
+            };
         } catch (e) { console.warn("Falha ao detalhar Lawsuit, usando dados básicos."); }
 
         // 3. Busca Participantes (Etapa 3: Endpoint Dedicado)
@@ -125,6 +129,35 @@ export class LegalOneProcesses extends LegalOneAuth {
         lawsuit.participants = participants;
 
         return lawsuit;
+    }
+
+    public async getLawsuitById(id: number): Promise<LegalOneLawsuit> {
+        const token = await this.getAccessToken();
+        const res = await axios.get<LegalOneLawsuit>(
+            `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/Lawsuits/${id}`,
+            { headers: { 'Authorization': `Bearer ${token}` }, params: { '$expand': 'courtPanel' } }
+        );
+        const lawsuit = res.data;
+        lawsuit.participants = await this.getEntityParticipants('lawsuits', id);
+        return lawsuit;
+    }
+
+    public async getAppealById(id: number): Promise<LegalOneAppeal> {
+        const token = await this.getAccessToken();
+        const res = await axios.get<LegalOneAppeal>(
+            `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/Appeals/${id}`,
+            { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        return res.data;
+    }
+
+    public async getProceduralIssueById(id: number): Promise<LegalOneProceduralIssue> {
+        const token = await this.getAccessToken();
+        const res = await axios.get<LegalOneProceduralIssue>(
+            `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/ProceduralIssues/${id}`,
+            { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        return res.data;
     }
 
     public async getAppealDetails(processNumber: string): Promise<LegalOneAppeal> {
@@ -277,6 +310,87 @@ export class LegalOneProcesses extends LegalOneAuth {
             console.error("[Legal One API] Erro na listagem unificada:", error);
             throw error;
         }
+    }
+
+    /**
+     * Retorna TODOS os processos no Legal One com um dado número judicial.
+     * Usado para avisar o usuário que um número existe em múltiplas pastas.
+     */
+    public async getAllByProcessNumber(processNumber: string): Promise<{ id: number; folder: string; legalOneType: string }[]> {
+        const token = await this.getAccessToken();
+        const base = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const clean = processNumber.trim();
+
+        const results: { id: number; folder: string; legalOneType: string }[] = [];
+
+        const endpoints = [
+            { url: `${base}/Lawsuits`, type: 'Lawsuit', numberField: 'identifierNumber' },
+            { url: `${base}/Appeals`, type: 'Appeal', numberField: 'identifierNumber' },
+            { url: `${base}/ProceduralIssues`, type: 'ProceduralIssue', numberField: 'identifierNumber' },
+        ];
+
+        for (const ep of endpoints) {
+            for (const variant of [clean, clean.replace(/[.\-/]/g, '')]) {
+                try {
+                    const res = await axios.get(ep.url, {
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        params: { '$filter': `${ep.numberField} eq '${variant}'` }
+                    });
+                    const items: any[] = res.data.value || [];
+                    if (items.length > 0) {
+                        items.forEach(item => results.push({ id: item.id, folder: item.folder || '', legalOneType: ep.type }));
+                        break; // encontrou com esta variante, não precisa tentar a outra
+                    }
+                } catch (e) { /* ignora e tenta próxima variante */ }
+            }
+        }
+
+        return results;
+    }
+
+    /**
+     * Busca processos, recursos e incidentes pelo código exato da pasta no Legal One.
+     * Ex: folderCode = "Proc - 0002091/032"
+     */
+    public async getEntitiesByFolderCode(folderCode: string): Promise<any[]> {
+        const headers = await this.getAuthHeader();
+        const base = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+
+        // Tenta variações do código (com e sem espaços ao redor do traço)
+        const variants = [
+            folderCode,
+            folderCode.replace(/\s*-\s*/, ' - '), // garante "Proc - 0002091/032"
+            folderCode.replace(/\s*-\s*/, '-'),    // garante "Proc-0002091/032"
+        ].filter((v, i, a) => a.indexOf(v) === i); // remove duplicatas
+
+        const endpoints = [
+            { url: `${base}/Lawsuits`, type: 'Lawsuit' },
+            { url: `${base}/Appeals`, type: 'Appeal' },
+            { url: `${base}/ProceduralIssues`, type: 'ProceduralIssue' },
+        ];
+
+        const results: any[] = [];
+
+        for (const endpoint of endpoints) {
+            for (const variant of variants) {
+                try {
+                    const res = await axios.get(endpoint.url, {
+                        headers,
+                        params: { '$filter': `folder eq '${variant}'` }
+                    });
+                    const items = (res.data.value || []).map((item: any) => ({
+                        ...item,
+                        __legalOneType: endpoint.type
+                    }));
+                    if (items.length > 0) {
+                        results.push(...items);
+                        break; // achou com essa variação, não precisa tentar outra
+                    }
+                } catch (e) { /* tenta próxima variação */ }
+            }
+        }
+
+        return results;
     }
 
     public async getAppealsByLawsuitId(lawsuitId: number): Promise<LegalOneAppeal[]> {

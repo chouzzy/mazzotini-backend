@@ -3,11 +3,11 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 class GetAssetByProcessNumberUseCase {
-    async execute(processNumber: string, auth0UserId: string, roles: string[]) {
-        
+    async execute(legalOneId: number, auth0UserId: string, roles: string[]) {
+
         // 1. Busca o processo com todas as relações
         const asset = await prisma.creditAsset.findUnique({
-            where: { processNumber },
+            where: { legalOneId },
             include: {
                 investors: {
                     include: {
@@ -44,7 +44,7 @@ class GetAssetByProcessNumberUseCase {
                 // Verifica se o ID do usuário está dentro da lista de investidores DESTE processo
                 const isInvestorInThisAsset = asset.investors.some(inv => inv.user?.id === user.id);
                 if (!isInvestorInThisAsset) {
-                    console.warn(`[SEGURANÇA] Usuário ${user.id} tentou aceder ao processo ${processNumber} sem estar vinculado.`);
+                    console.warn(`[SEGURANÇA] Usuário ${user.id} tentou aceder ao processo ${legalOneId} sem estar vinculado.`);
                     throw new Error("Acesso negado.");
                 }
             }

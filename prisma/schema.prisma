@@ -109,13 +109,13 @@ model ProcessFolder {
 // ==========================================
 model CreditAsset {
   id                   String        @id @default(auto()) @map("_id") @db.ObjectId
-  processNumber        String        @unique
+  processNumber        String
   nickname             String?
   otherParty           String?
   originalCreditor     String
   origemProcesso       String
-  
-  legalOneId           Int?
+
+  legalOneId           Int           @unique
   legalOneType         String?
   
   originalValue        Float

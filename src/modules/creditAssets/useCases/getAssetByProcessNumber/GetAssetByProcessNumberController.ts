@@ -8,7 +8,7 @@ interface CustomJWTPayload {
 
 class GetAssetByProcessNumberController {
     async handle(request: Request, response: Response): Promise<Response> {
-        const processNumber = String(request.params.processNumber);
+        const legalOneId = Number(request.params.legalOneId);
         
         // Pega os dados do usuário que fez a requisição
         const payload = (request as any).auth.payload as CustomJWTPayload;
@@ -19,7 +19,7 @@ class GetAssetByProcessNumberController {
         
         try {
             // Passa o usuário e a role para o UseCase auditar
-            const asset = await getUseCase.execute(processNumber, auth0UserId, roles);
+            const asset = await getUseCase.execute(legalOneId, auth0UserId, roles);
             return response.json(asset);
         } catch (err: any) {
             if (err.message === "Acesso negado.") {

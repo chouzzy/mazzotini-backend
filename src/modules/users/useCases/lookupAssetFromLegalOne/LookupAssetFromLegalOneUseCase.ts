@@ -1,10 +1,16 @@
-import { 
-    legalOneApiService 
+import {
+    legalOneApiService
 } from "../../../../services/legalOneApiService";
 import { syncParticipantsAsUsers } from "../../../../utils/participantHelper";
 
-// CORREÇÃO: Adicionado o campo opcional na interface
+interface ILegalOneMatch {
+    legalOneId: number;
+    folderCode: string;
+    legalOneType: string;
+}
+
 interface ILookupResult {
+    processNumber: string;
     originalCreditor: string;
     origemProcesso: string;
     legalOneId: number;
@@ -12,7 +18,9 @@ interface ILookupResult {
     otherParty?: string;
     nickname?: string;
     processFolderId?: string;
-    suggestedInvestors?: { userId: string; share: number }[]; // <--- O CAMPO QUE FALTAVA
+    suggestedInvestors?: { userId: string; share: number }[];
+    // Todas as entradas deste número de processo no Legal One (pode haver mais de uma pasta)
+    legalOneMatches: ILegalOneMatch[];
 }
 
 class LookupAssetFromLegalOneUseCase {
@@ -58,7 +66,20 @@ class LookupAssetFromLegalOneUseCase {
 
         if (suggestedInvestors.length === 1) suggestedInvestors[0].share = 100;
 
+        const processNumber = processData.identifierNumber || processData.oldNumber || '';
+
+        // Busca no Legal One todas as entradas com este número de processo
+        // (pode haver múltiplas pastas para o mesmo número judicial)
+        const legalOneMatches: ILegalOneMatch[] = processNumber
+            ? (await legalOneApiService.getAllByProcessNumber(processNumber)).map(m => ({
+                legalOneId: m.id,
+                folderCode: m.folder,
+                legalOneType: m.legalOneType,
+              }))
+            : [];
+
         return {
+            processNumber,
             originalCreditor,
             origemProcesso,
             legalOneId: processData.id,
@@ -66,7 +87,8 @@ class LookupAssetFromLegalOneUseCase {
             otherParty,
             nickname,
             processFolderId,
-            suggestedInvestors // <--- Retornando
+            suggestedInvestors,
+            legalOneMatches,
         };
     }
 
@@ -102,6 +124,32 @@ class LookupAssetFromLegalOneUseCase {
                 }
             }
         }
+    }
+
+    async executeByFolder(folderCode: string): Promise<ILookupResult> {
+        console.log(`[Lookup Asset] Buscando por pasta: ${folderCode}`);
+
+        const entities = await legalOneApiService.getEntitiesByFolderCode(folderCode);
+
+        if (entities.length === 0) {
+            throw new Error(`Nenhum processo encontrado para a pasta: ${folderCode}`);
+        }
+
+        // Pega o primeiro resultado (a pasta tem um processo específico)
+        const entity = entities[0];
+        const entityType = entity.__legalOneType as 'Lawsuit' | 'Appeal' | 'ProceduralIssue';
+
+        // Busca participantes do processo encontrado
+        const endpointType = entityType === 'Lawsuit' ? 'lawsuits'
+            : entityType === 'Appeal' ? 'appeals'
+            : 'proceduralissues';
+
+        const participants = await legalOneApiService.getEntityParticipants(endpointType, entity.id).catch(() => []);
+        entity.participants = participants;
+
+        const syncedUsers = await syncParticipantsAsUsers(participants);
+
+        return this.extractData(entity, entityType, syncedUsers);
     }
 }
 

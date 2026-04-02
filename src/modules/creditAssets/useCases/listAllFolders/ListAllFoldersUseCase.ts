@@ -78,6 +78,7 @@ class ListAllFoldersUseCase {
 
             const assetsFormatted = visibleAssets.map(asset => ({
                 id: asset.id,
+                legalOneId: asset.legalOneId,
                 processNumber: asset.processNumber,
                 nickname: asset.nickname,
                 originalCreditor: asset.originalCreditor,

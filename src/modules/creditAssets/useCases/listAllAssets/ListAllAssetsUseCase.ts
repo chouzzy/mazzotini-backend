@@ -13,6 +13,7 @@ const ROLES = {
 
 export type AssetSummary = {
     id: string;
+    legalOneId: number;
     processNumber: string;
     nickname?: string | null;
     originalCreditor: string;
@@ -122,6 +123,7 @@ class ListAllAssetsUseCase {
 
             return {
                 id: asset.id,
+                legalOneId: asset.legalOneId,
                 processNumber: asset.processNumber,
                 nickname: asset.nickname,
                 originalCreditor: asset.originalCreditor,

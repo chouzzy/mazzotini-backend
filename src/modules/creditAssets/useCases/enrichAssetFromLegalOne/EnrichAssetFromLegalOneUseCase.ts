@@ -41,14 +41,14 @@ class EnrichAssetFromLegalOneUseCase {
 
             console.log(`[Enrich] Iniciando enriquecimento para: ${asset.processNumber} (ID: ${asset.legalOneId})`);
 
-            // Se for um Recurso ou Incidente, buscamos o ID do "Pai"
+            // Se for um Recurso ou Incidente, buscamos o ID do Pai via legalOneId (não processNumber)
             if (entityType === 'Appeal') {
-                const appealData = await legalOneApiService.getAppealDetails(asset.processNumber);
+                const appealData = await legalOneApiService.getAppealById(asset.legalOneId);
                 if (appealData.relatedLitigationId) {
                     entityIdToFetchUpdates = appealData.relatedLitigationId;
                 }
             } else if (entityType === 'ProceduralIssue') {
-                const issueData = await legalOneApiService.getProceduralIssueDetails(asset.processNumber);
+                const issueData = await legalOneApiService.getProceduralIssueById(asset.legalOneId);
                 if (issueData.relatedLitigationId) {
                     entityIdToFetchUpdates = issueData.relatedLitigationId;
                 }
@@ -187,10 +187,10 @@ class EnrichAssetFromLegalOneUseCase {
             if (!childNumber) continue;
 
             // Tenta encontrar se o filho já está no nosso banco de dados
-            const exists = await prisma.creditAsset.findUnique({ where: { processNumber: childNumber } });
+            const exists = await prisma.creditAsset.findUnique({ where: { legalOneId: child.id } });
             if (exists) {
                 // Se já existe, não faz nada (ele será enriquecido na vez dele)
-                continue; 
+                continue;
             }
 
             console.log(`[Enrich] ➡ Reforço Encontrou Filho Perdido: Cadastrando ${childNumber} (${child.type})`);

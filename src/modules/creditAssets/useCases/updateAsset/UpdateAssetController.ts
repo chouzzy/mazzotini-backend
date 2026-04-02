@@ -30,15 +30,15 @@ class UpdateAssetController {
     }).stripUnknown();
 
     handle = async (request: Request, response: Response): Promise<Response> => {
-        const { processNumber } = request.params;
+        const legalOneId = Number(request.params.legalOneId);
         const bodyData = request.body; 
 
         try {
             const validatedData = await this.validationSchema.validate(bodyData, { abortEarly: false, stripUnknown: true });
             const useCase = new UpdateAssetUseCase();
             
-            const updatedAsset = await useCase.execute({ 
-                processNumber, 
+            const updatedAsset = await useCase.execute({
+                legalOneId,
                 ...validatedData,
                 // Asserção de tipo para contornar a inferência imprecisa do Yup no TypeScript
                 investors: validatedData.investors as any 

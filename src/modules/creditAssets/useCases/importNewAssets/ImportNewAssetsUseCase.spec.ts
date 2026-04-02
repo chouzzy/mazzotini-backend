@@ -50,8 +50,8 @@ describe('ImportNewAssetsUseCase', () => {
     it('deve importar processos novos com sucesso', async () => {
         // ARRANGE
         (legalOneApiService.listLawsuits as jest.Mock).mockResolvedValue([
-            { identifierNumber: 'PROCESSO-001' },
-            { identifierNumber: 'PROCESSO-002' }
+            { id: 1001, identifierNumber: 'PROCESSO-001' },
+            { id: 1002, identifierNumber: 'PROCESSO-002' }
         ]);
 
         // Configura o mock do Prisma para retornar null (não existe)
@@ -75,7 +75,7 @@ describe('ImportNewAssetsUseCase', () => {
         
         // Verifica Prisma
         expect(mockPrisma.creditAsset.findUnique).toHaveBeenCalledTimes(2);
-        expect(mockPrisma.creditAsset.findUnique).toHaveBeenCalledWith({ where: { processNumber: 'PROCESSO-001' } });
+        expect(mockPrisma.creditAsset.findUnique).toHaveBeenCalledWith({ where: { legalOneId: 1001 } });
 
         // Verifica Lógica
         expect(mockLookupInstance.execute).toHaveBeenCalledTimes(2);

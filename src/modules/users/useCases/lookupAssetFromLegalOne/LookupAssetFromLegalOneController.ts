@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { LookupAssetFromLegalOneUseCase } from './LookupAssetFromLegalOneUseCase';
 
 class LookupAssetFromLegalOneController {
+    // GET /api/assets/lookup/:processNumber
     async handle(request: Request, response: Response): Promise<Response> {
         const processNumber = request.params.processNumber as string;
         const useCase = new LookupAssetFromLegalOneUseCase();
@@ -9,14 +10,28 @@ class LookupAssetFromLegalOneController {
         try {
             const result = await useCase.execute(processNumber);
             return response.status(200).json(result);
-
         } catch (err: any) {
             console.error(`[Lookup Asset] Erro ao buscar dados do processo ${processNumber}:`, err.message);
-            
-            if (err.message.includes("Nenhum processo encontrado")) {
-                 return response.status(404).json({ error: err.message });
+            if (err.message.includes("Nenhum processo encontrado") || err.message.includes("não encontrado")) {
+                return response.status(404).json({ error: err.message });
             }
+            return response.status(500).json({ error: err.message });
+        }
+    }
 
+    // GET /api/assets/lookup/folder/:folderCode
+    async handleByFolder(request: Request, response: Response): Promise<Response> {
+        const folderCode = request.params.folderCode as string;
+        const useCase = new LookupAssetFromLegalOneUseCase();
+
+        try {
+            const result = await useCase.executeByFolder(folderCode);
+            return response.status(200).json(result);
+        } catch (err: any) {
+            console.error(`[Lookup Asset] Erro ao buscar pela pasta ${folderCode}:`, err.message);
+            if (err.message.includes("não encontrado")) {
+                return response.status(404).json({ error: err.message });
+            }
             return response.status(500).json({ error: err.message });
         }
     }
