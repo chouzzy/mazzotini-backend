@@ -18,7 +18,7 @@ interface ILookupResult {
     otherParty?: string;
     nickname?: string;
     processFolderId?: string;
-    suggestedInvestors?: { userId: string; share: number }[];
+    suggestedInvestors?: { userId: string; name: string; share: number }[];
     // Todas as entradas deste número de processo no Legal One (pode haver mais de uma pasta)
     legalOneMatches: ILegalOneMatch[];
 }
@@ -61,7 +61,8 @@ class LookupAssetFromLegalOneUseCase {
         // Monta a sugestão de investidores
         const suggestedInvestors = syncedUsers.map(u => ({
             userId: u.id,
-            share: 0 
+            name: u.name || u.email,
+            share: 0
         }));
 
         if (suggestedInvestors.length === 1) suggestedInvestors[0].share = 100;

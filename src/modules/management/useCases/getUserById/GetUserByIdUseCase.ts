@@ -17,6 +17,12 @@ class GetUserByIdUseCase {
                                 nickname: true,
                                 status: true
                             }
+                        },
+                        associate: {
+                            select: {
+                                id: true,
+                                name: true
+                            }
                         }
                     }
                 }

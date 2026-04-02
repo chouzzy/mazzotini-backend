@@ -12,7 +12,8 @@ class UpdateUserInvestmentsController {
                 yup.object().shape({
                     assetId: yup.string().required(),
                     share: yup.number().min(0).max(100).required(),
-                    documents: yup.array().of(yup.string()).optional() // <-- NOVO
+                    documents: yup.array().of(yup.string()).optional(),
+                    associateId: yup.string().nullable().optional()
                 })
             ).required()
         });

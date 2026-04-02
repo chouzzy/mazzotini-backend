@@ -13,25 +13,23 @@ const prisma = new PrismaClient();
 const TEST_LEGAL_ONE_IDS = [900001, 900002, 900003, 900099];
 
 export async function cleanTestDb() {
-    // Deleta na ordem correta para respeitar dependências
-    await prisma.assetUpdate.deleteMany({
-        where: { asset: { legalOneId: { in: TEST_LEGAL_ONE_IDS } } }
+    // MongoDB não suporta filtro por relação em deleteMany.
+    // Primeiro buscamos os IDs dos assets de teste, depois deletamos os filhos.
+    const testAssets = await prisma.creditAsset.findMany({
+        where: { legalOneId: { in: TEST_LEGAL_ONE_IDS } },
+        select: { id: true }
     });
-    await prisma.document.deleteMany({
-        where: { asset: { legalOneId: { in: TEST_LEGAL_ONE_IDS } } }
-    });
-    await prisma.investment.deleteMany({
-        where: { creditAsset: { legalOneId: { in: TEST_LEGAL_ONE_IDS } } }
-    });
-    await prisma.creditAsset.deleteMany({
-        where: { legalOneId: { in: TEST_LEGAL_ONE_IDS } }
-    });
-    await prisma.user.deleteMany({
-        where: { auth0UserId: { startsWith: 'test|' } }
-    });
-    await prisma.processFolder.deleteMany({
-        where: { folderCode: { startsWith: 'Proc-Test-' } }
-    });
+    const testAssetIds = testAssets.map(a => a.id);
+
+    if (testAssetIds.length > 0) {
+        await prisma.assetUpdate.deleteMany({ where: { assetId: { in: testAssetIds } } });
+        await prisma.document.deleteMany({ where: { assetId: { in: testAssetIds } } });
+        await prisma.investment.deleteMany({ where: { creditAssetId: { in: testAssetIds } } });
+    }
+
+    await prisma.creditAsset.deleteMany({ where: { legalOneId: { in: TEST_LEGAL_ONE_IDS } } });
+    await prisma.user.deleteMany({ where: { auth0UserId: { startsWith: 'test|' } } });
+    await prisma.processFolder.deleteMany({ where: { folderCode: { startsWith: 'Proc-Test-' } } });
 }
 
 /**

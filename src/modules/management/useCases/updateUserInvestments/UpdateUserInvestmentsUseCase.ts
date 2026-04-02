@@ -5,7 +5,8 @@ const prisma = new PrismaClient();
 interface InvestmentInput {
     assetId: string;
     share: number;
-    documents?: string[]; // <-- NOVO: Array de URLs
+    documents?: string[];
+    associateId?: string | null;
 }
 
 interface IRequest {
@@ -36,7 +37,8 @@ class UpdateUserInvestmentsUseCase {
                         creditAssetId: inv.assetId,
                         investorShare: inv.share,
                         mazzotiniShare: 0,
-                        documents: inv.documents || [] // <-- Salva os documentos
+                        documents: inv.documents || [],
+                        associateId: inv.associateId || null
                     }))
                 });
             }
