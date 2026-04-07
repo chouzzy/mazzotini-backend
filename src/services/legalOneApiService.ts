@@ -1,3 +1,29 @@
+/**
+ * legalOneApiService.ts — Facade de Integração com o Legal One
+ *
+ * Centraliza todo o acesso à API externa do Legal One através de um único
+ * objeto singleton (`legalOneApiService`). Internamente delega para três
+ * módulos especializados, mantendo a responsabilidade de cada um isolada:
+ *
+ * | Módulo              | Responsabilidade                                     |
+ * |---------------------|------------------------------------------------------|
+ * | LegalOneContacts    | CRUD de contatos (PF/PJ) — busca por CPF, RG, etc. |
+ * | LegalOneProcesses   | Processos, recursos, incidentes, andamentos, pastas |
+ * | LegalOneDocuments   | GED: listagem, download, upload e finalização       |
+ *
+ * ## Por que Facade?
+ * Usar a classe de cada domínio diretamente espalharia os imports por todo o
+ * código. O Facade agrupa as operações em um objeto único, facilitando mocks
+ * em testes (`jest.mock('../../services/legalOneApiService', ...)`) e
+ * permitindo que a implementação interna seja trocada sem impactar os callers.
+ *
+ * ## Uso
+ * ```typescript
+ * import { legalOneApiService } from '../services/legalOneApiService';
+ * const contato = await legalOneApiService.getContactByCPF('123.456.789-00');
+ * ```
+ */
+
 import { LegalOneContacts } from './LegalOne/LegalOneContacts';
 import { LegalOneProcesses } from './LegalOne/LegalOneProcesses';
 import { LegalOneDocuments } from './LegalOne/LegalOneDocuments';

@@ -1,3 +1,36 @@
+/**
+ * ApproveUserProfileUseCase.ts — Aprovação de Perfil de Usuário
+ *
+ * Fluxo de aprovação executado pelo administrador quando um usuário com status
+ * `PENDING_REVIEW` tem seu cadastro validado. O processo é composto por 4 etapas:
+ *
+ * ## Etapa 1 — Validação Pré-aprovação
+ * Verifica se o usuário possui os dados mínimos obrigatórios (documento + e-mail)
+ * e se está no status correto (`PENDING_REVIEW`). Lança AppError 409/422 se não.
+ *
+ * ## Etapa 2 — Gestão de Contato no Legal One
+ * Busca o contato no Legal One pelo CPF/CNPJ (ou RG como fallback).
+ * - Se encontrar: atualiza os dados do contato existente.
+ * - Se não encontrar: cria um novo contato.
+ * Em ambos os casos, o campo customizado "Associado" é preenchido com o nome
+ * do associado vinculador (referredById → nome no banco, ou campo `indication`).
+ *
+ * ## Etapa 3 — Replicação de Documentos (GED)
+ * Para cada documento pessoal enviado pelo usuário (URLs no Spaces/S3):
+ *  a. Baixa o arquivo via HTTP (arraybuffer)
+ *  b. Obtém um container de upload temporário no Legal One
+ *  c. Envia o arquivo para esse container
+ *  d. Finaliza o documento, vinculando-o ao contato (com tag #DocumentoMAA)
+ * Erros individuais de documentos são logados mas NÃO interrompem a aprovação.
+ *
+ * ## Etapa 4 — Finalização Local
+ * Atualiza o status do usuário para `ACTIVE`, salva o `legalOneContactId` retornado
+ * pela API e atribui a role `INVESTOR` ao perfil.
+ *
+ * @throws {AppError} 422 — Perfil incompleto (sem documentos ou e-mail)
+ * @throws {AppError} 409 — Usuário não está em `PENDING_REVIEW`
+ */
+
 import { PrismaClient } from "@prisma/client";
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { AppError } from "../../../../errors/AppError";

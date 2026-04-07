@@ -1,3 +1,47 @@
+/**
+ * SyncSingleAssetUseCase.ts — Sincronização Manual de Ativo Judicial
+ *
+ * Sincroniza um único ativo com o Legal One, buscando andamentos e documentos
+ * novos desde a última execução. Acionado pelo endpoint
+ * `POST /api/assets/:legalOneId/sync`.
+ *
+ * ## Filtro por Tags
+ * Nem todo andamento ou documento do Legal One é importado — apenas os que
+ * possuem as tags controladas pelo time jurídico:
+ *
+ * | Tag                   | Tipo       | Importa                    |
+ * |-----------------------|------------|----------------------------|
+ * | `#RelatórioMAA`       | Andamento  | Atualização de valores     |
+ * | `#RelatorioMAA`       | Andamento  | Alias sem acento (fallback)|
+ * | `#DocumentoMAA`       | Documento  | Documento legal relevante  |
+ *
+ * ## Extração de Valores dos Andamentos
+ * Os andamentos do relatório seguem um padrão de texto estruturado:
+ * ```
+ * Valor da Causa: R$ 1.234.567,89
+ * Valor da Compra: R$ 800.000,00
+ * Valor Atualizado: R$ 1.450.000,00
+ * ```
+ * As funções `extractAllValues` e `extractFreeText` fazem o parse desse texto
+ * para extrair os valores financeiros e o texto livre do andamento.
+ *
+ * ## Transação Atômica
+ * Todos os andamentos, documentos e a atualização dos valores do ativo são
+ * salvos dentro de uma única `prisma.$transaction` com timeout de 30s.
+ * Isso garante que nunca haverá andamentos salvos sem a atualização de valores,
+ * ou vice-versa.
+ *
+ * ## Malha Fina (Reforço de Filhos)
+ * Ao final de cada sincronização, se o ativo for um `Lawsuit` (processo pai),
+ * o use case chama `syncChildren()` para descobrir recursos (`Appeal`) e
+ * incidentes (`ProceduralIssue`) filhos que ainda não foram cadastrados.
+ * Filhos novos são criados com status `PENDING_ENRICHMENT` e têm os investidores
+ * do pai automaticamente clonados. Após criados, o `EnrichAssetFromLegalOneUseCase`
+ * é chamado para populá-los com dados completos.
+ *
+ * Erros na Malha Fina são capturados e logados — não interrompem a sync principal.
+ */
+
 import { PrismaClient } from "@prisma/client";
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/EnrichAssetFromLegalOneUseCase";

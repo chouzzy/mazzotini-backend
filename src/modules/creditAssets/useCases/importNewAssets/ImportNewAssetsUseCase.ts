@@ -1,3 +1,36 @@
+/**
+ * ImportNewAssetsUseCase.ts — Robô de Importação Massiva de Ativos
+ *
+ * Responsável pela importação automática (ou incremental) de processos,
+ * recursos e incidentes cadastrados no Legal One para o banco de dados local.
+ * Acionado via script agendado (cron) ou manualmente pelo endpoint
+ * `POST /api/assets/import`.
+ *
+ * ## Fluxo por Entidade
+ * Para cada processo encontrado no Legal One:
+ *
+ * 1. **Validação** — descarta entidades sem número de processo
+ * 2. **Deduplicação** — verifica pelo `legalOneId` se já existe no banco.
+ *    Se existir, pula silenciosamente (incrementa `skippedCount`)
+ * 3. **Lookup** — chama `LookupAssetFromLegalOneUseCase` para buscar dados
+ *    completos (partes, pasta, investidores sugeridos) antes de criar o registro
+ * 4. **Criação** — chama `CreateCreditAssetUseCase` com todos os dados enriquecidos
+ *
+ * ## Throttling
+ * Há um `wait(3000)` entre cada entidade para respeitar o rate limit da API do
+ * Legal One. Em um import de 200 processos, isso leva ~10 minutos — intencional.
+ *
+ * ## Relatório Final
+ * Ao encerrar, loga um resumo com contadores:
+ * - `importedCount` — novos ativos criados com sucesso
+ * - `skippedCount`  — entidades já existentes (puladas)
+ * - `errorCount`    — falhas individuais (não interrompem o loop)
+ *
+ * ## Parâmetro Opcional: startDate
+ * Se fornecido, busca apenas processos criados APÓS essa data — útil para
+ * sincronizações incrementais diárias sem precisar revisar todo o histórico.
+ */
+
 // src/modules/creditAssets/useCases/importNewAssets/ImportNewAssetsUseCase.ts
 
 import { PrismaClient } from "@prisma/client";

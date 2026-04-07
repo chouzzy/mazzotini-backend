@@ -1,3 +1,34 @@
+/**
+ * auth0ManagementService.ts — Integração com a Auth0 Management API
+ *
+ * Encapsula todas as operações administrativas no tenant Auth0 que exigem
+ * credenciais de máquina (M2M): criação de usuários, gestão de roles,
+ * reenvio de verificação e exclusão de contas.
+ *
+ * ## Autenticação Machine-to-Machine (M2M)
+ * Usa as variáveis de ambiente abaixo para autenticar via Client Credentials:
+ * - `AUTH0_MGMT_DOMAIN`        — domínio do tenant (ex: `dev-xxx.us.auth0.com`)
+ * - `AUTH0_MGMT_CLIENT_ID`     — client ID da aplicação M2M no Auth0
+ * - `AUTH0_MGMT_CLIENT_SECRET` — client secret (nunca expor no frontend!)
+ *
+ * Se alguma das três estiver ausente no `.env`, a aplicação falha na inicialização
+ * (fail-fast intencional — evita erros silenciosos em produção).
+ *
+ * ## Métodos disponíveis
+ * - `getUsersWithRoles()`          — lista todos os usuários com suas roles
+ * - `getAllRoles()`                 — lista todas as roles configuradas no tenant
+ * - `updateUserRoles(id, roles[])`  — substitui as roles de um usuário (assign + remove)
+ * - `createUserAndGenerateInvite()` — cria conta e retorna link "Crie sua senha"
+ * - `resendVerificationEmail(id)`   — reenvio de e-mail de verificação via Auth0 Jobs
+ * - `getUsersByRole(roleName)`      — lista usuários que têm uma role específica
+ * - `deleteUser(id)`                — exclusão permanente do usuário no Auth0
+ *
+ * ## Nota sobre roles no Auth0 Free Plan
+ * As Actions que injetam roles no token têm limite de execução no plano gratuito.
+ * Por isso, o `checkRole` middleware usa um fallback para o banco de dados quando
+ * o token chega sem roles. Ver `src/middleware/checkRole.ts`.
+ */
+
 // /src/services/auth0ManagementService.ts
 import { User } from '@prisma/client';
 import { GetOrganizationMemberRoles200ResponseOneOfInner, GetRoleUser200ResponseOneOfInner, GetUsers200ResponseOneOfInner, ManagementClient } from 'auth0';
