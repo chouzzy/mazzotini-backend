@@ -36,10 +36,20 @@ const listMyInvestmentsController = new ListMyInvestmentsController();
  *               items:
  *                 type: object
  *                 properties:
- *                   id:             { type: string }
- *                   investorShare:  { type: number, example: 30, description: "Percentual do investidor (%)" }
- *                   mazzotiniShare: { type: number, example: 5,  description: "Percentual da Mazzotini (%)" }
- *                   acquisitionDate:{ type: string, format: date-time, nullable: true }
+ *                   id:
+ *                     type: string
+ *                   investorShare:
+ *                     type: number
+ *                     example: 30
+ *                     description: "Percentual do investidor (%)"
+ *                   mazzotiniShare:
+ *                     type: number
+ *                     example: 5
+ *                     description: "Percentual da Mazzotini (%)"
+ *                   acquisitionDate:
+ *                     type: string
+ *                     format: date-time
+ *                     nullable: true
  *                   asset:
  *                     $ref: '#/components/schemas/CreditAssetSummary'
  *       401:
