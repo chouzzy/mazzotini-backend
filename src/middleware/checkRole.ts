@@ -30,7 +30,7 @@ export const checkRole = (allowedRoles: string[]) => {
     // 2. SE O TOKEN ESTIVER VAZIO, VAI AO BANCO DE DADOS (Fallback Seguro)
     if (!roles || roles.length === 0) {
         console.warn(`[CheckRole] Token de ${auth0UserId} veio sem roles. Consultando o banco de dados...`);
-        
+
         try {
             const userInDb = await prisma.user.findUnique({
                 where: { auth0UserId },
@@ -40,11 +40,12 @@ export const checkRole = (allowedRoles: string[]) => {
             if (userInDb && userInDb.role) {
                 roles = [userInDb.role];
                 // Injeta no request para os próximos controllers não precisarem buscar de novo
-                payload['https://mazzotini.awer.co/roles'] = roles; 
+                payload['https://mazzotini.awer.co/roles'] = roles;
                 console.log(`[CheckRole] Role '${userInDb.role}' resgatada do banco com sucesso.`);
             }
         } catch (error) {
-            console.error("[CheckRole] Erro ao buscar role no banco:", error);
+            console.error("[CheckRole] Falha ao consultar banco de dados para role:", error);
+            return res.status(500).json({ error: 'Erro interno ao verificar permissões.' });
         }
     }
 

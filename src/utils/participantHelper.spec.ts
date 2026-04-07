@@ -52,7 +52,8 @@ describe('syncParticipantsAsUsers', () => {
     // --- CENÁRIO 2: Usuário Já Existe e Está Vinculado (Caminho Feliz) ---
     it('deve retornar o usuário existente se já estiver vinculado pelo ID do Legal One', async () => {
         // Simulamos que o banco encontrou o usuário pelo ID 100
-        (prisma.user.findFirst as jest.Mock).mockResolvedValueOnce({ id: 'user-1', name: 'Já Existo' });
+        // auth0UserId é necessário porque o helper verifica se é shadow user via startsWith
+        (prisma.user.findFirst as jest.Mock).mockResolvedValueOnce({ id: 'user-1', name: 'Já Existo', auth0UserId: 'auth0|real-user-123' });
 
         const result = await syncParticipantsAsUsers([mockParticipant]);
 

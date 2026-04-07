@@ -3,7 +3,6 @@ import { checkJwt } from '../middleware/auth';
 import { checkRole } from '../middleware/checkRole';
 
 import { CreateCreditAssetController } from '../modules/creditAssets/useCases/createCreditAsset/CreateCreditAssetController';
-import { EnrichAssetFromLegalOneController } from '../modules/creditAssets/useCases/enrichAssetFromLegalOne/EnrichAssetFromLegalOneController';
 import { GetAssetByProcessNumberController } from '../modules/creditAssets/useCases/getAssetByProcessNumber/GetAssetByProcessNumberController';
 import { SyncSingleAssetController } from '../modules/creditAssets/useCases/syncSingleAsset/SyncSingleAssetController';
 import { ListAllAssetsController } from '../modules/creditAssets/useCases/listAllAssets/ListAllAssetsController';
@@ -17,7 +16,6 @@ import { ROLES } from '../types';
 
 const creditAssetRoutes = Router();
 const createCreditAssetController = new CreateCreditAssetController();
-const enrichAssetFromLegalOneController = new EnrichAssetFromLegalOneController();
 const getAssetByProcessNumberController = new GetAssetByProcessNumberController();
 const syncSingleAssetController = new SyncSingleAssetController();
 const listAllAssetsController = new ListAllAssetsController();
@@ -125,7 +123,8 @@ creditAssetRoutes.post(
  */
 creditAssetRoutes.get(
     '/api/assets/:assetId/estimate',
-    // checkJwt,
+    checkJwt,
+    checkRole([ROLES.ADMIN, ROLES.OPERATOR, ROLES.INVESTOR, ROLES.ASSOCIATE]),
     getAssetEstimationController.handle
 );
 

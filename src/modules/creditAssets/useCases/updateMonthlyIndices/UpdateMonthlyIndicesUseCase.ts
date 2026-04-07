@@ -95,9 +95,12 @@ class UpdateMonthlyIndicesUseCase {
 
         const assetsToUpdate = await prisma.creditAsset.findMany({
             where: {
-                status: 'Ativo', 
-                NOT: { updateIndexType: null },
-                AND: { NOT: { updateIndexType: 'Outro' } }
+                status: 'Ativo',
+                NOT: [
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    { updateIndexType: null as any },
+                    { updateIndexType: 'Outro' },
+                ],
             }
         });
 

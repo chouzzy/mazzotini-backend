@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { legalOneApiService } from "../../../../services/legalOneApiService";
+import { AppError } from "../../../../errors/AppError";
 import axios from 'axios';
 import { LegalOneContact } from "../../../../services/legalOneTypes";
 
@@ -16,10 +17,10 @@ class ApproveUserProfileUseCase {
         // Validação básica
         const hasDocument = user.cpfOrCnpj || user.rg;
         if (!hasDocument || !user.email) {
-            throw new Error("Perfil incompleto (sem documentos ou e-mail).");
+            throw new AppError("Perfil incompleto (sem documentos ou e-mail).", 422);
         }
         if (user.status !== 'PENDING_REVIEW') {
-            throw new Error("Este utilizador não está pendente de revisão.");
+            throw new AppError("Este usuário não está pendente de revisão.", 409);
         }
 
         // --- 1. RESOLVER NOME DO ASSOCIADO (Para enviar ao Legal One) ---

@@ -9,7 +9,8 @@ module.exports = {
         ...tsJestTransformCfg,
     },
     testMatch: [
-        "<rootDir>/src/__tests__/**/*.test.ts"
+        "<rootDir>/src/__tests__/**/*.test.ts",
+        "<rootDir>/src/**/*.spec.ts"
     ],
     // Carrega variáveis de ambiente de teste ANTES de qualquer import
     setupFiles: [

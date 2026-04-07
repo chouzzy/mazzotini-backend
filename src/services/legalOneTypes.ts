@@ -67,6 +67,39 @@ export interface LegalOneContact {
     customFields?: { id: number; customFieldId: number; textValue: string | null }[];
 }
 
+export interface LegalOneEmailPayload {
+    email: string;
+    isMainEmail: boolean;
+    isBillingEmail?: boolean;
+    isInvoicingEmail?: boolean;
+    typeId: number;
+}
+
+export interface LegalOnePhonePayload {
+    number: string;
+    isMainPhone: boolean;
+    typeId: number;
+}
+
+export interface LegalOneAddressPayload {
+    type: string;
+    addressLine1: string;
+    addressNumber: string;
+    addressLine2?: string;
+    neighborhood?: string;
+    cityId: number;
+    areaCode?: string;
+    isMainAddress: boolean;
+    isBillingAddress?: boolean;
+    isInvoicingAddress?: boolean;
+}
+
+export interface LegalOneCustomField {
+    id: number;
+    customFieldId: number;
+    textValue: string | null;
+}
+
 // Payload unificado para criação
 export interface LegalOneCreatePersonPayload {
     name: string;
@@ -78,10 +111,17 @@ export interface LegalOneCreatePersonPayload {
     gender?: 'Male' | 'Female';
     nacionality?: string;
 
-    emails: any[];
-    phones: any[];
-    addresses: any[];
+    emails: LegalOneEmailPayload[];
+    phones: LegalOnePhonePayload[];
+    addresses: LegalOneAddressPayload[];
 }
+
+// Tipo discriminado para entidades do Legal One retornadas nas listagens
+export type LegalOneEntityType = 'Lawsuit' | 'Appeal' | 'ProceduralIssue';
+export type LegalOneEntity =
+    | (LegalOneLawsuit & { __legalOneType: 'Lawsuit' })
+    | (LegalOneAppeal & { __legalOneType: 'Appeal' })
+    | (LegalOneProceduralIssue & { __legalOneType: 'ProceduralIssue' });
 
 // ... (Resto das interfaces: Updates) ...
 export interface LegalOneUpdate { id: number; description: string; notes: string | null; date: string; typeId: number; originType: 'Manual' | 'OfficialJournalsCrawler' | string; }

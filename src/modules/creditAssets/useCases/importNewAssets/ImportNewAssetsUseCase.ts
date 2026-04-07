@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { CreateCreditAssetUseCase } from "../createCreditAsset/CreateCreditAssetUseCase";
 import { LookupAssetFromLegalOneUseCase } from "../../../users/useCases/lookupAssetFromLegalOne/LookupAssetFromLegalOneUseCase";
+import { LegalOneEntity } from "../../../../services/legalOneTypes";
 
 const prisma = new PrismaClient();
 
@@ -11,28 +12,24 @@ class ImportNewAssetsUseCase {
     /**
      * Executa a importação massiva ou incremental de processos, recursos e incidentes.
      * @param startDate (Opcional) Busca processos criados APÓS essa data.
-     * @param endDate (Opcional) Busca processos criados ANTES dessa data.
      */
-    async execute(startDate?: Date, endDate?: Date): Promise<void> {
+    async execute(startDate?: Date): Promise<void> {
 
         const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
         console.log(`\n==================================================`);
         console.log(`[IMPORT ROBOT] Iniciando execução...`);
         if (startDate) console.log(`   - Desde: ${startDate.toISOString()}`);
-        if (endDate) console.log(`   - Até:   ${endDate.toISOString()}`);
         console.log(`==================================================\n`);
 
         // 1. Busca lista UNIFICADA no Legal One (Lawsuits, Appeals, ProceduralIssues)
-        let legalOneEntities: any[] = [];
+        let legalOneEntities: LegalOneEntity[] = [];
         try {
-            // O seu listLawsuits atualizado agora deve suportar startDate e endDate
-            legalOneEntities = await legalOneApiService.listLawsuits(startDate, endDate);
+            legalOneEntities = await legalOneApiService.listLawsuits(startDate);
             console.log(`[IMPORT ROBOT] Total de entidades encontradas na API: ${legalOneEntities.length}`);
         } catch (error: any) {
             console.error(`[IMPORT ROBOT] Falha fatal ao listar processos: ${error.message}`);
             return;
         }
-        // t
         const lookupUseCase = new LookupAssetFromLegalOneUseCase();
         const createUseCase = new CreateCreditAssetUseCase();
         
@@ -41,8 +38,7 @@ class ImportNewAssetsUseCase {
         let skippedCount = 0;
 
         for (const entity of legalOneEntities) {
-            // O Legal One usa 'identifierNumber' (Lawsuits) ou 'number' (Appeals/Issues)
-            const processNumber = entity.identifierNumber || entity.number;
+            const processNumber = entity.identifierNumber;
             
             // =================================================================
             //  Validação de Nulo
@@ -71,7 +67,7 @@ class ImportNewAssetsUseCase {
                 const lookupData = await lookupUseCase.execute(processNumber);
 
                 // 4. Prepara investidores sugeridos
-                const investors = (lookupData.suggestedInvestors || []).map((inv: any) => ({
+                const investors = (lookupData.suggestedInvestors || []).map((inv: { userId: string; share?: number }) => ({
                     userId: inv.userId,
                     share: inv.share || 0
                 }));

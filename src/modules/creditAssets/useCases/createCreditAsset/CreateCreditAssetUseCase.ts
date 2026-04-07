@@ -3,6 +3,8 @@ import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/Enric
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { syncParticipantsAsUsers } from "../../../../utils/participantHelper";
 import { ensureProcessFolderExists } from "../../../../utils/folderHelper";
+import { AppError } from "../../../../errors/AppError";
+import { LegalOneParticipant } from "../../../../services/legalOneTypes";
 
 const prisma = new PrismaClient();
 
@@ -25,7 +27,7 @@ class CreateCreditAssetUseCase {
         const assetAlreadyExists = await prisma.creditAsset.findUnique({
             where: { legalOneId: assetData.legalOneId! },
         });
-        if (assetAlreadyExists) throw new Error(`Já existe um ativo com este ID Legal One.`);
+        if (assetAlreadyExists) throw new AppError(`Já existe um ativo com este ID Legal One.`, 409);
 
         const totalShare = investors.reduce((sum, i) => sum + (Number(i.share) || 0), 0);
         const mazzotiniShare = 100 - totalShare;
@@ -56,9 +58,11 @@ class CreateCreditAssetUseCase {
             return createdAsset;
         });
 
-        // 1. Enriquecimento do ativo cadastrado
+        // 1. Enriquecimento do ativo cadastrado (fire-and-forget)
         const enrichUseCase = new EnrichAssetFromLegalOneUseCase();
-        enrichUseCase.execute(newCreditAsset.id).catch(console.error);
+        enrichUseCase.execute(newCreditAsset.id).catch(err =>
+            console.error(`[CreateAsset] Falha no enriquecimento do ativo ${newCreditAsset.id}:`, err.message)
+        );
 
         // 2. Se for Recurso ou Incidente, garante que o processo pai (Lawsuit) existe
         if (
@@ -123,15 +127,18 @@ class CreateCreditAssetUseCase {
                 console.error(`[CreateAsset] Erro ao sincronizar participantes do pai:`, err.message)
             );
 
-            const customerP = parentParticipants.find((p: any) => p.type === "Customer");
-            const otherPartyP = parentParticipants.find((p: any) => p.type === "OtherParty" && p.isMainParticipant)
-                || parentParticipants.find((p: any) => p.type === "OtherParty");
+            const customerP = parentParticipants.find((p: LegalOneParticipant) => p.type === "Customer");
+            const otherPartyP = parentParticipants.find((p: LegalOneParticipant) => p.type === "OtherParty" && p.isMainParticipant)
+                || parentParticipants.find((p: LegalOneParticipant) => p.type === "OtherParty");
             const parentOriginalCreditor = customerP?.contactName || child.originalCreditor;
             const parentOtherParty = otherPartyP?.contactName || child.otherParty;
 
             // Garante a pasta
             const folderCode = parentData.folder;
-            const folderId = await ensureProcessFolderExists(folderCode, parentOtherParty).catch(() => child.folderId);
+            const folderId = await ensureProcessFolderExists(folderCode, parentOtherParty).catch(err => {
+                console.error(`[CreateAsset] Falha ao garantir pasta "${folderCode}", usando pasta do filho:`, err.message);
+                return child.folderId;
+            });
 
             const createdParent = await prisma.$transaction(async (tx) => {
                 const asset = await tx.creditAsset.create({
@@ -174,9 +181,11 @@ class CreateCreditAssetUseCase {
 
             console.log(`[CreateAsset] ✅ Processo pai ${parentNumber} cadastrado com sucesso (ID: ${createdParent.id})`);
 
-            // Enriquece o pai também
+            // Enriquece o pai também (fire-and-forget)
             const enrichParent = new EnrichAssetFromLegalOneUseCase();
-            enrichParent.execute(createdParent.id).catch(console.error);
+            enrichParent.execute(createdParent.id).catch(err =>
+                console.error(`[CreateAsset] Falha no enriquecimento do processo pai ${createdParent.id}:`, err.message)
+            );
 
         } catch (err: any) {
             console.error(`[CreateAsset] ❌ Falha ao cadastrar processo pai ${relatedLitigationId}:`, err.message);

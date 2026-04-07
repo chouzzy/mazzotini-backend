@@ -76,9 +76,9 @@ class SyncProcessUpdatesUseCase {
                 const existingDocIds = new Set(asset.documents.map(d => d.legalOneDocumentId).filter(id => id !== null));
                 
                 // Filtra apenas documentos que contenham a TAG no nome (archive) e que sejam novos
-                const newDocuments = legalOneDocuments.filter(doc => 
-                    !existingDocIds.has(doc.id) && 
-                    doc.archive.includes(TAG_DOCUMENTO)
+                const newDocuments = legalOneDocuments.filter(doc =>
+                    !existingDocIds.has(doc.id) &&
+                    !!doc.archive?.includes(TAG_DOCUMENTO)
                 );
 
                 if (newUpdates.length === 0 && newDocuments.length === 0) {
@@ -126,7 +126,7 @@ class SyncProcessUpdatesUseCase {
                         console.log(`[CRON JOB] Processo ${asset.processNumber}: ${newDocuments.length} novo(s) documento(s) com a tag ${TAG_DOCUMENTO}!`);
                         for (const doc of newDocuments) {
                             // Limpa o nome do arquivo removendo a tag, se desejar
-                            const cleanName = doc.archive.replace(TAG_DOCUMENTO, '').trim();
+                            const cleanName = (doc.archive ?? '').replace(TAG_DOCUMENTO, '').trim();
 
                             // O link de download é gerado sob demanda, mas se quiser salvar uma url temporária:
                             // const downloadUrl = await legalOneApiService.getDocumentDownloadUrl(doc.id);
@@ -135,7 +135,7 @@ class SyncProcessUpdatesUseCase {
                                 data: {
                                     assetId: asset.id,
                                     legalOneDocumentId: doc.id,
-                                    name: cleanName || doc.archive,
+                                    name: cleanName || doc.archive || '',
                                     category: doc.type || 'Documento Legal One',
                                     url: '', // URL vazia indica que deve ser buscada no Legal One na hora do download
                                 }

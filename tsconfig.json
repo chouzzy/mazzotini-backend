@@ -13,11 +13,10 @@
     "skipLibCheck": true,
     "outDir": "./build",
     "rootDir": "./src",
-    /* O CAMINHO MAIS CURTO: SUPRESSÃO TOTAL */
-    "strict": false,
-    "strictNullChecks": false,
-    "noImplicitAny": false,
-    "noEmitOnError": false,
+    "strict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "noEmitOnError": true,
     "baseUrl": ".",
     "paths": {
       "@/*": [

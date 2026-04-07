@@ -137,6 +137,8 @@ describe('SyncSingleAssetUseCase', () => {
             date: '2024-07-01T10:00:00.000Z',
             description: 'Andamento sem tag especial. Processo em tramitação.',
             originType: 'Sistema',
+            notes: null,
+            typeId: 1,
         };
         mockedService.getProcessUpdates.mockResolvedValue([updateSemTag]);
         mockedService.getProcessDocuments.mockResolvedValue([]);

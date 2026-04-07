@@ -183,7 +183,7 @@ class EnrichAssetFromLegalOneUseCase {
         }
 
         for (const child of children) {
-            const childNumber = child.identifierNumber || child.oldNumber;
+            const childNumber = child.identifierNumber || child.otherNumber;
             if (!childNumber) continue;
 
             // Tenta encontrar se o filho já está no nosso banco de dados

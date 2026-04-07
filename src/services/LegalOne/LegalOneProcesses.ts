@@ -1,4 +1,5 @@
-import axios, { AxiosResponse } from 'axios';
+import axios from 'axios';
+import type { AxiosResponse } from 'axios';
 import { LegalOneAuth } from './LegalOneAuth';
 import {
     LegalOneLawsuit, LegalOneLawsuitApiResponse,
@@ -6,7 +7,9 @@ import {
     LegalOneProceduralIssue, LegalOneProceduralIssueApiResponse,
     LegalOneUpdate,
     LegalOneParticipant,
-    LegalOneUpdatesApiResponse
+    LegalOneUpdatesApiResponse,
+    LegalOneEntity,
+    LegalOneEntityType,
 } from '../legalOneTypes';
 
 export class LegalOneProcesses extends LegalOneAuth {
@@ -19,7 +22,8 @@ export class LegalOneProcesses extends LegalOneAuth {
         try {
             while (url) {
                 const headers = await this.getAuthHeader();
-                const response = await axios.get<{ value: LegalOneParticipant[]; '@odata.nextLink'?: string }>(url, { headers });
+                type ParticipantPage = { value: LegalOneParticipant[]; '@odata.nextLink'?: string };
+                const response: AxiosResponse<ParticipantPage> = await axios.get<ParticipantPage>(url, { headers });
                 all = all.concat(response.data.value || []);
                 url = response.data['@odata.nextLink'] || null;
             }
@@ -37,7 +41,7 @@ export class LegalOneProcesses extends LegalOneAuth {
     /**
          * Helper para lidar com Rate Limit (429) usando Exponential Backoff
          */
-    private async requestWithRetry<T>(requestFn: () => Promise<any>, maxRetries = 5): Promise<any> {
+    private async requestWithRetry<T>(requestFn: () => Promise<T>, maxRetries = 5): Promise<T> {
         let attempt = 0;
         let baseDelay = 2000; // Começa a esperar 2 segundos
 
@@ -246,41 +250,47 @@ export class LegalOneProcesses extends LegalOneAuth {
     // =================================================================
     //  NOVO MÉTODO: Listar Processos (Com Paginação e Filtro de Data)
     // =================================================================
-    private async fetchAllPages(endpoint: string, sinceDate?: Date): Promise<any[]> {
+    private async fetchAllPages(
+        endpoint: 'Lawsuits' | 'Appeals' | 'ProceduralIssues',
+        sinceDate?: Date
+    ): Promise<LegalOneEntity[]> {
         const headers = await this.getAuthHeader();
         const url = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/${endpoint}`;
 
-        let allItems: any[] = [];
+        let allItems: LegalOneEntity[] = [];
 
-        // Filtro: Se passar data, filtra por creationDate. Se não, pega tudo.
         let filter = "";
         if (sinceDate) {
             filter = `creationDate gt ${sinceDate.toISOString()}`;
         }
 
-        // Params iniciais
         let requestUrl: string | null = url + (filter ? `?$filter=${encodeURIComponent(filter)}` : "");
+
+        const entityType: LegalOneEntityType =
+            endpoint === 'Lawsuits' ? 'Lawsuit' :
+            endpoint === 'Appeals' ? 'Appeal' : 'ProceduralIssue';
+
+        type ListResponse = {
+            value: (LegalOneLawsuit | LegalOneAppeal | LegalOneProceduralIssue)[];
+            '@odata.nextLink'?: string;
+        };
 
         console.log(`[Legal One API] Listando ${endpoint}... Filtro: ${filter || 'TODOS'}`);
 
         try {
-            // O SEU Loop de paginação (NextLink) intocado
             while (requestUrl) {
-                const res: any = await axios.get(requestUrl, { headers });
+                const res: AxiosResponse<ListResponse> = await axios.get<ListResponse>(requestUrl, { headers });
 
                 if (res.data.value && res.data.value.length > 0) {
-                    // Adicionamos uma flag invisível para sabermos de onde veio (vai ajudar no Lookup)
-                    const itemsWithType = res.data.value.map((item: any) => ({
+                    const itemsWithType: LegalOneEntity[] = res.data.value.map((item: LegalOneLawsuit | LegalOneAppeal | LegalOneProceduralIssue) => ({
                         ...item,
-                        __legalOneType: endpoint === 'Lawsuits' ? 'Lawsuit' :
-                            endpoint === 'Appeals' ? 'Appeal' : 'ProceduralIssue'
-                    }));
+                        __legalOneType: entityType,
+                    })) as LegalOneEntity[];
 
                     allItems = allItems.concat(itemsWithType);
                     console.log(`[Legal One API] [${endpoint}] +${res.data.value.length} encontrados. Total parcial: ${allItems.length}`);
                 }
 
-                // O Legal One usa '@odata.nextLink' para a próxima página
                 requestUrl = res.data['@odata.nextLink'] || null;
             }
 
@@ -292,8 +302,7 @@ export class LegalOneProcesses extends LegalOneAuth {
         }
     }
 
-    // 2. O seu listLawsuits agora chama a função acima para as 3 categorias
-    public async listLawsuits(sinceDate?: Date): Promise<any[]> {
+    public async listLawsuits(sinceDate?: Date): Promise<LegalOneEntity[]> {
         console.log(`\n[Legal One API] Iniciando extração completa (Processos, Recursos e Incidentes)...`);
 
         try {
@@ -332,14 +341,14 @@ export class LegalOneProcesses extends LegalOneAuth {
         for (const ep of endpoints) {
             for (const variant of [clean, clean.replace(/[.\-/]/g, '')]) {
                 try {
-                    const res = await axios.get(ep.url, {
+                    const res = await axios.get<{ value: Array<{ id: number; folder: string }> }>(ep.url, {
                         headers: { 'Authorization': `Bearer ${token}` },
                         params: { '$filter': `${ep.numberField} eq '${variant}'` }
                     });
-                    const items: any[] = res.data.value || [];
+                    const items = res.data.value || [];
                     if (items.length > 0) {
                         items.forEach(item => results.push({ id: item.id, folder: item.folder || '', legalOneType: ep.type }));
-                        break; // encontrou com esta variante, não precisa tentar a outra
+                        break;
                     }
                 } catch (e) { /* ignora e tenta próxima variante */ }
             }
@@ -352,39 +361,40 @@ export class LegalOneProcesses extends LegalOneAuth {
      * Busca processos, recursos e incidentes pelo código exato da pasta no Legal One.
      * Ex: folderCode = "Proc - 0002091/032"
      */
-    public async getEntitiesByFolderCode(folderCode: string): Promise<any[]> {
+    public async getEntitiesByFolderCode(folderCode: string): Promise<LegalOneEntity[]> {
         const headers = await this.getAuthHeader();
         const base = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
 
-        // Tenta variações do código (com e sem espaços ao redor do traço)
         const variants = [
             folderCode,
-            folderCode.replace(/\s*-\s*/, ' - '), // garante "Proc - 0002091/032"
-            folderCode.replace(/\s*-\s*/, '-'),    // garante "Proc-0002091/032"
-        ].filter((v, i, a) => a.indexOf(v) === i); // remove duplicatas
+            folderCode.replace(/\s*-\s*/, ' - '),
+            folderCode.replace(/\s*-\s*/, '-'),
+        ].filter((v, i, a) => a.indexOf(v) === i);
 
-        const endpoints = [
+        const endpoints: Array<{ url: string; type: LegalOneEntityType }> = [
             { url: `${base}/Lawsuits`, type: 'Lawsuit' },
             { url: `${base}/Appeals`, type: 'Appeal' },
             { url: `${base}/ProceduralIssues`, type: 'ProceduralIssue' },
         ];
 
-        const results: any[] = [];
+        type FolderResponse = { value: (LegalOneLawsuit | LegalOneAppeal | LegalOneProceduralIssue)[] };
+
+        const results: LegalOneEntity[] = [];
 
         for (const endpoint of endpoints) {
             for (const variant of variants) {
                 try {
-                    const res = await axios.get(endpoint.url, {
+                    const res = await axios.get<FolderResponse>(endpoint.url, {
                         headers,
                         params: { '$filter': `folder eq '${variant}'` }
                     });
-                    const items = (res.data.value || []).map((item: any) => ({
+                    const items: LegalOneEntity[] = (res.data.value || []).map(item => ({
                         ...item,
-                        __legalOneType: endpoint.type
-                    }));
+                        __legalOneType: endpoint.type,
+                    })) as LegalOneEntity[];
                     if (items.length > 0) {
                         results.push(...items);
-                        break; // achou com essa variação, não precisa tentar outra
+                        break;
                     }
                 } catch (e) { /* tenta próxima variação */ }
             }

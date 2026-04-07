@@ -9,7 +9,8 @@ import {
     LegalOneCountryApiResponse,
     LegalOneStateApiResponse,
     LegalOneCityApiResponse,
-    LegalOneAddress
+    LegalOneAddress,
+    LegalOneCustomField,
 } from '../legalOneTypes';
 
 export class LegalOneContacts extends LegalOneAuth {
@@ -148,8 +149,8 @@ export class LegalOneContacts extends LegalOneAuth {
         console.log(`[Legal One API] Atualizando Associado (${associateName}) para ID ${contactId} em /${endpointType}`);
 
         try {
-            const res = await axios.get(`${apiRestUrl}/${endpointType}/${contactId}/customFields`, { headers });
-            const existingField = (res.data.value || []).find((cf: any) => cf.customFieldId === ASSOCIATE_FIELD_ID);
+            const res = await axios.get<{ value: LegalOneCustomField[] }>(`${apiRestUrl}/${endpointType}/${contactId}/customFields`, { headers });
+            const existingField = (res.data.value || []).find(cf => cf.customFieldId === ASSOCIATE_FIELD_ID);
 
             if (existingField) {
                 await axios.patch(`${apiRestUrl}/${endpointType}/${contactId}/customFields/${existingField.id}`, {
@@ -249,18 +250,25 @@ export class LegalOneContacts extends LegalOneAuth {
         const endpointType = isPJ ? 'companies' : 'individuals';
 
         console.log(`[Legal One API] Atualizando ID ${contactId} em /${endpointType}`);
-        const newPayload = await this.buildPersonPayload(user) as any;
+        const newPayload = await this.buildPersonPayload(user);
 
         // Remove campos proibidos no PATCH raiz
         const { country, emails, phones, addresses, personStateIdentificationNumber, birthDate, gender, nacionality, ...basicPayload } = newPayload;
 
+        type PatchPayload = typeof basicPayload & {
+            birthDate?: string;
+            gender?: 'Male' | 'Female';
+            nacionality?: string;
+            personStateIdentificationNumber?: string;
+        };
+
         // Se for PF, reinjeta campos permitidos
-        let payloadToSend = { ...basicPayload };
+        let payloadToSend: PatchPayload = { ...basicPayload };
         if (!isPJ) {
-            if (newPayload.birthDate) payloadToSend.birthDate = newPayload.birthDate;
-            if (newPayload.gender) payloadToSend.gender = newPayload.gender;
-            if (newPayload.nacionality) payloadToSend.nacionality = newPayload.nacionality;
-            if (newPayload.personStateIdentificationNumber) payloadToSend.personStateIdentificationNumber = newPayload.personStateIdentificationNumber;
+            if (birthDate) payloadToSend.birthDate = birthDate;
+            if (gender) payloadToSend.gender = gender;
+            if (nacionality) payloadToSend.nacionality = nacionality;
+            if (personStateIdentificationNumber) payloadToSend.personStateIdentificationNumber = personStateIdentificationNumber;
         }
 
         try {
@@ -274,8 +282,8 @@ export class LegalOneContacts extends LegalOneAuth {
         try { currentContact = await this.getIndividualDetails(contactId, isPJ); } catch { return; }
 
         // Update Emails
-        if (currentContact.emails && newPayload.emails.length > 0) {
-            const mainNew = newPayload.emails.find((e: any) => e.isMainEmail);
+        if (currentContact.emails && emails.length > 0) {
+            const mainNew = emails.find(e => e.isMainEmail);
             const mainCurr = currentContact.emails.find(e => e.isMainEmail) || currentContact.emails[0];
             if (mainNew) {
                 try {
@@ -286,8 +294,8 @@ export class LegalOneContacts extends LegalOneAuth {
         }
 
         // Update Phones
-        if (currentContact.phones && newPayload.phones.length > 0) {
-            const mainNew = newPayload.phones.find((p: any) => p.isMainPhone);
+        if (currentContact.phones && phones.length > 0) {
+            const mainNew = phones.find(p => p.isMainPhone);
             const mainCurr = currentContact.phones.find(p => p.isMainPhone) || currentContact.phones[0];
             if (mainNew) {
                 try {
@@ -298,11 +306,11 @@ export class LegalOneContacts extends LegalOneAuth {
         }
 
         // Update Addresses
-        if (newPayload.addresses && newPayload.addresses.length > 0) {
+        if (addresses && addresses.length > 0) {
             try {
                 const addrRes = await axios.get<LegalOnePagedResponse<LegalOneAddress>>(`${apiRestUrl}/${endpointType}/${contactId}/addresses`, { headers: { 'Authorization': `Bearer ${token}` } });
                 const existingAddresses = addrRes.data.value || [];
-                for (const newAddr of newPayload.addresses) {
+                for (const newAddr of addresses) {
                     let match = newAddr.isMainAddress ? existingAddresses.find(a => a.isMainAddress) : existingAddresses.find(a => !a.isMainAddress && a.type === newAddr.type);
                     if (match) {
                         await axios.patch(`${apiRestUrl}/${endpointType}/${contactId}/addresses/${match.id}`, { ...newAddr, id: match.id }, { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } });

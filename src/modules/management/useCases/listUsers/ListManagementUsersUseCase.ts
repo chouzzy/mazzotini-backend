@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma, Role } from "@prisma/client";
+import { PrismaClient, Prisma, Role, UserStatus } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -6,12 +6,13 @@ export type UserManagementInfo = {
     id: string;
     auth0UserId: string;
     email: string;
-    name: string; 
-    picture: string; 
-    profilePictureUrl?: string | null; 
+    name: string;
+    picture: string;
+    profilePictureUrl?: string | null;
     lastLogin?: string;
     roles: string[];
     status?: string;
+    associateName?: string | null;
 };
 
 interface IListUsersRequest {
@@ -31,7 +32,7 @@ class ListManagementUsersUseCase {
         const where: Prisma.UserWhereInput = {};
 
         if (status && status !== 'ALL') {
-            where.status = status;
+            where.status = status as UserStatus;
         }
 
         if (role && role !== 'ALL') {
@@ -58,6 +59,9 @@ class ListManagementUsersUseCase {
                 skip,
                 take: limit,
                 orderBy: { name: 'asc' },
+                include: {
+                    referredBy: { select: { name: true } },
+                },
             }),
             prisma.user.count({ where })
         ]);
@@ -78,6 +82,7 @@ class ListManagementUsersUseCase {
                 lastLogin: user.updatedAt?.toISOString() || '', 
                 roles: roles, 
                 status: user.status || 'ACTIVE',
+                associateName: user.referredBy?.name || user.indication || null,
             };
         });
 

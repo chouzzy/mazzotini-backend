@@ -211,7 +211,7 @@ class SyncSingleAssetUseCase {
         }
 
         for (const child of children) {
-            const childNumber = child.identifierNumber || child.oldNumber;
+            const childNumber = child.identifierNumber || child.otherNumber;
             if (!childNumber) continue;
 
             const exists = await prisma.creditAsset.findUnique({ where: { legalOneId: child.id } });

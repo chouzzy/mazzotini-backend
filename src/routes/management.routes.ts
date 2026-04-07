@@ -9,8 +9,6 @@ import { InviteUserController } from '../modules/management/useCases/inviteUser/
 import { ApproveUserProfileController } from '../modules/management/useCases/approveUserProfile/ApproveUserProfileController';
 import { ListPendingUsersController } from '../modules/management/useCases/listPendingUsers/ListPendingUsersController';
 import { RejectUserProfileController } from '../modules/management/useCases/rejectUserProfile/RejectUserProfileController';
-import { TestGetDocumentsController } from '../modules/users/useCases/testGetDocuments/TestGetDocumentsController';
-import { TestMonthlyUpdateController } from '../modules/creditAssets/useCases/testMonthlyUpdate/TestMonthlyUpdateController';
 import { GetUserByIdController } from '../modules/management/useCases/getUserById/GetUserByIdController';
 import { AdminUpdateUserController } from '../modules/management/useCases/adminUpdateUser/AdminUpdateUserController';
 import { AdminDeleteUserDocumentController } from '../modules/management/useCases/adminDeleteUserDocument/AdminDeleteUserDocumentController';
@@ -32,8 +30,6 @@ const inviteUserController = new InviteUserController(); // 2. Crie a instância
 const listPendingUsersController = new ListPendingUsersController();
 const approveUserProfileController = new ApproveUserProfileController();
 const rejectUserProfileController = new RejectUserProfileController();
-const testGetDocumentsController = new TestGetDocumentsController();
-const testMonthlyUpdateController = new TestMonthlyUpdateController();
 const getUserByIdController = new GetUserByIdController();
 const adminUpdateUserController = new AdminUpdateUserController();
 const adminDeleteUserDocumentController = new AdminDeleteUserDocumentController();
@@ -135,32 +131,6 @@ managementRoutes.patch(
     rejectUserProfileController.handle
 );
 
-// --- ROTA DE ESPIONAGEM TEMPORÁRIA ---
-/**
- * @route   GET /api/management/spy-docs/:lawsuitId
- * @desc    [DEBUG] Retorna o JSON completo do primeiro documento de um processo.
- * @access  Privado (Apenas para ADMINs)
- */
-managementRoutes.get(
-    '/api/management/spy-docs/:lawsuitId',
-    testGetDocumentsController.handle // 3. ADICIONAR A ROTA
-);
-
-
-/**
- * @route   GET /api/management/test-monthly-update
- * @desc    [TESTE] Força a execução do cron de atualização monetária mensal.
- * @access  Privado (Apenas ADMINs)
- */
-managementRoutes.get(
-    '/api/management/test-monthly-update',
-    // checkJwt,
-    // checkRole([ROLES.ADMIN]), // Protegido
-    testMonthlyUpdateController.handle
-);
-
-
-
 /**
  * @route   GET /api/management/users/:id
  * @desc    Busca detalhes de um usuário específico
@@ -213,20 +183,6 @@ managementRoutes.patch(
 
 /** 
  * @route   POST /api/management/users/:id/investments/documents]
- * @desc    Upload de documentos de investimento para um usuário específico
- * @access  Privado (ADMIN)
-*/
-
-// Rota para atualizar a carteira do usuário
-managementRoutes.patch(
-    '/api/management/users/:id/investments',
-    checkJwt,
-    checkRole([ROLES.ADMIN]),
-    updateUserInvestmentsController.handle
-);
-
-/** 
- * @route   POST /api/management/users/:id/investments/documents
  * @desc    Upload de documentos de investimento para um usuário específico
  * @access  Privado (ADMIN)
 */

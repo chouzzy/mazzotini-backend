@@ -47,6 +47,8 @@ export const mockUpdate = {
     date: '2024-06-01T10:00:00.000Z',
     description: '#RelatórioMAA\nValor da Causa: R$ 100.000,00\nValor da Compra: R$ 50.000,00\nValor Atualizado: R$ 75.000,00\nProcesso em andamento normal.',
     originType: 'Manual',
+    notes: null,
+    typeId: 1,
 };
 
 export const mockDocument = {

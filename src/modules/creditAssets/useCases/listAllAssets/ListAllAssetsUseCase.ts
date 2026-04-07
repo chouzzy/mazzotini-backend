@@ -80,11 +80,14 @@ class ListAllAssetsUseCase {
             where.status = status;
         }
 
-        // --- NOVO: Lógica de Filtro por Tipo ---
+        // --- Lógica de Filtro por Tipo ---
         if (type && type !== 'ALL') {
             if (type === 'LAWSUIT') {
+                const existingAnd = Array.isArray(where.AND)
+                    ? (where.AND as Prisma.CreditAssetWhereInput[])
+                    : [];
                 where.AND = [
-                    ...(where.AND as any[] || []),
+                    ...existingAnd,
                     { OR: [{ legalOneType: 'Lawsuit' }, { legalOneType: null }] }
                 ];
             } else if (type === 'APPEAL') {
@@ -96,8 +99,11 @@ class ListAllAssetsUseCase {
 
         if (search) {
             const searchFilter = { contains: search, mode: 'insensitive' as Prisma.QueryMode };
+            const existingOr = Array.isArray(where.OR)
+                ? (where.OR as Prisma.CreditAssetWhereInput[])
+                : [];
             where.OR = [
-                ...(where.OR as any[] || []),
+                ...existingOr,
                 { processNumber: searchFilter },
                 { originalCreditor: searchFilter },
                 { nickname: searchFilter },
