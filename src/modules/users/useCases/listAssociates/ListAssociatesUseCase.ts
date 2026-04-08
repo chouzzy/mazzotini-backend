@@ -1,59 +1,46 @@
 // /src/modules/users/useCases/listAssociates/ListAssociatesUseCase.ts
 import { PrismaClient } from "@prisma/client";
-import { auth0ManagementService } from "../../../../services/auth0ManagementService";
 
 const prisma = new PrismaClient();
 
 // O "contrato" de dados que o Controller espera
 export type AssociateSummary = {
-    id: string; // O ID do nosso banco de dados
+    id: string;
     name: string;
-    associateSequence: number | null; // O número de associado, se aplicável
+    associateSequence: number | null;
     email: string;
     role: string;
 };
 
-// Lê a role das variáveis de ambiente
-const ROLE_ASSOCIATE = process.env.ROLE_ASSOCIATE || 'ASSOCIATE';
-
 /**
  * @class ListAssociatesUseCase
- * @description Lógica de negócio para buscar todos os utilizadores com a role 'ASSOCIATE'.
+ * @description Busca todos os usuários com role ASSOCIATE diretamente no banco.
+ *
+ * Antes, essa consulta passava pela Auth0 Management API para obter os IDs
+ * e depois cruzava com o banco — o que quebrava quando o Auth0 retornava vazio
+ * por rate limit ou por usuários ainda não sincronizados.
+ *
+ * O banco local é a fonte da verdade para roles internas, então a consulta
+ * vai direto para o Prisma.
  */
 class ListAssociatesUseCase {
     async execute(): Promise<AssociateSummary[]> {
-        console.log(`[USERS] Buscando lista de utilizadores com a role: ${ROLE_ASSOCIATE}`);
+        console.log(`[USERS] Buscando associados no banco local...`);
 
-        // 1. Busca no Auth0 todos os utilizadores que SÃO associados
-        const associatesFromAuth0 = await auth0ManagementService.getUsersByRole(ROLE_ASSOCIATE);
-
-        if (!associatesFromAuth0 || associatesFromAuth0.length === 0) {
-            console.log(`[USERS] Nenhum utilizador encontrado com a role ${ROLE_ASSOCIATE} no Auth0.`);
-            return [];
-        }
-
-        // 2. Extrai os emails ou auth0UserIds para encontrar no nosso banco
-        const associateAuth0Ids = associatesFromAuth0.map(u => u.user_id).filter(Boolean) as string[];
-
-        // 3. Busca no nosso banco de dados local APENAS os utilizadores que são associados
-        const localUsers = await prisma.user.findMany({
-            where: {
-                auth0UserId: { in: associateAuth0Ids }
-            },
+        const associates = await prisma.user.findMany({
+            where: { role: 'ASSOCIATE' },
             select: {
-                id: true, // O ID do nosso banco (MongoDB)
+                id: true,
                 name: true,
                 associateSequence: true,
                 email: true,
                 role: true
             },
-            orderBy: {
-                name: 'asc'
-            }
+            orderBy: { name: 'asc' }
         });
 
-        console.log(`[USERS] ${localUsers.length} associados encontrados e validados no banco local.`);
-        return localUsers;
+        console.log(`[USERS] ${associates.length} associados encontrados.`);
+        return associates;
     }
 }
 
