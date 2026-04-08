@@ -21,11 +21,12 @@ interface IListUsersRequest {
     search?: string;
     role?: string;
     status?: string;
-    onlyPlaceholders?: boolean; // <-- NOVO PARÂMETRO
+    onlyPlaceholders?: boolean;
+    associateSearch?: string; // filtra pelo nome do associado vinculado
 }
 
 class ListManagementUsersUseCase {
-    async execute({ page = 1, limit = 10, search, role, status, onlyPlaceholders }: IListUsersRequest) {
+    async execute({ page = 1, limit = 10, search, role, status, onlyPlaceholders, associateSearch }: IListUsersRequest) {
         const skip = (page - 1) * limit;
 
         // 1. CONSTRUÇÃO DO FILTRO (WHERE)
@@ -45,10 +46,22 @@ class ListManagementUsersUseCase {
         }
 
         if (search) {
-            // Se já houver um filtro de placeholder, o search vira um AND implícito
             where.OR = [
                 { name: { contains: search, mode: 'insensitive' } },
                 { email: { contains: search, mode: 'insensitive' } },
+            ];
+        }
+
+        // Filtra pelo nome do associado: busca tanto na relação referredBy quanto
+        // no campo de texto livre `indication` (usado em importações manuais)
+        if (associateSearch) {
+            where.AND = [
+                {
+                    OR: [
+                        { referredBy: { name: { contains: associateSearch, mode: 'insensitive' } } },
+                        { indication: { contains: associateSearch, mode: 'insensitive' } },
+                    ]
+                }
             ];
         }
 
