@@ -6,6 +6,18 @@ import { LegalOneParticipant } from "../services/legalOneTypes";
 const prisma = new PrismaClient();
 
 /**
+ * Tipos de participante do Legal One que NÃO devem ser cadastrados como clientes.
+ * - PersonInCharge   → Responsável (gestor interno do escritório)
+ * - OtherParty       → Parte Contrária (adversária no processo)
+ * - LawyerOfOtherParty → Advogado da parte contrária
+ */
+const EXCLUDED_PARTICIPANT_TYPES: LegalOneParticipant['type'][] = [
+    'PersonInCharge',
+    'OtherParty',
+    'LawyerOfOtherParty',
+];
+
+/**
  * Sincroniza participantes do Legal One com a tabela User do nosso banco.
  * Se o usuário não existir, cria um "Shadow User" (Usuário Sombra).
  *
@@ -14,6 +26,13 @@ const prisma = new PrismaClient();
  */
 export const syncParticipantsAsUsers = async (participants: LegalOneParticipant[]): Promise<User[]> => {
     if (!participants || participants.length === 0) return [];
+
+    // Filtra tipos que não devem ser cadastrados como clientes (Responsável, Parte Contrária, Advogado)
+    const filtered = participants.filter(p => !EXCLUDED_PARTICIPANT_TYPES.includes(p.type));
+    if (filtered.length < participants.length) {
+        console.log(`[PARTICIPANTS] Filtrados ${participants.length - filtered.length} participante(s) excluídos (Responsável/Parte Contrária/Advogado). Processando ${filtered.length}.`);
+    }
+    participants = filtered;
 
     const syncedUsers: User[] = [];
 
