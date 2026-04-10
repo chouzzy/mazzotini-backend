@@ -85,6 +85,40 @@ describe('syncParticipantsAsUsers', () => {
         }));
     });
 
+    // --- CENÁRIO 4b: Tipos Excluídos (Responsável, Parte Contrária, Advogado) ---
+    it('deve ignorar participantes do tipo PersonInCharge, OtherParty e LawyerOfOtherParty', async () => {
+        const excluded = [
+            { type: 'PersonInCharge' as const, contactId: 1, contactName: 'Responsável' },
+            { type: 'OtherParty' as const, contactId: 2, contactName: 'Parte Contrária' },
+            { type: 'LawyerOfOtherParty' as const, contactId: 3, contactName: 'Advogado' },
+        ];
+
+        const result = await syncParticipantsAsUsers(excluded);
+
+        expect(result).toEqual([]);
+        expect(prisma.user.findFirst).not.toHaveBeenCalled();
+        expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it('deve cadastrar Customer mas ignorar OtherParty na mesma lista', async () => {
+        const mixed = [
+            { type: 'Customer' as const, contactId: 10, contactName: 'Cliente Válido' },
+            { type: 'OtherParty' as const, contactId: 11, contactName: 'Parte Contrária' },
+        ];
+
+        (prisma.user.findFirst as jest.Mock).mockResolvedValueOnce(null); // não encontrou por ID
+        mockedGetContactGeneric.mockResolvedValueOnce({ id: 10, name: 'Cliente Válido', identificationNumber: null, email: null });
+        (prisma.user.findFirst as jest.Mock).mockResolvedValueOnce(null); // não encontrou por CPF
+        (prisma.user.create as jest.Mock).mockResolvedValue({ id: 'new-1', name: 'Cliente Válido', status: 'ACTIVE' });
+
+        const result = await syncParticipantsAsUsers(mixed);
+
+        expect(result).toHaveLength(1);
+        expect(result[0].name).toBe('Cliente Válido');
+        // Apenas 1 create (o Customer) — OtherParty foi filtrado antes
+        expect(prisma.user.create).toHaveBeenCalledTimes(1);
+    });
+
     // --- CENÁRIO 4: Usuário Novo (Shadow User) ---
     it('deve criar um "Shadow User" se não existir nem por ID nem por CPF', async () => {
         // 1. Busca por ID -> Null
