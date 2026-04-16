@@ -3,7 +3,7 @@ import { ListManagementUsersUseCase } from './ListManagementUsersUseCase';
 
 class ListManagementUsersController {
     async handle(request: Request, response: Response): Promise<Response> {
-        const { page, limit, search, role, status, associateSearch } = request.query;
+        const { page, limit, search, role, status, associateSearch, approvedFrom, approvedTo } = request.query;
 
         const useCase = new ListManagementUsersUseCase();
 
@@ -15,6 +15,8 @@ class ListManagementUsersController {
                 role: role ? String(role) : undefined,
                 status: status ? String(status) : undefined,
                 associateSearch: associateSearch ? String(associateSearch) : undefined,
+                approvedFrom: approvedFrom ? String(approvedFrom) : undefined,
+                approvedTo: approvedTo ? String(approvedTo) : undefined,
             });
             
             return response.status(200).json(result);

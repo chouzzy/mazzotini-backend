@@ -94,6 +94,7 @@ model User {
   // CORREÇÃO: Nulos permitidos
   createdAt             DateTime?    @default(now())
   updatedAt             DateTime?    @updatedAt
+  approvedAt            DateTime?
 
   @@index([status])
   @@index([referredById])

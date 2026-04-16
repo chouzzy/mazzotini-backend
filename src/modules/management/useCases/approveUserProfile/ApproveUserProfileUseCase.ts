@@ -130,7 +130,8 @@ class ApproveUserProfileUseCase {
             data: {
                 status: "ACTIVE",
                 legalOneContactId: legalOneContact.id,
-                role: "INVESTOR"
+                role: "INVESTOR",
+                approvedAt: new Date(),
             }
         });
 

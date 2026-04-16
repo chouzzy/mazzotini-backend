@@ -13,6 +13,7 @@ export type UserManagementInfo = {
     roles: string[];
     status?: string;
     associateName?: string | null;
+    approvedAt?: string | null;
 };
 
 interface IListUsersRequest {
@@ -23,10 +24,12 @@ interface IListUsersRequest {
     status?: string;
     onlyPlaceholders?: boolean;
     associateSearch?: string; // filtra pelo nome do associado vinculado
+    approvedFrom?: string;   // data ISO — aprovados a partir de
+    approvedTo?: string;     // data ISO — aprovados até
 }
 
 class ListManagementUsersUseCase {
-    async execute({ page = 1, limit = 10, search, role, status, onlyPlaceholders, associateSearch }: IListUsersRequest) {
+    async execute({ page = 1, limit = 10, search, role, status, onlyPlaceholders, associateSearch, approvedFrom, approvedTo }: IListUsersRequest) {
         const skip = (page - 1) * limit;
 
         // 1. CONSTRUÇÃO DO FILTRO (WHERE)
@@ -54,15 +57,29 @@ class ListManagementUsersUseCase {
 
         // Filtra pelo nome do associado: busca tanto na relação referredBy quanto
         // no campo de texto livre `indication` (usado em importações manuais)
+        const andClauses: Prisma.UserWhereInput[] = [];
+
         if (associateSearch) {
-            where.AND = [
-                {
-                    OR: [
-                        { referredBy: { name: { contains: associateSearch, mode: 'insensitive' } } },
-                        { indication: { contains: associateSearch, mode: 'insensitive' } },
-                    ]
+            andClauses.push({
+                OR: [
+                    { referredBy: { name: { contains: associateSearch, mode: 'insensitive' } } },
+                    { indication: { contains: associateSearch, mode: 'insensitive' } },
+                ]
+            });
+        }
+
+        // Filtra por intervalo de data de aprovação
+        if (approvedFrom || approvedTo) {
+            andClauses.push({
+                approvedAt: {
+                    ...(approvedFrom ? { gte: new Date(approvedFrom) } : {}),
+                    ...(approvedTo   ? { lte: new Date(new Date(approvedTo).setHours(23, 59, 59, 999)) } : {}),
                 }
-            ];
+            });
+        }
+
+        if (andClauses.length > 0) {
+            where.AND = andClauses;
         }
 
         // 2. BUSCA E CONTAGEM EM PARALELO
@@ -92,10 +109,11 @@ class ListManagementUsersUseCase {
                 name: displayName,
                 picture: user.profilePictureUrl || fallbackAvatar, 
                 profilePictureUrl: user.profilePictureUrl,
-                lastLogin: user.updatedAt?.toISOString() || '', 
-                roles: roles, 
+                lastLogin: user.updatedAt?.toISOString() || '',
+                roles: roles,
                 status: user.status || 'ACTIVE',
                 associateName: user.referredBy?.name || user.indication || null,
+                approvedAt: user.approvedAt?.toISOString() || null,
             };
         });
 
