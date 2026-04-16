@@ -16,7 +16,10 @@ class GetAssetByProcessNumberUseCase {
                     }
                 },
                 associate: { select: { id: true, name: true, email: true } },
-                updates: { orderBy: { date: "desc" } },
+                updates: {
+                    where: { description: { contains: '#RelatórioMAA' } },
+                    orderBy: { date: "desc" }
+                },
                 documents: true,
                 folder: true
             }

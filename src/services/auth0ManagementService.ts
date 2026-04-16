@@ -181,6 +181,21 @@ class Auth0ManagementService {
         return usersResponse.data;
     }
 
+    async generatePasswordResetLink(auth0UserId: string): Promise<string> {
+        console.log(`[Auth0 Mgmt] Gerando link de redefinição de senha para: ${auth0UserId}`);
+        const ticket = await managementClient.tickets.changePassword({ user_id: auth0UserId });
+        return ticket.data.ticket;
+    }
+
+    async updateUserEmail(auth0UserId: string, newEmail: string): Promise<void> {
+        console.log(`[Auth0 Mgmt] Atualizando e-mail de ${auth0UserId} para ${newEmail}`);
+        await managementClient.users.update(
+            { id: auth0UserId },
+            { email: newEmail, email_verified: false, verify_email: false }
+        );
+        console.log(`[Auth0 Mgmt] E-mail atualizado com sucesso.`);
+    }
+
     async deleteUser(auth0UserId: string): Promise<void> {
         console.log(`[Auth0 Mgmt] A excluir permanentemente o utilizador: ${auth0UserId}...`);
 

@@ -31,6 +31,8 @@ import { AdminUploadUserDocumentController } from '../modules/management/useCase
 import { RequestProfileChangeController } from '../modules/management/useCases/requestProfileChange/RequestProfileChangeController';
 import { ReviewProfileChangeController } from '../modules/management/useCases/reviewProfileChange/ReviewProfileChangeController';
 import { ListPendingProfileChangesController } from '../modules/management/useCases/listPendingProfileChanges/ListPendingProfileChangesController';
+import { PasswordResetController } from '../modules/management/useCases/passwordReset/PasswordResetController';
+import { UpdateUserEmailController } from '../modules/management/useCases/updateUserEmail/UpdateUserEmailController';
 
 const managementRoutes = Router();
 
@@ -51,6 +53,8 @@ const adminUploadUserDocumentController = new AdminUploadUserDocumentController(
 const requestProfileChangeController   = new RequestProfileChangeController();
 const reviewProfileChangeController    = new ReviewProfileChangeController();
 const listPendingProfileChangesController = new ListPendingProfileChangesController();
+const passwordResetController  = new PasswordResetController();
+const updateUserEmailController = new UpdateUserEmailController();
 
 // Multer configurado via /src/config/upload.ts (Spaces/S3)
 const upload = multer(uploadConfig);
@@ -170,6 +174,20 @@ managementRoutes.patch(
     checkJwt,
     checkRole([ROLES.ADMIN]),
     updateUserRolesController.handle
+);
+
+managementRoutes.post(
+    '/api/management/users/:auth0UserId/password-reset',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    passwordResetController.handle
+);
+
+managementRoutes.patch(
+    '/api/management/users/:auth0UserId/email',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    updateUserEmailController.handle
 );
 
 
