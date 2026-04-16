@@ -14,6 +14,7 @@ export type UserManagementInfo = {
     status?: string;
     associateName?: string | null;
     approvedAt?: string | null;
+    createdAt?: string | null;
 };
 
 interface IListUsersRequest {
@@ -114,6 +115,7 @@ class ListManagementUsersUseCase {
                 status: user.status || 'ACTIVE',
                 associateName: user.referredBy?.name || user.indication || null,
                 approvedAt: user.approvedAt?.toISOString() || null,
+                createdAt: user.createdAt?.toISOString() || null,
             };
         });
 
