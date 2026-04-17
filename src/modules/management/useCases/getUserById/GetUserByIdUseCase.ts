@@ -13,8 +13,10 @@ class GetUserByIdUseCase {
                         asset: {
                             select: {
                                 id: true,
+                                legalOneId: true,
                                 processNumber: true,
                                 nickname: true,
+                                otherParty: true,
                                 status: true
                             }
                         },
