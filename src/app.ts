@@ -27,6 +27,7 @@ const app = express();
 // Em desenvolvimento, 'origin: undefined' (requisições diretas como curl/Postman) é permitido.
 const allowedOrigins = [
     'http://localhost:3000',
+    'http://localhost:3001',
     'https://mazzotini-frontend.vercel.app',
     'https://portal.mazzotiniadvogados.com.br',
     'https://mazzotini-backup.netlify.app',
