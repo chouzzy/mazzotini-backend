@@ -177,7 +177,6 @@ class SyncSingleAssetUseCase {
             // Salva Andamentos
             for (const update of sortedNewUpdates) {
                 const allValues = extractAllValues(update.description);
-                const updateText = extractFreeText(update.description);
 
                 if (allValues.valorDaCausa !== null) currentAssetValues.originalValue = allValues.valorDaCausa;
                 if (allValues.valorDaCompra !== null) currentAssetValues.acquisitionValue = allValues.valorDaCompra;
@@ -188,7 +187,10 @@ class SyncSingleAssetUseCase {
                         assetId: asset.id,
                         legalOneUpdateId: update.id,
                         date: new Date(update.date),
-                        description: updateText,
+                        // Salva o texto original completo (com a tag) para que o filtro
+                        // description.contains('#RelatórioMAA') funcione na leitura.
+                        // O frontend é responsável por limpar tag e linhas de valor na exibição.
+                        description: update.description || "",
                         updatedValue: allValues.valorAtualizado ?? currentAssetValues.currentValue,
                         source: `Legal One - ${update.originType || 'Manual'}`
                     }
