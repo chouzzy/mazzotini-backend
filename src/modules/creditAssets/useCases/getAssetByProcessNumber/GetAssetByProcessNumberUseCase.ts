@@ -17,7 +17,12 @@ class GetAssetByProcessNumberUseCase {
                 },
                 associate: { select: { id: true, name: true, email: true } },
                 updates: {
-                    where: { description: { contains: '#RelatórioMAA' } },
+                    where: {
+                        OR: [
+                            { description: { contains: '#RelatórioMAA' } },
+                            { description: { contains: '#RelatorioMAA' } },
+                        ]
+                    },
                     orderBy: { date: "desc" }
                 },
                 documents: true,

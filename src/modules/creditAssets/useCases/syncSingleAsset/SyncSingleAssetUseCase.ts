@@ -105,7 +105,7 @@ class SyncSingleAssetUseCase {
         const asset = await prisma.creditAsset.findUnique({
             where: { legalOneId },
             include: {
-                updates: { select: { legalOneUpdateId: true } },
+                updates: { select: { legalOneUpdateId: true, id: true } },
                 documents: { select: { legalOneDocumentId: true } },
                 investors: true // <--- ADICIONADO: Necessário para a Malha Fina clonar os investidores
             }
@@ -130,10 +130,13 @@ class SyncSingleAssetUseCase {
 
         console.log(`[SYNC MANUAL] ${legalOneUpdates.length} andamentos e ${legalOneDocuments.length} documentos encontrados no Legal One.`);
 
-        // Filtro de Andamentos
-        const existingUpdateIds = new Set(asset.updates.map(u => u.legalOneUpdateId));
+        // Mapa de updates existentes: legalOneUpdateId → id interno do DB
+        // Usado para upsert: se o update já foi importado (possivelmente com description stripada),
+        // atualiza a description com o texto raw do Legal One.
+        const existingUpdatesMap = new Map(asset.updates.map(u => [u.legalOneUpdateId, u.id]));
+
+        // Filtra APENAS por tag — não exclui updates já existentes (eles serão atualizados via upsert)
         const updatesToProcess = legalOneUpdates.filter(update => {
-            if (existingUpdateIds.has(update.id)) return false;
             const desc = update.description || "";
             return desc.toLowerCase().includes(TAG_RELATORIO.toLowerCase()) || desc.toLowerCase().includes(TAG_RELATORIO_SEM_ACENTO.toLowerCase());
         });
@@ -182,19 +185,33 @@ class SyncSingleAssetUseCase {
                 if (allValues.valorDaCompra !== null) currentAssetValues.acquisitionValue = allValues.valorDaCompra;
                 if (allValues.valorAtualizado !== null) currentAssetValues.currentValue = allValues.valorAtualizado;
 
-                await tx.assetUpdate.create({
-                    data: {
-                        assetId: asset.id,
-                        legalOneUpdateId: update.id,
-                        date: new Date(update.date),
-                        // Salva o texto original completo (com a tag) para que o filtro
-                        // description.contains('#RelatórioMAA') funcione na leitura.
-                        // O frontend é responsável por limpar tag e linhas de valor na exibição.
-                        description: update.description || "",
-                        updatedValue: allValues.valorAtualizado ?? currentAssetValues.currentValue,
-                        source: `Legal One - ${update.originType || 'Manual'}`
-                    }
-                });
+                const rawDescription = update.description || "";
+                const existingId = existingUpdatesMap.get(update.id);
+
+                if (existingId) {
+                    // Já existe no DB (possivelmente com description stripada) → atualiza com texto raw
+                    await tx.assetUpdate.update({
+                        where: { id: existingId },
+                        data: {
+                            description: rawDescription,
+                            date: new Date(update.date),
+                            updatedValue: allValues.valorAtualizado ?? currentAssetValues.currentValue,
+                        }
+                    });
+                    console.log(`[SYNC MANUAL] ♻️ Atualizado andamento existente ID ${update.id} com description raw.`);
+                } else {
+                    // Novo andamento → cria
+                    await tx.assetUpdate.create({
+                        data: {
+                            assetId: asset.id,
+                            legalOneUpdateId: update.id,
+                            date: new Date(update.date),
+                            description: rawDescription,
+                            updatedValue: allValues.valorAtualizado ?? currentAssetValues.currentValue,
+                            source: `Legal One - ${update.originType || 'Manual'}`
+                        }
+                    });
+                }
             }
 
             // Salva Documentos
