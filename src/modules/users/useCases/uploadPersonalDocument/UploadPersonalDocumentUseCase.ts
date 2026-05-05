@@ -1,8 +1,9 @@
-import { PrismaClient } from "@prisma/client";
+
+import { prisma } from '../../../../prisma';
 import { fileUploadService } from "../../../../services/fileUploadService";
 import { legalOneApiService } from "../../../../services/legalOneApiService"; // Importar serviço
 
-const prisma = new PrismaClient();
+
 
 interface IRequest {
     auth0UserId: string;

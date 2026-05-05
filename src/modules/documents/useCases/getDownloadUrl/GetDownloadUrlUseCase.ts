@@ -1,8 +1,9 @@
 // /src/modules/documents/useCases/getDownloadUrl/GetDownloadUrlUseCase.ts
-import { PrismaClient } from "@prisma/client";
+
+import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 
-const prisma = new PrismaClient();
+
 
 class GetDownloadUrlUseCase {
     async execute(documentId: string): Promise<string> {

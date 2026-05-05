@@ -1,6 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from '../../../../prisma';
 
-const prisma = new PrismaClient();
+
+
 
 class DeleteCreditAssetUseCase {
     async execute(assetId: string): Promise<void> {

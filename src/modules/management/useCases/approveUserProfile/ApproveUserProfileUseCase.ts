@@ -31,13 +31,14 @@
  * @throws {AppError} 409 — Usuário não está em `PENDING_REVIEW`
  */
 
-import { PrismaClient } from "@prisma/client";
+
+import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { AppError } from "../../../../errors/AppError";
 import axios from 'axios';
 import { LegalOneContact } from "../../../../services/legalOneTypes";
 
-const prisma = new PrismaClient();
+
 
 class ApproveUserProfileUseCase {
     async execute(userId: string): Promise<void> {

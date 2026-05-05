@@ -1,5 +1,6 @@
-import { PrismaClient, CreditAsset, User } from "@prisma/client";
-const prisma = new PrismaClient();
+import { prisma } from '../../../../prisma';
+
+
 
 // 1. ATUALIZAÇÃO DA INTERFACE
 interface InvestorInput { 

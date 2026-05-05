@@ -1,8 +1,9 @@
+import { prisma } from '../../../../prisma';
 // src/modules/creditAssets/useCases/getAssetEstimation/GetAssetEstimationUseCase.ts
-import { PrismaClient } from "@prisma/client";
+
 // NÂO PRECISAMOS MAIS DO economicIndexService AQUI
 
-const prisma = new PrismaClient();
+
 
 interface IResponse {
     currentEstimatedValue: number; // O valor de "hoje"

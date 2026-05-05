@@ -1,9 +1,10 @@
 // /src/modules/management/useCases/updateUserRoles/UpdateUserRolesUseCase.ts
 
-import { PrismaClient, Role } from "@prisma/client";
+
+import { prisma } from '../../../../prisma';
 import { auth0ManagementService } from "../../../../services/auth0ManagementService";
 
-const prisma = new PrismaClient();
+
 
 const VALID_ROLES: Role[] = ['ADMIN', 'OPERATOR', 'INVESTOR', 'ASSOCIATE'];
 

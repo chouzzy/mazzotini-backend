@@ -1,6 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from '../../../../prisma';
 
-const prisma = new PrismaClient();
+
+
 
 class GetAssetByProcessNumberUseCase {
     async execute(legalOneId: number, auth0UserId: string, roles: string[]) {

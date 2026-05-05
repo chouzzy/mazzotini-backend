@@ -1,9 +1,10 @@
 // src/modules/creditAssets/useCases/updateMonthlyIndices/UpdateMonthlyIndicesUseCase.ts
-import { PrismaClient } from "@prisma/client";
+
+import { prisma } from '../../../../prisma';
 import axios from 'axios'; 
 import { v4 as uuidv4 } from 'uuid';
 
-const prisma = new PrismaClient();
+
 
 // ============================================================================
 //  LÓGICA DO "OLHEIRO" (Usando a API correta - SGS 11)

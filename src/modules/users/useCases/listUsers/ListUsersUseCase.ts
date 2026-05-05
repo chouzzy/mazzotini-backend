@@ -1,6 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from '../../../../prisma';
 
-const prisma = new PrismaClient();
+
+
 
 export type UserSelectItem = {
     value: string; // ID do Prisma

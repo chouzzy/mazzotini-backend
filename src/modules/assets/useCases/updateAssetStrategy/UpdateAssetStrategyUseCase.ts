@@ -1,7 +1,8 @@
 // src/modules/assets/useCases/updateAssetStrategy/UpdateAssetStrategyUseCase.ts
-import {  PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+
+
+import { prisma } from '../../../../prisma';
 import { AppError } from '../../../../errors/AppError';
 
 interface IRequest {

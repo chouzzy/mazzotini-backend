@@ -6,13 +6,12 @@
  * A listagem retorna as 10 mais recentes em ordem cronológica decrescente.
  */
 
+import { prisma } from '../prisma';
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { checkJwt } from '../middleware/auth';
 import { checkRole } from '../middleware/checkRole';
 
 const notificationsRoutes = Router();
-const prisma = new PrismaClient();
 
 
 /**

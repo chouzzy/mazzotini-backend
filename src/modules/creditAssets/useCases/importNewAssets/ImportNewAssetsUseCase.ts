@@ -18,7 +18,8 @@
  *
  * ## Throttling
  * Há um `wait(3000)` entre cada entidade para respeitar o rate limit da API do
- * Legal One. Em um import de 200 processos, isso leva ~10 minutos — intencional.
+ * Legal One. Em um import { prisma } from '../../../../prisma';
+import de 200 processos, isso leva ~10 minutos — intencional.
  *
  * ## Relatório Final
  * Ao encerrar, loga um resumo com contadores:
@@ -33,13 +34,13 @@
 
 // src/modules/creditAssets/useCases/importNewAssets/ImportNewAssetsUseCase.ts
 
-import { PrismaClient } from "@prisma/client";
+
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { CreateCreditAssetUseCase } from "../createCreditAsset/CreateCreditAssetUseCase";
 import { LookupAssetFromLegalOneUseCase } from "../../../users/useCases/lookupAssetFromLegalOne/LookupAssetFromLegalOneUseCase";
 import { LegalOneEntity } from "../../../../services/legalOneTypes";
 
-const prisma = new PrismaClient();
+
 
 class ImportNewAssetsUseCase {
     /**

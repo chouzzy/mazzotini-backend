@@ -1,7 +1,8 @@
+import { prisma } from '../../../../prisma';
 // /src/modules/users/useCases/listAssociates/ListAssociatesUseCase.ts
-import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+
+
 
 // O "contrato" de dados que o Controller espera
 export type AssociateSummary = {

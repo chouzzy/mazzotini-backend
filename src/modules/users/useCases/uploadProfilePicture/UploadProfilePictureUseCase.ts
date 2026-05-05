@@ -1,9 +1,10 @@
 // /src/modules/users/useCases/uploadProfilePicture/UploadProfilePictureUseCase.ts
-import { PrismaClient } from "@prisma/client";
+
+import { prisma } from '../../../../prisma';
 import { fileUploadService } from "../../../../services/fileUploadService";
 
 
-const prisma = new PrismaClient();
+
 
 interface IRequest {
     auth0UserId: string;

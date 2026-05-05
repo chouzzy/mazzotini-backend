@@ -1,6 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from '../../../../prisma';
 
-const prisma = new PrismaClient();
 
 class RequestProfileChangeUseCase {
     async execute(userId: string, proposedData: Record<string, any>) {

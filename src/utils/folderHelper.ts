@@ -1,6 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from '../prisma';
 
-const prisma = new PrismaClient();
+
+
 
 /**
  * Recebe o código da pasta do Legal One (ex: "Proc - 0002356/001" ou "Proc - 0002356")

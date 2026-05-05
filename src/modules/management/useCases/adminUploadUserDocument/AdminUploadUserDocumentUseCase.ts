@@ -1,5 +1,6 @@
+import { prisma } from '../../../../prisma';
 import fs from 'fs';
-import { PrismaClient } from "@prisma/client";
+
 import { fileUploadService } from "../../../../services/fileUploadService";
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { AppError } from "../../../../errors/AppError";
@@ -12,7 +13,7 @@ const ALLOWED_MIME_TYPES = new Set([
 ]);
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
-const prisma = new PrismaClient();
+
 
 interface IRequest {
     userId: string; // ID do Prisma

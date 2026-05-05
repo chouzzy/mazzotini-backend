@@ -1,8 +1,9 @@
+import { prisma } from '../../../../prisma';
 // Caminho: src/modules/creditAssets/useCases/listAllAssets/ListAllAssetsUseCase.ts
 
-import { Prisma, PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+
+
 
 const ROLES = {
     ADMIN: process.env.ROLE_ADMIN || 'ADMIN',

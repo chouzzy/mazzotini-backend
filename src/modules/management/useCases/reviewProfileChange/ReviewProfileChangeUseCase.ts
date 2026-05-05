@@ -1,7 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from '../../../../prisma';
 import { AdminUpdateUserUseCase } from "../adminUpdateUser/AdminUpdateUserUseCase";
 
-const prisma = new PrismaClient();
 
 class ReviewProfileChangeUseCase {
     async approve(requestId: string) {

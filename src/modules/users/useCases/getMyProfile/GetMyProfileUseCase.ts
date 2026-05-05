@@ -1,7 +1,8 @@
+import { prisma } from '../../../../prisma';
 // /src/modules/users/useCases/getMyProfile/GetMyProfileUseCase.ts
-import { PrismaClient, User } from "@prisma/client";
 
-const prisma = new PrismaClient();
+
+
 
 class GetMyProfileUseCase {
     async execute(auth0UserId: string): Promise<User | null> {

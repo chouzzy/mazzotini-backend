@@ -1,4 +1,4 @@
-import { PrismaClient, CreditAsset, User } from "@prisma/client";
+import { prisma } from '../../../../prisma';
 import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/EnrichAssetFromLegalOneUseCase";
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { syncParticipantsAsUsers } from "../../../../utils/participantHelper";
@@ -6,7 +6,6 @@ import { ensureProcessFolderExists } from "../../../../utils/folderHelper";
 import { AppError } from "../../../../errors/AppError";
 import { LegalOneParticipant } from "../../../../services/legalOneTypes";
 
-const prisma = new PrismaClient();
 
 interface InvestorInput {
     userId: User['id'];

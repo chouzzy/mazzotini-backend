@@ -42,11 +42,12 @@
  * Erros na Malha Fina são capturados e logados — não interrompem a sync principal.
  */
 
-import { PrismaClient } from "@prisma/client";
+
+import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/EnrichAssetFromLegalOneUseCase";
 
-const prisma = new PrismaClient();
+
 
 const TAG_RELATORIO = "#RelatórioMAA";
 const TAG_RELATORIO_SEM_ACENTO = "#RelatorioMAA";

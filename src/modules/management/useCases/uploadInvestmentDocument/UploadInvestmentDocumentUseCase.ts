@@ -1,9 +1,10 @@
-import { PrismaClient } from "@prisma/client";
+
+import { prisma } from '../../../../prisma';
 import { fileUploadService } from "../../../../services/fileUploadService";
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import fs from 'fs'; // Necessário para ler o arquivo se estiver em disco
 
-const prisma = new PrismaClient();
+
 
 interface IRequest {
     userId: string;

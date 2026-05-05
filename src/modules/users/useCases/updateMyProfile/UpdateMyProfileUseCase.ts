@@ -1,7 +1,8 @@
+import { prisma } from '../../../../prisma';
 // /src/modules/users/useCases/updateMyProfile/UpdateMyProfileUseCase.ts
-import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+
+
 
 // A interface agora reflete todos os novos campos do schema.prisma
 // Esta é a "lista branca" de campos que permitimos que o utilizador atualize.

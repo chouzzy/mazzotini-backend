@@ -1,7 +1,8 @@
-import { PrismaClient } from "@prisma/client";
+
+import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 
-const prisma = new PrismaClient();
+
 const TAG_ANDAMENTO = "#RelatórioMAA";
 
 // Assumindo que esta função já existe no topo do seu ficheiro original

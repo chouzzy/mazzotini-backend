@@ -29,11 +29,10 @@
  * ```
  */
 
+import { prisma } from '../prisma';
 import { Request, Response, NextFunction } from 'express';
 import { JWTPayload } from 'express-oauth2-jwt-bearer';
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
 
 /** Extensão do payload JWT para incluir as roles customizadas do Auth0 */
 interface CustomJWTPayload extends JWTPayload {

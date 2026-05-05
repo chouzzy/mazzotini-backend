@@ -1,7 +1,8 @@
-import { PrismaClient, User } from "@prisma/client";
+
+import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 
-const prisma = new PrismaClient();
+
 
 // Interface flexível para receber os dados do form
 interface IAdminUpdateUserDTO {

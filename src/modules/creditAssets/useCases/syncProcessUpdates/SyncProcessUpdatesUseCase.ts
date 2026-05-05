@@ -1,7 +1,8 @@
-import { PrismaClient } from "@prisma/client";
+
+import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 
-const prisma = new PrismaClient();
+
 
 // Tags
 const TAG_RELATORIO = "#RelatórioMAA";

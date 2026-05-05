@@ -1,9 +1,10 @@
 // /src/modules/management/useCases/rejectUserProfile/RejectUserProfileUseCase.ts
-import { PrismaClient } from "@prisma/client";
+
 // Importa os dois serviços que precisamos para a exclusão
+import { prisma } from '../../../../prisma';
 import { auth0ManagementService } from "../../../../services/auth0ManagementService";
 
-const prisma = new PrismaClient();
+
 
 class RejectUserProfileUseCase {
 

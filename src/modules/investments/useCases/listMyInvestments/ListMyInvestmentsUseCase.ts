@@ -1,8 +1,9 @@
+import { prisma } from '../../../../prisma';
 // src/modules/investments/useCases/listMyInvestments/ListMyInvestmentsUseCase.ts
 
-import { PrismaClient, Investment } from '@prisma/client';
 
-const prisma = new PrismaClient();
+
+
 
 // Definimos uma interface para o nosso retorno, incluindo o objeto do ativo.
 // O Prisma vai nos dar isso automaticamente com o 'include'.

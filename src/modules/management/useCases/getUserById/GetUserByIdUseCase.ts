@@ -1,6 +1,7 @@
-import { PrismaClient, User } from "@prisma/client";
+import { prisma } from '../../../../prisma';
 
-const prisma = new PrismaClient();
+
+
 
 class GetUserByIdUseCase {
     async execute(userId: string): Promise<User> {

@@ -1,6 +1,7 @@
-import { PrismaClient, User } from "@prisma/client";
+import { prisma } from '../../../../prisma';
 
-const prisma = new PrismaClient();
+
+
 
 interface IRequest {
     auth0UserId: string;

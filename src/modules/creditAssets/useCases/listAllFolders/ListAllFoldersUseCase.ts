@@ -1,6 +1,7 @@
-import { Prisma, PrismaClient } from "@prisma/client";
+import { prisma } from '../../../../prisma';
 
-const prisma = new PrismaClient();
+
+
 
 interface IListFoldersRequest {
     auth0UserId: string;

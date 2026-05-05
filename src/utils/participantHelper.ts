@@ -1,9 +1,8 @@
-import { PrismaClient, User } from "@prisma/client";
+import { prisma } from '../prisma';
 import { legalOneApiService } from "../services/legalOneApiService";
 import { unmask } from "./masks";
 import { LegalOneParticipant } from "../services/legalOneTypes";
 
-const prisma = new PrismaClient();
 
 /**
  * Tipos de participante do Legal One que NÃO devem ser cadastrados como clientes.

@@ -1,7 +1,8 @@
+import { prisma } from '../../../../prisma';
 // /src/modules/management/useCases/listPendingUsers/ListPendingUsersUseCase.ts
-import { PrismaClient, User } from "@prisma/client";
 
-const prisma = new PrismaClient();
+
+
 
 // Usamos o tipo User completo, pois o Admin precisará de todos os dados
 // para tomar a decisão de aprovação.

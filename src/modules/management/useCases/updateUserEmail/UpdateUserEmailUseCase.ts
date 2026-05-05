@@ -1,8 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from '../../../../prisma';
 import { auth0ManagementService } from "../../../../services/auth0ManagementService";
 import { AppError } from "../../../../errors/AppError";
 
-const prisma = new PrismaClient();
 
 class UpdateUserEmailUseCase {
     async execute(auth0UserId: string, newEmail: string): Promise<void> {

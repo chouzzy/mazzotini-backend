@@ -1,9 +1,10 @@
 // src/modules/users/useCases/createUser/CreateUserUseCase.ts
 
-import { PrismaClient, User } from "@prisma/client";
+
+import { prisma } from '../../../../prisma';
 import { ManagementClient } from "auth0";
 
-const prisma = new PrismaClient();
+
 
 // Configura o cliente da API de Gestão do Auth0 (necessário para atribuir a role)
 const management = new ManagementClient({
