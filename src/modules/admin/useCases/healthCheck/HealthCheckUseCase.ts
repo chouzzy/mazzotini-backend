@@ -101,15 +101,8 @@ class HealthCheckUseCase {
 
     private checkLegalOne() {
         return runCheck('Legal One API', 'Legal One', async () => {
-            // Busca o legalOneId de um processo existente no banco para usar como ping
-            const sample = await prisma.creditAsset.findFirst({
-                where: { legalOneType: 'Lawsuit', legalOneId: { not: 0 } },
-                orderBy: { createdAt: 'asc' },
-                select: { legalOneId: true, processNumber: true },
-            });
-            if (!sample?.legalOneId) return 'Nenhum processo encontrado no banco para teste';
-            await legalOneApiService.getLawsuitById(sample.legalOneId);
-            return `Processo ${sample.processNumber} (ID ${sample.legalOneId}) retornado com sucesso`;
+            // ping(): auth + $top=1&$select=id — 1 única chamada, sem participantes
+            return await legalOneApiService.ping();
         });
     }
 

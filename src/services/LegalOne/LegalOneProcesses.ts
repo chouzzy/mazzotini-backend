@@ -14,6 +14,18 @@ import {
 
 export class LegalOneProcesses extends LegalOneAuth {
 
+    // Minimal connectivity check: auth + 1 result only, no participant calls
+    public async ping(): Promise<string> {
+        const token = await this.getAccessToken();
+        const url = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/Lawsuits`;
+        const response = await axios.get<LegalOneLawsuitApiResponse>(url, {
+            headers: { Authorization: `Bearer ${token}` },
+            params: { '$top': 1, '$select': 'id' },
+        });
+        const count = response.data.value?.length ?? 0;
+        return `Autenticado · ${count} resultado(s) retornado(s)`;
+    }
+
     // --- Helper ---
     public async getEntityParticipants(endpointType: 'lawsuits' | 'appeals' | 'proceduralissues', entityId: number): Promise<LegalOneParticipant[]> {
         const baseUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/${endpointType}/${entityId}/participants`;
