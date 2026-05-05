@@ -37,7 +37,7 @@ class UpdateMyProfileController {
             residentialCity: yup.string().required("A Cidade Residencial é obrigatória."),
             residentialState: yup.string().required("O Estado Residencial é obrigatório."),
 
-            useCommercialAddress: yup.boolean().optional(),
+            // useCommercialAddress é campo de UI — não existe no banco, não deve passar ao Prisma
             commercialCep: yup.string().optional().nullable(),
             commercialStreet: yup.string().optional().nullable(),
             commercialNumber: yup.string().optional().nullable(),

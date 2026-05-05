@@ -50,7 +50,7 @@ class UpdateMyProfileUseCase {
         console.log(`[PROFILE] A atualizar perfil para o utilizador: ${auth0UserId}`);
 
         // O 'address' antigo é depreciado e não será usado.
-        const { address, ...validData } = data as any;
+        const { address, useCommercialAddress, ...validData } = data as any;
 
         const existingUser = await prisma.user.findUnique({
             where: { auth0UserId },
