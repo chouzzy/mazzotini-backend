@@ -1,6 +1,7 @@
 // Em algum lugar como src/schedulers/cronJobs.ts
 
 import { UpdateMonthlyIndicesUseCase } from '../modules/creditAssets/useCases/updateMonthlyIndices/UpdateMonthlyIndicesUseCase';
+import { HealthCheckUseCase } from '../modules/admin/useCases/healthCheck/HealthCheckUseCase';
 import cron from 'node-cron';
 
 // ... (seu cron do EnrichAssetFromLegalOneUseCase deve estar aqui)
@@ -27,5 +28,16 @@ const runMonthlyIndexUpdate = () => {
     });
 };
 
-// Exporte e chame esta função no seu 'server.ts'
-export { runMonthlyIndexUpdate };
+const runDailyHealthCheck = () => {
+    cron.schedule('0 8 * * *', async () => {
+        console.log('⏰ [Cron] Iniciando health check diário...');
+        try {
+            const useCase = new HealthCheckUseCase();
+            await useCase.execute('cron');
+        } catch (error) {
+            console.error('⏰ [Cron] FALHA no health check:', error);
+        }
+    }, { timezone: 'America/Sao_Paulo' });
+};
+
+export { runMonthlyIndexUpdate, runDailyHealthCheck };

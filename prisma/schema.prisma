@@ -253,6 +253,17 @@ model UserProfileChangeRequest {
 }
 
 // ==========================================
+//  MODEL: HEALTH CHECK LOGS
+// ==========================================
+model SystemHealthLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  runAt     DateTime @default(now())
+  status    String   // "ok" | "degraded" | "error"
+  checks    Json     // CheckResult[]
+  triggeredBy String @default("cron") // "cron" | "manual"
+}
+
+// ==========================================
 //  MODEL: NOTIFICAÇÕES (SystemNotification)
 // ==========================================
 model SystemNotification {
