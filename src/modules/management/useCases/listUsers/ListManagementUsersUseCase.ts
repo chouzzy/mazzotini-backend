@@ -14,6 +14,8 @@ export type UserManagementInfo = {
     roles: string[];
     status?: string;
     associateName?: string | null;
+    associateSequence?: number | null;   // código do próprio usuário (se for ASSOCIATE)
+    referredBySequence?: number | null;  // código do associado que indicou este usuário
     approvedAt?: string | null;
     createdAt?: string | null;
 };
@@ -92,7 +94,7 @@ class ListManagementUsersUseCase {
                 take: limit,
                 orderBy: { name: 'asc' },
                 include: {
-                    referredBy: { select: { name: true } },
+                    referredBy: { select: { name: true, associateSequence: true } },
                 },
             }),
             prisma.user.count({ where })
@@ -115,6 +117,8 @@ class ListManagementUsersUseCase {
                 roles: roles,
                 status: user.status || 'ACTIVE',
                 associateName: user.referredBy?.name || user.indication || null,
+                associateSequence: user.associateSequence ?? null,
+                referredBySequence: user.referredBy?.associateSequence ?? null,
                 approvedAt: user.approvedAt?.toISOString() || null,
                 createdAt: user.createdAt?.toISOString() || null,
             };
