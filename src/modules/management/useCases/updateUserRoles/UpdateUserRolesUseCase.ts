@@ -26,9 +26,27 @@ class UpdateUserRolesUseCase {
         // 2. Atualiza no banco de dados local para manter consistência
         const newRole = roles[0] as Role;
         if (newRole && VALID_ROLES.includes(newRole)) {
+            const updateData: any = { role: newRole };
+
+            // Auto-assign sequential code when promoting to ASSOCIATE
+            if (newRole === 'ASSOCIATE') {
+                const user = await prisma.user.findUnique({
+                    where: { auth0UserId },
+                    select: { associateSequence: true },
+                });
+                if (!user?.associateSequence) {
+                    const max = await prisma.user.aggregate({
+                        _max: { associateSequence: true },
+                        where: { associateSequence: { not: null } },
+                    });
+                    updateData.associateSequence = (max._max.associateSequence ?? 0) + 1;
+                    console.log(`[UPDATE ROLES] Código ${updateData.associateSequence} atribuído ao novo associado.`);
+                }
+            }
+
             await prisma.user.update({
                 where: { auth0UserId },
-                data: { role: newRole },
+                data: updateData,
             });
             console.log(`[UPDATE ROLES] Role do usuário ${auth0UserId} atualizada para ${newRole} no banco.`);
         }
