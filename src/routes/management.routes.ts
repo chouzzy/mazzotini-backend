@@ -33,6 +33,7 @@ import { ReviewProfileChangeController } from '../modules/management/useCases/re
 import { ListPendingProfileChangesController } from '../modules/management/useCases/listPendingProfileChanges/ListPendingProfileChangesController';
 import { PasswordResetController } from '../modules/management/useCases/passwordReset/PasswordResetController';
 import { UpdateUserEmailController } from '../modules/management/useCases/updateUserEmail/UpdateUserEmailController';
+import { UpdateAssociateCodeController } from '../modules/management/useCases/updateAssociateCode/UpdateAssociateCodeController';
 
 const managementRoutes = Router();
 
@@ -55,6 +56,7 @@ const reviewProfileChangeController    = new ReviewProfileChangeController();
 const listPendingProfileChangesController = new ListPendingProfileChangesController();
 const passwordResetController  = new PasswordResetController();
 const updateUserEmailController = new UpdateUserEmailController();
+const updateAssociateCodeController = new UpdateAssociateCodeController();
 
 // Multer configurado via /src/config/upload.ts (Spaces/S3)
 const upload = multer(uploadConfig);
@@ -188,6 +190,13 @@ managementRoutes.patch(
     checkJwt,
     checkRole([ROLES.ADMIN]),
     updateUserEmailController.handle
+);
+
+managementRoutes.patch(
+    '/api/management/users/:id/associate-code',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    updateAssociateCodeController.handle
 );
 
 
