@@ -231,8 +231,15 @@ export class LegalOneContacts extends LegalOneAuth {
         console.log(`[Legal One API] Criando contato (${endpointType}): ${user.name}`);
         const payload = await this.buildPersonPayload(user);
 
+        // CompanyModel não aceita campos exclusivos de PF (gender, birthDate, RG, nacionality)
+        let finalPayload: Partial<LegalOneCreatePersonPayload> = { ...payload };
+        if (isPJ) {
+            const { birthDate, gender, personStateIdentificationNumber, nacionality, ...pjPayload } = finalPayload;
+            finalPayload = pjPayload;
+        }
+
         try {
-            const res = await axios.post<LegalOneContact>(`${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/${endpointType}`, payload, { headers });
+            const res = await axios.post<LegalOneContact>(`${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/${endpointType}`, finalPayload, { headers });
             const newContact = res.data;
             if (associateName) await this.updateAssociateCustomField(newContact.id, associateName, isPJ);
             return newContact;
