@@ -3,11 +3,13 @@ import { checkJwt } from '../middleware/auth';
 import { checkRole } from '../middleware/checkRole';
 import { GetAssociateDashboardController } from '../modules/associate/useCases/getAssociateDashboard/GetAssociateDashboardController';
 import { GetAssociateClientProcessesController } from '../modules/associate/useCases/getAssociateClientProcesses/GetAssociateClientProcessesController';
+import { GetAssociateAllProcessesController } from '../modules/associate/useCases/getAssociateAllProcesses/GetAssociateAllProcessesController';
 
 const associateRoutes = Router();
 
 const getAssociateDashboardController = new GetAssociateDashboardController();
 const getAssociateClientProcessesController = new GetAssociateClientProcessesController();
+const getAssociateAllProcessesController = new GetAssociateAllProcessesController();
 
 const ROLES = { ASSOCIATE: process.env.ROLE_ASSOCIATE || 'ASSOCIATE' };
 
@@ -25,6 +27,14 @@ associateRoutes.get(
     checkJwt,
     checkRole([ROLES.ASSOCIATE]),
     getAssociateClientProcessesController.handle
+);
+
+// Tabela flat: todos os processos do associado com info do cliente
+associateRoutes.get(
+    '/api/associate/processes',
+    checkJwt,
+    checkRole([ROLES.ASSOCIATE]),
+    getAssociateAllProcessesController.handle
 );
 
 export { associateRoutes };
