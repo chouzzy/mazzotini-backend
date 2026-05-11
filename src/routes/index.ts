@@ -9,6 +9,7 @@ import { managementRoutes } from "./management.routes";
 import { notificationsRoutes } from "./notifications.routes";
 import { assetsRoutes } from "./assets.routes";
 import { adminRoutes } from "./admin.routes";
+import { associateRoutes } from "./associate.routes";
 
 const router = Router();
 
@@ -25,5 +26,6 @@ router.use(documentRoutes);
 router.use(managementRoutes);
 router.use(notificationsRoutes);
 router.use(adminRoutes);
+router.use(associateRoutes);
 
 export { router };

@@ -9,9 +9,11 @@
 import { Router } from 'express';
 import { checkJwt } from '../middleware/auth';
 import { ListMyInvestmentsController } from '../modules/investments/useCases/listMyInvestments/ListMyInvestmentsController';
+import { UpdateInvestmentAssociateController } from '../modules/investments/useCases/updateInvestmentAssociate/UpdateInvestmentAssociateController';
 
 const investmentRoutes = Router();
 const listMyInvestmentsController = new ListMyInvestmentsController();
+const updateInvestmentAssociateController = new UpdateInvestmentAssociateController();
 
 
 /**
@@ -59,6 +61,13 @@ investmentRoutes.get(
     '/api/investments/me',
     checkJwt,
     listMyInvestmentsController.handle
+);
+
+// Cliente vincula ou remove o associado de um investimento seu
+investmentRoutes.patch(
+    '/api/investments/:investmentId/associate',
+    checkJwt,
+    updateInvestmentAssociateController.handle
 );
 
 export { investmentRoutes };

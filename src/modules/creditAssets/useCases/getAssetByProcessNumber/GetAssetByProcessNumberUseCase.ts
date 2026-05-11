@@ -37,20 +37,25 @@ class GetAssetByProcessNumberUseCase {
 
         // 2. AUDITORIA DE ACESSO (O Cadeado)
         const isAdminOrOperator = roles.includes('ADMIN') || roles.includes('OPERATOR');
+        let viewerIsAssociate = false;
 
-        // Se NÃO for Admin/Operador, temos de garantir que ele está vinculado ao processo
         if (!isAdminOrOperator) {
             const user = await prisma.user.findUnique({
                 where: { auth0UserId },
                 select: { id: true }
             });
 
-            if (!user) {
-                throw new Error("Acesso negado.");
-            }
+            if (!user) throw new Error("Acesso negado.");
 
-            if (roles.includes('INVESTOR') || roles.includes('ASSOCIATE')) {
-                // Verifica se o ID do usuário está dentro da lista de investidores DESTE processo
+            if (roles.includes('ASSOCIATE')) {
+                // Associado só acessa processos em que está vinculado via investment.associateId
+                const isLinked = asset.investors.some(inv => inv.associate?.id === user.id);
+                if (!isLinked) {
+                    console.warn(`[SEGURANÇA] Associado ${user.id} tentou aceder ao processo ${legalOneId} sem vínculo.`);
+                    throw new Error("Acesso negado.");
+                }
+                viewerIsAssociate = true;
+            } else if (roles.includes('INVESTOR')) {
                 const isInvestorInThisAsset = asset.investors.some(inv => inv.user?.id === user.id);
                 if (!isInvestorInThisAsset) {
                     console.warn(`[SEGURANÇA] Usuário ${user.id} tentou aceder ao processo ${legalOneId} sem estar vinculado.`);
@@ -59,7 +64,11 @@ class GetAssetByProcessNumberUseCase {
             }
         }
 
-        // Se passou pela auditoria (ou é admin), devolve os dados
+        // Associados não podem ver documentos
+        if (viewerIsAssociate) {
+            return { ...asset, documents: [] };
+        }
+
         return asset;
     }
 }
