@@ -13,7 +13,7 @@
     "import": "node build/import-all-assets.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.914.0",
+    "@aws-sdk/client-s3": "^3.972.0",
     "@aws-sdk/lib-storage": "^3.972.0",
     "@prisma/client": "5",
     "@stripe/stripe-js": "^2.1.7",
