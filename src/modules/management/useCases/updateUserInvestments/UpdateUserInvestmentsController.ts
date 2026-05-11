@@ -10,7 +10,7 @@ class UpdateUserInvestmentsController {
         const schema = yup.object().shape({
             investments: yup.array().of(
                 yup.object().shape({
-                    assetId: yup.string().required(),
+                    assetId: yup.string().min(1, 'assetId inválido').required(),
                     share: yup.number().min(0).max(100).required(),
                     documents: yup.array().of(yup.string()).optional(),
                     associateId: yup.string().nullable().optional()
