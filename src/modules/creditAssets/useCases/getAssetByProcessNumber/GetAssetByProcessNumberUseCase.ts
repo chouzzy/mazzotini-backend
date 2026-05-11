@@ -48,13 +48,15 @@ class GetAssetByProcessNumberUseCase {
             if (!user) throw new Error("Acesso negado.");
 
             if (roles.includes('ASSOCIATE')) {
-                // Associado só acessa processos em que está vinculado via investment.associateId
-                const isLinked = asset.investors.some(inv => inv.associate?.id === user.id);
-                if (!isLinked) {
+                const isLinkedAsAssociate = asset.investors.some(inv => inv.associate?.id === user.id);
+                const isLinkedAsInvestor  = asset.investors.some(inv => inv.user?.id === user.id);
+
+                if (!isLinkedAsAssociate && !isLinkedAsInvestor) {
                     console.warn(`[SEGURANÇA] Associado ${user.id} tentou aceder ao processo ${legalOneId} sem vínculo.`);
                     throw new Error("Acesso negado.");
                 }
-                viewerIsAssociate = true;
+                // Só bloqueia documentos quando acessa como associado (não como cliente do processo)
+                viewerIsAssociate = isLinkedAsAssociate && !isLinkedAsInvestor;
             } else if (roles.includes('INVESTOR')) {
                 const isInvestorInThisAsset = asset.investors.some(inv => inv.user?.id === user.id);
                 if (!isInvestorInThisAsset) {
