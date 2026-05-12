@@ -253,6 +253,22 @@ model UserProfileChangeRequest {
 }
 
 // ==========================================
+//  MODEL: LOG DE IMPORTAÇÃO
+// ==========================================
+model ImportLog {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  triggeredAt    DateTime  @default(now())
+  triggeredBy    String    @default("cron")  // "cron" | auth0UserId
+  since          DateTime?
+  importedCount  Int       @default(0)
+  skippedCount   Int       @default(0)
+  errorCount     Int       @default(0)
+  status         String    @default("running") // "running" | "completed" | "failed"
+  finishedAt     DateTime?
+  durationMs     Int?
+}
+
+// ==========================================
 //  MODEL: CONFIGURAÇÕES DO SISTEMA
 // ==========================================
 model SystemSettings {

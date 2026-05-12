@@ -40,6 +40,7 @@ import { CreateCreditAssetUseCase } from "../createCreditAsset/CreateCreditAsset
 import { LookupAssetFromLegalOneUseCase } from "../../../users/useCases/lookupAssetFromLegalOne/LookupAssetFromLegalOneUseCase";
 import { LegalOneEntity } from "../../../../services/legalOneTypes";
 import { getSystemSettings } from "../../../admin/useCases/systemSettings/SystemSettingsService";
+import { prisma } from '../../../../prisma';
 
 
 
@@ -48,8 +49,9 @@ class ImportNewAssetsUseCase {
      * Executa a importação massiva ou incremental de processos, recursos e incidentes.
      * @param startDate (Opcional) Busca processos criados APÓS essa data.
      */
-    async execute(startDate?: Date): Promise<void> {
+    async execute(startDate?: Date, logId?: string): Promise<void> {
 
+        const startTime = Date.now();
         const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
         console.log(`\n==================================================`);
         console.log(`[IMPORT ROBOT] Iniciando execução...`);
@@ -160,12 +162,33 @@ class ImportNewAssetsUseCase {
             await wait(3000);
         }
 
+        const durationMs = Date.now() - startTime;
         console.log(`\n==================================================`);
         console.log(`[IMPORT ROBOT] Finalizado.`);
         console.log(`✅ Importados: ${importedCount}`);
         console.log(`⏩ Pulados: ${skippedCount}`);
         console.log(`❌ Erros: ${errorCount}`);
+        console.log(`⏱ Duração: ${Math.round(durationMs / 1000)}s`);
         console.log(`==================================================\n`);
+
+        // Atualiza o log no banco
+        if (logId) {
+            try {
+                await prisma.importLog.update({
+                    where: { id: logId },
+                    data: {
+                        importedCount,
+                        skippedCount,
+                        errorCount,
+                        status: errorCount > 0 && importedCount === 0 ? 'failed' : 'completed',
+                        finishedAt: new Date(),
+                        durationMs,
+                    },
+                });
+            } catch (e: any) {
+                console.error('[IMPORT ROBOT] Falha ao atualizar log:', e.message);
+            }
+        }
     }
 }
 
