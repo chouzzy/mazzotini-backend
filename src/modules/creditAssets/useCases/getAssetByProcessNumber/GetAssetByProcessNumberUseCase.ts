@@ -1,12 +1,8 @@
 import { prisma } from '../../../../prisma';
 
-
-
-
 class GetAssetByProcessNumberUseCase {
     async execute(legalOneId: number, auth0UserId: string, roles: string[]) {
 
-        // 1. Busca o processo com todas as relações
         const asset = await prisma.creditAsset.findUnique({
             where: { legalOneId },
             include: {
@@ -26,52 +22,45 @@ class GetAssetByProcessNumberUseCase {
                     },
                     orderBy: { date: "desc" }
                 },
-                documents: true,
+                documents: { orderBy: { createdAt: 'desc' } },
                 folder: true
             }
         });
 
-        if (!asset) {
-            throw new Error("Processo não encontrado.");
-        }
+        if (!asset) throw new Error("Processo não encontrado.");
 
-        // 2. AUDITORIA DE ACESSO (O Cadeado)
         const isAdminOrOperator = roles.includes('ADMIN') || roles.includes('OPERATOR');
+
+        // Admin/Operator vê tudo — retorna direto
+        if (isAdminOrOperator) return asset;
+
+        const user = await prisma.user.findUnique({ where: { auth0UserId }, select: { id: true } });
+        if (!user) throw new Error("Acesso negado.");
+
         let viewerIsAssociate = false;
 
-        if (!isAdminOrOperator) {
-            const user = await prisma.user.findUnique({
-                where: { auth0UserId },
-                select: { id: true }
-            });
-
-            if (!user) throw new Error("Acesso negado.");
-
-            if (roles.includes('ASSOCIATE')) {
-                const isLinkedAsAssociate = asset.investors.some(inv => inv.associate?.id === user.id);
-                const isLinkedAsInvestor  = asset.investors.some(inv => inv.user?.id === user.id);
-
-                if (!isLinkedAsAssociate && !isLinkedAsInvestor) {
-                    console.warn(`[SEGURANÇA] Associado ${user.id} tentou aceder ao processo ${legalOneId} sem vínculo.`);
-                    throw new Error("Acesso negado.");
-                }
-                // Só bloqueia documentos quando acessa como associado (não como cliente do processo)
-                viewerIsAssociate = isLinkedAsAssociate && !isLinkedAsInvestor;
-            } else if (roles.includes('INVESTOR')) {
-                const isInvestorInThisAsset = asset.investors.some(inv => inv.user?.id === user.id);
-                if (!isInvestorInThisAsset) {
-                    console.warn(`[SEGURANÇA] Usuário ${user.id} tentou aceder ao processo ${legalOneId} sem estar vinculado.`);
-                    throw new Error("Acesso negado.");
-                }
-            }
+        if (roles.includes('ASSOCIATE')) {
+            const isLinkedAsAssociate = asset.investors.some(inv => inv.associate?.id === user.id);
+            const isLinkedAsInvestor  = asset.investors.some(inv => inv.user?.id === user.id);
+            if (!isLinkedAsAssociate && !isLinkedAsInvestor) throw new Error("Acesso negado.");
+            viewerIsAssociate = isLinkedAsAssociate && !isLinkedAsInvestor;
+        } else if (roles.includes('INVESTOR')) {
+            const isInvestor = asset.investors.some(inv => inv.user?.id === user.id);
+            if (!isInvestor) throw new Error("Acesso negado.");
         }
 
-        // Associados não podem ver documentos
-        if (viewerIsAssociate) {
-            return { ...asset, documents: [] };
-        }
+        // Associados não veem documentos
+        if (viewerIsAssociate) return { ...asset, documents: [] };
 
-        return asset;
+        // Investidores veem:
+        //  - docs globais (JURIDICO, PROCESSUAL) — investorUserId === null
+        //  - docs privados (PRIVADO_FINANCEIRO) apenas os próprios — investorUserId === user.id
+        const filteredDocs = asset.documents.filter(doc => {
+            if (doc.section !== 'PRIVADO_FINANCEIRO') return true;
+            return doc.investorUserId === user.id;
+        });
+
+        return { ...asset, documents: filteredDocs };
     }
 }
 

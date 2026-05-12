@@ -12,12 +12,16 @@ interface IRequest {
     section: string;
     category: string;
     auth0UserId: string;
+    investorUserId?: string;
 }
 
 class AttachStagingDocumentUseCase {
-    async execute({ stagingDocId, assetLegalOneId, section, category, auth0UserId }: IRequest) {
+    async execute({ stagingDocId, assetLegalOneId, section, category, auth0UserId, investorUserId }: IRequest) {
         if (!VALID_CATEGORIES[section]?.includes(category)) {
             throw new Error(`Categoria inválida "${category}" para a seção "${section}"`);
+        }
+        if (section === 'PRIVADO_FINANCEIRO' && !investorUserId) {
+            throw new Error('investorUserId é obrigatório para documentos Privados e Financeiros.');
         }
 
         const admin = await prisma.user.findUniqueOrThrow({ where: { auth0UserId }, select: { id: true } });
@@ -40,6 +44,7 @@ class AttachStagingDocumentUseCase {
                 sourceStagingDocId: stagingDocId,
                 uploadedByUserId: admin.id,
                 assetId: asset.id,
+                investorUserId: investorUserId || null,
             },
         });
 

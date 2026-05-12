@@ -233,6 +233,9 @@ model Document {
   sourceStagingDocId String?
   uploadedByUserId   String?     @db.ObjectId
 
+  // Para docs de PRIVADO_FINANCEIRO: scoped ao investidor específico
+  investorUserId     String?     @db.ObjectId
+
   assetId            String      @db.ObjectId
   asset              CreditAsset @relation(fields: [assetId], references: [id])
 

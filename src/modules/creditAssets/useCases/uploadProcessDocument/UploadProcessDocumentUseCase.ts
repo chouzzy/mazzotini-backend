@@ -7,6 +7,7 @@ interface IRequest {
     section: string;
     category: string;
     auth0UserId: string;
+    investorUserId?: string;
 }
 
 const VALID_SECTIONS = ['JURIDICO', 'PRIVADO_FINANCEIRO', 'PROCESSUAL'];
@@ -18,7 +19,7 @@ const VALID_CATEGORIES: Record<string, string[]> = {
 };
 
 class UploadProcessDocumentUseCase {
-    async execute({ legalOneId, file, section, category, auth0UserId }: IRequest) {
+    async execute({ legalOneId, file, section, category, auth0UserId, investorUserId }: IRequest) {
         if (!VALID_SECTIONS.includes(section)) {
             throw new Error(`Seção inválida: ${section}`);
         }
@@ -36,6 +37,11 @@ class UploadProcessDocumentUseCase {
         const fileUrl = await fileUploadService.upload(fileContent, file.originalname, folder, file.mimetype);
         const fileKey = new URL(fileUrl).pathname.substring(1);
 
+        // PRIVADO_FINANCEIRO docs devem ter investorUserId
+        if (section === 'PRIVADO_FINANCEIRO' && !investorUserId) {
+            throw new Error('investorUserId é obrigatório para documentos Privados e Financeiros.');
+        }
+
         const doc = await prisma.document.create({
             data: {
                 name: file.originalname,
@@ -47,6 +53,7 @@ class UploadProcessDocumentUseCase {
                 sourceType: 'MANUAL',
                 uploadedByUserId: uploader.id,
                 assetId: asset.id,
+                investorUserId: investorUserId || null,
             },
         });
 

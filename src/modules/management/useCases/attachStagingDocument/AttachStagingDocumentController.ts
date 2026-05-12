@@ -5,7 +5,7 @@ class AttachStagingDocumentController {
     async handle(req: Request, res: Response) {
         try {
             const { stagingDocId } = req.params;
-            const { assetLegalOneId, section, category } = req.body;
+            const { assetLegalOneId, section, category, investorUserId } = req.body;
             const auth0UserId = (req as any).auth?.payload?.sub;
 
             if (!assetLegalOneId || !section || !category) {
@@ -19,6 +19,7 @@ class AttachStagingDocumentController {
                 section,
                 category,
                 auth0UserId,
+                investorUserId,
             });
 
             return res.status(201).json(doc);
