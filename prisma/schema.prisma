@@ -253,6 +253,17 @@ model UserProfileChangeRequest {
 }
 
 // ==========================================
+//  MODEL: CONFIGURAÇÕES DO SISTEMA
+// ==========================================
+model SystemSettings {
+  id                          String   @id @default(auto()) @map("_id") @db.ObjectId
+  autoImportAppeals           Boolean  @default(true)
+  autoImportProceduralIssues  Boolean  @default(true)
+  updatedAt                   DateTime @updatedAt
+  updatedBy                   String?
+}
+
+// ==========================================
 //  MODEL: HEALTH CHECK LOGS
 // ==========================================
 model SystemHealthLog {

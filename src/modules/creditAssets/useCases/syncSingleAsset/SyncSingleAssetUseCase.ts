@@ -46,6 +46,7 @@
 import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/EnrichAssetFromLegalOneUseCase";
+import { getSystemSettings } from '../../../admin/useCases/systemSettings/SystemSettingsService';
 
 
 
@@ -258,15 +259,24 @@ class SyncSingleAssetUseCase {
 
     private async syncChildren(parent: any) {
         console.log(`[SYNC MANUAL] 🕵️ Reforço de Malha Fina: Buscando família do processo pai ID: ${parent.legalOneId}`);
-        
-        const [appeals, issues] = await Promise.all([
-            legalOneApiService.getAppealsByLawsuitId(parent.legalOneId!),
-            legalOneApiService.getProceduralIssuesByLawsuitId(parent.legalOneId!)
+
+        const settings = await getSystemSettings();
+
+        const [rawAppeals, rawIssues] = await Promise.all([
+            settings.autoImportAppeals
+                ? legalOneApiService.getAppealsByLawsuitId(parent.legalOneId!)
+                : Promise.resolve([]),
+            settings.autoImportProceduralIssues
+                ? legalOneApiService.getProceduralIssuesByLawsuitId(parent.legalOneId!)
+                : Promise.resolve([]),
         ]);
 
+        if (!settings.autoImportAppeals) console.log('[SYNC MANUAL] ⏸ Recursos desativados nas configurações.');
+        if (!settings.autoImportProceduralIssues) console.log('[SYNC MANUAL] ⏸ Incidentes desativados nas configurações.');
+
         const children = [
-            ...appeals.map(a => ({ ...a, type: 'Appeal' })),
-            ...issues.map(i => ({ ...i, type: 'ProceduralIssue' }))
+            ...rawAppeals.map(a => ({ ...a, type: 'Appeal' })),
+            ...rawIssues.map(i => ({ ...i, type: 'ProceduralIssue' }))
         ];
 
         if (children.length === 0) {

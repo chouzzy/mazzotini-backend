@@ -1,6 +1,7 @@
 
 import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
+import { getSystemSettings } from '../../../admin/useCases/systemSettings/SystemSettingsService';
 
 
 const TAG_ANDAMENTO = "#RelatórioMAA";
@@ -166,16 +167,24 @@ class EnrichAssetFromLegalOneUseCase {
 
     private async syncChildren(parent: any) {
         console.log(`[Enrich] 🕵️ Reforço de Malha Fina: Buscando família do processo pai ID: ${parent.legalOneId}`);
-        
-        // Assegure-se de que o legalOneApiService está importado no topo do ficheiro
-        const [appeals, issues] = await Promise.all([
-            legalOneApiService.getAppealsByLawsuitId(parent.legalOneId!),
-            legalOneApiService.getProceduralIssuesByLawsuitId(parent.legalOneId!)
+
+        const settings = await getSystemSettings();
+
+        const [rawAppeals, rawIssues] = await Promise.all([
+            settings.autoImportAppeals
+                ? legalOneApiService.getAppealsByLawsuitId(parent.legalOneId!)
+                : Promise.resolve([]),
+            settings.autoImportProceduralIssues
+                ? legalOneApiService.getProceduralIssuesByLawsuitId(parent.legalOneId!)
+                : Promise.resolve([]),
         ]);
 
+        if (!settings.autoImportAppeals) console.log('[Enrich] ⏸ Recursos desativados nas configurações.');
+        if (!settings.autoImportProceduralIssues) console.log('[Enrich] ⏸ Incidentes desativados nas configurações.');
+
         const children = [
-            ...appeals.map(a => ({ ...a, type: 'Appeal' })),
-            ...issues.map(i => ({ ...i, type: 'ProceduralIssue' }))
+            ...rawAppeals.map(a => ({ ...a, type: 'Appeal' })),
+            ...rawIssues.map(i => ({ ...i, type: 'ProceduralIssue' }))
         ];
 
         if (children.length === 0) {

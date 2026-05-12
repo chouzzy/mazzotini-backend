@@ -39,6 +39,7 @@ import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { CreateCreditAssetUseCase } from "../createCreditAsset/CreateCreditAssetUseCase";
 import { LookupAssetFromLegalOneUseCase } from "../../../users/useCases/lookupAssetFromLegalOne/LookupAssetFromLegalOneUseCase";
 import { LegalOneEntity } from "../../../../services/legalOneTypes";
+import { getSystemSettings } from "../../../admin/useCases/systemSettings/SystemSettingsService";
 
 
 
@@ -94,6 +95,22 @@ class ImportNewAssetsUseCase {
             }
 
             const typeLabel = entity.__legalOneType || 'Lawsuit';
+
+            // Guard: verifica configurações antes de importar recursos/incidentes
+            if (typeLabel === 'Appeal' || typeLabel === 'ProceduralIssue') {
+                const settings = await getSystemSettings();
+                if (typeLabel === 'Appeal' && !settings.autoImportAppeals) {
+                    console.log(`[IMPORT ROBOT] ⏸ Recursos desativados nas configurações. Pulando ${processNumber}.`);
+                    skippedCount++;
+                    continue;
+                }
+                if (typeLabel === 'ProceduralIssue' && !settings.autoImportProceduralIssues) {
+                    console.log(`[IMPORT ROBOT] ⏸ Incidentes desativados nas configurações. Pulando ${processNumber}.`);
+                    skippedCount++;
+                    continue;
+                }
+            }
+
             console.log(`[IMPORT ROBOT] 🚀 Importando novo [${typeLabel}]: ${processNumber}`);
 
             try {
