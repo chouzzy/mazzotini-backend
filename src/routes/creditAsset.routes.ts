@@ -26,7 +26,13 @@ import { UpdateAssetController } from '../modules/creditAssets/useCases/updateAs
 import { DeleteCreditAssetController } from '../modules/creditAssets/useCases/deleteCreditAsset/DeleteCreditAssetController';
 import { ImportNewAssetsController } from '../modules/creditAssets/useCases/importNewAssets/ImportNewAssetsController';
 import { ListAllFoldersController } from '../modules/creditAssets/useCases/listAllFolders/ListAllFoldersController';
+import { UploadProcessDocumentController } from '../modules/creditAssets/useCases/uploadProcessDocument/UploadProcessDocumentController';
+import { DeleteProcessDocumentController } from '../modules/creditAssets/useCases/deleteProcessDocument/DeleteProcessDocumentController';
 import { ROLES } from '../types';
+import multer from 'multer';
+import uploadConfig from '../config/upload';
+
+const upload = multer(uploadConfig);
 
 const creditAssetRoutes = Router();
 
@@ -41,6 +47,8 @@ const updateAssetController            = new UpdateAssetController();
 const deleteCreditAssetController      = new DeleteCreditAssetController();
 const importNewAssetsController        = new ImportNewAssetsController();
 const listAllFoldersController         = new ListAllFoldersController();
+const uploadProcessDocumentController  = new UploadProcessDocumentController();
+const deleteProcessDocumentController  = new DeleteProcessDocumentController();
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -461,6 +469,24 @@ creditAssetRoutes.post(
     checkJwt,
     checkRole([ROLES.OPERATOR, ROLES.ADMIN]),
     createCreditAssetController.handle
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  DOCUMENTOS DO PROCESSO
+// ─────────────────────────────────────────────────────────────────────────────
+creditAssetRoutes.post(
+    '/api/assets/:legalOneId/documents',
+    checkJwt,
+    checkRole([ROLES.OPERATOR, ROLES.ADMIN]),
+    upload.single('document'),
+    uploadProcessDocumentController.handle
+);
+
+creditAssetRoutes.delete(
+    '/api/assets/documents/:documentId',
+    checkJwt,
+    checkRole([ROLES.OPERATOR, ROLES.ADMIN]),
+    deleteProcessDocumentController.handle
 );
 
 

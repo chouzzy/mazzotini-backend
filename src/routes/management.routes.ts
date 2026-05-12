@@ -34,6 +34,8 @@ import { ListPendingProfileChangesController } from '../modules/management/useCa
 import { PasswordResetController } from '../modules/management/useCases/passwordReset/PasswordResetController';
 import { UpdateUserEmailController } from '../modules/management/useCases/updateUserEmail/UpdateUserEmailController';
 import { UpdateAssociateCodeController } from '../modules/management/useCases/updateAssociateCode/UpdateAssociateCodeController';
+import { GetUserStagingDocumentsController } from '../modules/management/useCases/getUserStagingDocuments/GetUserStagingDocumentsController';
+import { AttachStagingDocumentController } from '../modules/management/useCases/attachStagingDocument/AttachStagingDocumentController';
 
 const managementRoutes = Router();
 
@@ -57,6 +59,8 @@ const listPendingProfileChangesController = new ListPendingProfileChangesControl
 const passwordResetController  = new PasswordResetController();
 const updateUserEmailController = new UpdateUserEmailController();
 const updateAssociateCodeController = new UpdateAssociateCodeController();
+const getUserStagingDocumentsController = new GetUserStagingDocumentsController();
+const attachStagingDocumentController   = new AttachStagingDocumentController();
 
 // Multer configurado via /src/config/upload.ts (Spaces/S3)
 const upload = multer(uploadConfig);
@@ -664,6 +668,23 @@ managementRoutes.patch(
     checkJwt,
     checkRole([ROLES.ADMIN]),
     reviewProfileChangeController.reject
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  DOCUMENTOS TRANSITÓRIOS DO CLIENTE (STAGING)
+// ─────────────────────────────────────────────────────────────────────────────
+managementRoutes.get(
+    '/api/management/users/:id/staging-documents',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    getUserStagingDocumentsController.handle
+);
+
+managementRoutes.post(
+    '/api/management/staging-documents/:stagingDocId/attach',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    attachStagingDocumentController.handle
 );
 
 export { managementRoutes };

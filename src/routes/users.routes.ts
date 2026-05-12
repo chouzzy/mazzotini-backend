@@ -22,6 +22,9 @@ import { UploadProfilePictureController } from '../modules/users/useCases/upload
 import { UploadPersonalDocumentController } from '../modules/users/useCases/uploadPersonalDocument/UploadPersonalDocumentController';
 import { DeletePersonalDocumentController } from '../modules/users/useCases/deletePersonalDocument/DeletePersonalDocumentController';
 import { SyncAuth0UserController } from '../modules/users/useCases/syncAuth0User/SyncAuth0UserController';
+import { UploadStagingDocumentController } from '../modules/users/useCases/uploadStagingDocument/UploadStagingDocumentController';
+import { ListStagingDocumentsController } from '../modules/users/useCases/listStagingDocuments/ListStagingDocumentsController';
+import { DeleteStagingDocumentController } from '../modules/users/useCases/deleteStagingDocument/DeleteStagingDocumentController';
 
 // Multer em memória — os arquivos são enviados para o Spaces/S3 diretamente do buffer
 const upload = multer({ storage: multer.memoryStorage() });
@@ -39,6 +42,9 @@ const uploadProfilePictureController  = new UploadProfilePictureController();
 const uploadPersonalDocumentController = new UploadPersonalDocumentController();
 const deletePersonalDocumentController = new DeletePersonalDocumentController();
 const syncAuth0UserController         = new SyncAuth0UserController();
+const uploadStagingDocumentController = new UploadStagingDocumentController();
+const listStagingDocumentsController  = new ListStagingDocumentsController();
+const deleteStagingDocumentController = new DeleteStagingDocumentController();
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -270,6 +276,13 @@ userRoutes.post(
  *         description: Documento removido
  */
 userRoutes.delete('/api/users/me/personal-document', checkJwt, deletePersonalDocumentController.handle);
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  DOCUMENTOS TRANSITÓRIOS FINANCEIROS (STAGING)
+// ─────────────────────────────────────────────────────────────────────────────
+userRoutes.get('/api/users/me/staging-documents', checkJwt, listStagingDocumentsController.handle);
+userRoutes.post('/api/users/me/staging-documents', checkJwt, upload.single('document'), uploadStagingDocumentController.handle);
+userRoutes.delete('/api/users/me/staging-documents/:stagingDocId', checkJwt, deleteStagingDocumentController.handle);
 
 /**
  * @swagger

@@ -91,6 +91,9 @@ model User {
   // Solicitações de alteração de perfil
   profileChangeRequests UserProfileChangeRequest[] @relation("UserProfileChanges")
 
+  // Documentos transitórios financeiros (staging)
+  stagingDocuments      UserStagingDocument[]
+
   // CORREÇÃO: Nulos permitidos
   createdAt             DateTime?    @default(now())
   updatedAt             DateTime?    @updatedAt
@@ -211,24 +214,63 @@ model AssetUpdate {
 }
 
 // ==========================================
-//  MODEL: DOCUMENTOS LEGAIS (Document)
+//  MODEL: DOCUMENTOS DO PROCESSO (Document)
 // ==========================================
 model Document {
   id                 String      @id @default(auto()) @map("_id") @db.ObjectId
   name               String
   url                String
+  fileKey            String?
+  mimeType           String?
+
+  // Seção: JURIDICO | PRIVADO_FINANCEIRO | PROCESSUAL
+  section            String      @default("JURIDICO")
+  // Categoria dentro da seção (ex: TERMO_CESSAO, COMPROVANTE, etc.)
   category           String
+
+  // Origem: LEGAL_ONE | MANUAL | CLIENTE
+  sourceType         String      @default("LEGAL_ONE")
+  sourceStagingDocId String?
+  uploadedByUserId   String?     @db.ObjectId
 
   assetId            String      @db.ObjectId
   asset              CreditAsset @relation(fields: [assetId], references: [id])
 
   legalOneDocumentId Int?
 
-  // CORREÇÃO: Nulos permitidos
   createdAt          DateTime?   @default(now())
   updatedAt          DateTime?   @updatedAt
 
   @@index([assetId])
+  @@index([section])
+}
+
+// ==========================================
+//  MODEL: DOCUMENTOS TRANSITÓRIOS (UserStagingDocument)
+// ==========================================
+model UserStagingDocument {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String    @db.ObjectId
+  user         User      @relation(fields: [userId], references: [id])
+
+  fileName     String
+  fileUrl      String
+  fileKey      String
+  mimeType     String    @default("application/octet-stream")
+
+  // PENDING | ATTACHED
+  status       String    @default("PENDING")
+
+  attachedToAssetId    String?   @db.ObjectId
+  attachedToAssetName  String?
+  attachedCategory     String?
+  attachedAt           DateTime?
+  attachedByUserId     String?   @db.ObjectId
+
+  createdAt    DateTime? @default(now())
+
+  @@index([userId])
+  @@index([status])
 }
 
 // ==========================================
