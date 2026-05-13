@@ -260,6 +260,7 @@ model UserStagingDocument {
   fileUrl      String
   fileKey      String
   mimeType     String    @default("application/octet-stream")
+  category     String?   // categoria sugerida pelo cliente (ex: COMPROVANTE)
 
   // PENDING | ATTACHED
   status       String    @default("PENDING")

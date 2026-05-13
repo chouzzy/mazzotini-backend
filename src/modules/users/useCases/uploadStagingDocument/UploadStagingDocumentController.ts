@@ -8,8 +8,9 @@ class UploadStagingDocumentController {
             const file = req.file;
             if (!file) return res.status(400).json({ error: 'Arquivo obrigatório.' });
 
+            const category = req.body?.category || undefined;
             const useCase = new UploadStagingDocumentUseCase();
-            const doc = await useCase.execute({ auth0UserId, file });
+            const doc = await useCase.execute({ auth0UserId, file, category });
             return res.status(201).json(doc);
         } catch (error: any) {
             return res.status(400).json({ error: error.message });

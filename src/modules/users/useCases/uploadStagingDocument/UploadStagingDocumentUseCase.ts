@@ -4,10 +4,11 @@ import { fileUploadService } from '../../../../services/fileUploadService';
 interface IRequest {
     auth0UserId: string;
     file: Express.Multer.File;
+    category?: string;
 }
 
 class UploadStagingDocumentUseCase {
-    async execute({ auth0UserId, file }: IRequest) {
+    async execute({ auth0UserId, file, category }: IRequest) {
         const user = await prisma.user.findUniqueOrThrow({ where: { auth0UserId }, select: { id: true } });
 
         const folder = `users/${user.id}/staging`;
@@ -22,6 +23,7 @@ class UploadStagingDocumentUseCase {
                 fileUrl,
                 fileKey,
                 mimeType: file.mimetype,
+                category: category || null,
                 status: 'PENDING',
             },
         });
