@@ -45,11 +45,10 @@ async function main() {
     console.log(`Buscando dados de jan/${START_YEAR} até o mês atual...\n`);
 
     const indices: Array<{ name: string; label: string; fetcher: () => Promise<IBGEDataPoint[]> }> = [
-        { name: 'IPCA15', label: 'IPCA-15',        fetcher: () => fetchIndexSeries('IPCA15', START_YEAR, START_MONTH) },
-        { name: 'IPCA_E', label: 'IPCA-E',          fetcher: () => fetchIndexSeries('IPCA_E', START_YEAR, START_MONTH) },
-        { name: 'INPC',   label: 'INPC',            fetcher: () => fetchIndexSeries('INPC',   START_YEAR, START_MONTH) },
-        { name: 'IPCA',   label: 'IPCA',            fetcher: () => fetchIndexSeries('IPCA',   START_YEAR, START_MONTH) },
-        { name: 'TJSP_LEI14905', label: 'TJSP Lei 14905 (híbrido)', fetcher: () => fetchTJSPSeries(START_YEAR, START_MONTH) },
+        { name: 'IPCA_E', label: 'IPCA-E',                          fetcher: () => fetchIndexSeries('IPCA_E', START_YEAR, START_MONTH) },
+        { name: 'INPC',   label: 'INPC',                            fetcher: () => fetchIndexSeries('INPC',   START_YEAR, START_MONTH) },
+        { name: 'IPCA',   label: 'IPCA',                            fetcher: () => fetchIndexSeries('IPCA',   START_YEAR, START_MONTH) },
+        { name: 'TJSP_LEI14905', label: 'TJSP Lei 14905 (INPC até 12/2023 + IPCA-E de 01/2024)', fetcher: () => fetchTJSPSeries(START_YEAR, START_MONTH) },
     ];
 
     for (const idx of indices) {

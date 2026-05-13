@@ -44,7 +44,6 @@ export const startScheduledJobs = () => {
         try {
             // 1. Atualiza índices do mês corrente via IBGE
             const indexesToUpdate = [
-                { name: 'IPCA15', fetcher: () => fetchIndexSeries('IPCA15', year, month, year, month) },
                 { name: 'IPCA_E', fetcher: () => fetchIndexSeries('IPCA_E', year, month, year, month) },
                 { name: 'INPC',   fetcher: () => fetchIndexSeries('INPC',   year, month, year, month) },
                 { name: 'IPCA',   fetcher: () => fetchIndexSeries('IPCA',   year, month, year, month) },
