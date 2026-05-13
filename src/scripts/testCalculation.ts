@@ -46,7 +46,6 @@ async function main() {
             },
         ],
     };
-    const refY = 2026; const refM = 5; // referência: maio/2026
 
     console.log('Parâmetros utilizados:');
     console.log(`  Índice de correção : ${params.correctionIndex}`);
