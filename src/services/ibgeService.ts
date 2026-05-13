@@ -78,15 +78,9 @@ export async function fetchIndexSeries(
 }
 
 /**
- * Índice TJSP_LEI14905 (Débitos Judiciais):
- *   Usa a série BCB 10764 para todo o período.
- *
- *   A série 10764 do BCB corresponde ao IPCA-15 mensal, que é o índice
- *   adotado pelo TJ/SP para Débitos Judiciais. A Lei 14905/2024 formalizou
- *   este mesmo índice — portanto a série é contínua.
- *
- *   Validado contra drcalc.net ("TJSP INPC/IPCA-15 - Lei 14905"):
- *   os valores da série 10764 batem com os resultados do drcalc.
+ * Índice TJSP_LEI14905 (TJ/SP Débitos Judiciais):
+ *   - até ago/2024  : INPC  (série BCB 188)
+ *   - set/2024+     : IPCA  (série BCB 433, conforme Lei 14905/2024)
  */
 export async function fetchTJSPSeries(
     startYear: number,
@@ -94,5 +88,30 @@ export async function fetchTJSPSeries(
     endYear?: number,
     endMonth?: number,
 ): Promise<IBGEDataPoint[]> {
-    return fetchIndexSeries('IPCA_E', startYear, startMonth, endYear, endMonth);
+    const now    = new Date();
+    const eYear  = endYear  ?? now.getFullYear();
+    const eMonth = endMonth ?? now.getMonth() + 1;
+
+    const parts: IBGEDataPoint[] = [];
+
+    // Parte 1: INPC até ago/2024
+    const inpcEnd = (eYear < 2024 || (eYear === 2024 && eMonth <= 8))
+        ? { y: eYear, m: eMonth }
+        : { y: 2024, m: 8 };
+
+    if (startYear < 2024 || (startYear === 2024 && startMonth <= 8)) {
+        const inpc = await fetchIndexSeries('INPC', startYear, startMonth, inpcEnd.y, inpcEnd.m);
+        parts.push(...inpc);
+    }
+
+    // Parte 2: IPCA a partir de set/2024
+    if (eYear > 2024 || (eYear === 2024 && eMonth >= 9)) {
+        const ipcaStart = (startYear > 2024 || (startYear === 2024 && startMonth >= 9))
+            ? { y: startYear, m: startMonth }
+            : { y: 2024, m: 9 };
+        const ipca = await fetchIndexSeries('IPCA', ipcaStart.y, ipcaStart.m, eYear, eMonth);
+        parts.push(...ipca);
+    }
+
+    return parts.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
 }
