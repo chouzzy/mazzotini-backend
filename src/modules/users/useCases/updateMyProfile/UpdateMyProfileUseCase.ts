@@ -57,9 +57,12 @@ class UpdateMyProfileUseCase {
             where: { auth0UserId },
         });
 
-        // Campos ObjectId: string vazia deve virar null, nunca chegar ao Prisma como ""
-        if ('referredById' in validData && !validData.referredById) {
-            validData.referredById = null;
+        // Campos ObjectId: string vazia deve virar null para o Prisma não rejeitar com Malformed ObjectID
+        const OBJECT_ID_FIELDS = ['referredById', 'associateId', 'folderId'];
+        for (const field of OBJECT_ID_FIELDS) {
+            if (field in validData && !validData[field]) {
+                validData[field] = null;
+            }
         }
 
         const updateData: any = {
