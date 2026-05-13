@@ -20,10 +20,6 @@ class AttachStagingDocumentUseCase {
         if (!VALID_CATEGORIES[section]?.includes(category)) {
             throw new Error(`Categoria inválida "${category}" para a seção "${section}"`);
         }
-        if (section === 'PRIVADO_FINANCEIRO' && !investorUserId) {
-            throw new Error('investorUserId é obrigatório para documentos Privados e Financeiros.');
-        }
-
         const admin = await prisma.user.findUniqueOrThrow({ where: { auth0UserId }, select: { id: true } });
         const staging = await prisma.userStagingDocument.findUnique({ where: { id: stagingDocId } });
         if (!staging) throw new Error('Documento de staging não encontrado.');
@@ -31,6 +27,11 @@ class AttachStagingDocumentUseCase {
 
         const asset = await prisma.creditAsset.findUnique({ where: { legalOneId: assetLegalOneId } });
         if (!asset) throw new Error('Processo não encontrado.');
+
+        // Para PRIVADO_FINANCEIRO o investorUserId é o próprio dono do documento de staging
+        const resolvedInvestorUserId = section === 'PRIVADO_FINANCEIRO'
+            ? (investorUserId || staging.userId)
+            : null;
 
         const doc = await prisma.document.create({
             data: {
@@ -44,7 +45,7 @@ class AttachStagingDocumentUseCase {
                 sourceStagingDocId: stagingDocId,
                 uploadedByUserId: admin.id,
                 assetId: asset.id,
-                investorUserId: investorUserId || null,
+                investorUserId: resolvedInvestorUserId,
             },
         });
 
