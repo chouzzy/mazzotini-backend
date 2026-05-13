@@ -26,8 +26,23 @@ async function main() {
     console.log(`  Referência: ${String(refM).padStart(2,'0')}/${refY} (fixo para bater com drcalc)`);
     console.log('══════════════════════════════════════════════════════\n');
 
-    // Parâmetros do teste de validação (drcalc.net)
-    // drcalc esperado: corrigido=1.401.527,52 | juros=939.023,44 | total=3.089.527,28
+    // ──────────────────────────────────────────────────────────────
+    // CASO 1: base out/2020 — período misto INPC + IPCA
+    // drcalc esperado: corrigido=1.401.527,52 | total=3.089.527,28
+    // ──────────────────────────────────────────────────────────────
+    // const params: CalculationParams = {
+    //     correctionIndex: 'TJSP_LEI14905', moratoryRate: 1, moratoryType: 'SIMPLES',
+    //     compensatoryRate: 0, compensatoryType: 'SIMPLES',
+    //     feesPercentage: 10, penaltyPercentage: 10, feesOnPenalty: true,
+    //     moratoryStartDate: null,
+    //     installments: [{ baseValue: 1_000_000, baseDate: '2020-10-01', description: 'Caso 1' }],
+    // };
+
+    // ──────────────────────────────────────────────────────────────
+    // CASO 2: base ago/2024 — PURO IPCA (sep/2024 em diante)
+    // drcalc esperado: corrigido=1.088.643,11 | juros=228.615,05 | total=1.738.780,78
+    // Meses de juros: set/2024→mai/2026 = 21 meses
+    // ──────────────────────────────────────────────────────────────
     const params: CalculationParams = {
         correctionIndex:    'TJSP_LEI14905',
         moratoryRate:       1.0,
@@ -37,12 +52,12 @@ async function main() {
         compensatoryType:   'SIMPLES',
         feesPercentage:     10,
         penaltyPercentage:  10,
-        feesOnPenalty:      true,   // Art.523: multa 10% + honorários 10% sobre o mesmo total
+        feesOnPenalty:      true,
         installments: [
             {
                 baseValue:   1_000_000,
-                baseDate:    '2020-10-01',
-                description: 'Teste de validação drcalc',
+                baseDate:    '2024-08-10',
+                description: 'Caso 2 — puro IPCA',
             },
         ],
     };
@@ -57,28 +72,37 @@ async function main() {
     console.log('');
 
     // Verifica se temos índices no banco
-    const indexCount = await prisma.indexSeries.count({
-        where: { indexName: 'TJSP_LEI14905' },
-    });
-
+    const indexCount = await prisma.indexSeries.count({ where: { indexName: 'TJSP_LEI14905' } });
     if (indexCount === 0) {
         console.error('❌ ERRO: Nenhum índice TJSP_LEI14905 encontrado no banco.');
         console.error('   Execute primeiro: npx ts-node src/scripts/seedIndices.ts\n');
         await prisma.$disconnect();
         return;
     }
+    console.log(`✅ ${indexCount} meses de TJSP_LEI14905 no banco\n`);
 
-    console.log(`✅ Índices disponíveis: ${indexCount} meses de TJSP_LEI14905\n`);
+    // Lista os meses de set/2024 a mai/2026 (período crítico do Caso 2)
+    const criticos = await prisma.indexSeries.findMany({
+        where: { indexName: 'TJSP_LEI14905', year: { gte: 2024 } },
+        orderBy: [{ year: 'asc' }, { month: 'asc' }],
+    });
+    console.log('Índices set/2024 em diante (período IPCA):');
+    for (const r of criticos) {
+        console.log(`  ${String(r.month).padStart(2,'0')}/${r.year}  ${r.monthlyRate.toFixed(4)}%`);
+    }
+    console.log('');
 
     try {
         const result = await calculateJudicialDebt(params, refY, refM);  // use fixed ref date
-        console.log('\n─── REFERÊNCIA drcalc.net (esperado) ───────────────────');
-        console.log('  Valor Corrigido  : R$ 1.401.527,52');
-        console.log('  Juros Moratórios : R$   939.023,44');
-        console.log('  Honorários 10%   : R$   234.055,10');
-        console.log('  Art.523 multa 10%: R$   257.460,61');
-        console.log('  Art.523 hon. 10% : R$   257.460,61');
-        console.log('  TOTAL GERAL      : R$ 3.089.527,28');
+        console.log('\n─── REFERÊNCIA drcalc.net (esperado — Caso 2) ──────────');
+        console.log('  Valor Corrigido  : R$ 1.088.643,11  (fator=1.088643)');
+        console.log('  Juros 21 meses   : R$   228.615,05');
+        console.log('  Subtotal A       : R$ 1.317.258,16');
+        console.log('  Honorários 10%   : R$   131.725,82');
+        console.log('  Subtotal B       : R$ 1.448.983,98');
+        console.log('  Art.523 multa 10%: R$   144.898,40');
+        console.log('  Art.523 hon. 10% : R$   144.898,40');
+        console.log('  TOTAL GERAL      : R$ 1.738.780,78');
         console.log('─────────────────────────────────────────────────────────');
         const inst   = result.installmentResults[0];
 
