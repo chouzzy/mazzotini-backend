@@ -57,6 +57,11 @@ class UpdateMyProfileUseCase {
             where: { auth0UserId },
         });
 
+        // Campos ObjectId: string vazia deve virar null, nunca chegar ao Prisma como ""
+        if ('referredById' in validData && !validData.referredById) {
+            validData.referredById = null;
+        }
+
         const updateData: any = {
             ...validData,
         };
