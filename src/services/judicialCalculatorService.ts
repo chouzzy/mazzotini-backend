@@ -3,16 +3,20 @@
  *
  * Engine de cálculo de débitos judiciais.
  *
- * Fórmula aplicada por parcela:
- *   1. Fator de correção = ∏(1 + taxa_mensal_i / 100)  para cada mês entre baseDate e referenceDate
- *   2. Valor corrigido   = valorBase × fatorCorreção
- *   3. Juros moratórios simples  = valorCorrigido × (taxaMensal × nMeses) / 100
- *      Juros moratórios compostos = valorCorrigido × ((1 + taxa/100)^n - 1)
- *   4. Honorários = (valorCorrigido + juros) × honorários%
- *   5. Multa      = valorCorrigido × multa%
- *   6. Total parcela = valorCorrigido + juros + honorários + multa
+ * Fator de correção (dois modos):
+ *   Modo 1 (acumulado, preferencial):
+ *     factor = accumulatedValue(referência) / accumulatedValue(base)
+ *     Usa os valores acumulados oficiais (tabela drcalc.net), eliminando
+ *     erro de arredondamento acumulado do produto mensal.
+ *   Modo 2 (fallback, produto mensal):
+ *     factor = ∏(1 + taxa_i / 100)
  *
- * O total geral é a soma de todas as parcelas.
+ * Demais componentes:
+ *   Juros moratórios simples  = valorCorrigido × (taxa% × nMeses)
+ *   Honorários = (corrigido + juros) × hon%
+ *   Subtotal B = corrigido + juros + honorários
+ *   Multa Art.523 = subtotalB × multa%
+ *   Honorários Art.523 = subtotalB × hon%  (se habilitado)
  */
 
 import { prisma } from '../prisma';
@@ -103,13 +107,7 @@ export async function calculateJudicialDebt(
     referenceMonth: number,
 ): Promise<CalculationResult> {
 
-    // 1. Busca todos os índices necessários do banco em uma única query
-    const allMonths = params.installments.flatMap(inst => {
-        const { year: sy, month: sm } = parseYM(inst.baseDate);
-        return monthRange(sy, sm + 1, referenceYear, referenceMonth);
-    });
-
-    // Faixa global: menor data base → referência
+    // 1. Busca índices do banco — inclui o mês base para poder usar o ratio acumulado
     const sortedInstallments = [...params.installments].sort(
         (a, b) => new Date(a.baseDate).getTime() - new Date(b.baseDate).getTime()
     );
@@ -117,18 +115,23 @@ export async function calculateJudicialDebt(
 
     const globalStart = parseYM(sortedInstallments[0].baseDate);
 
+    // Range inclui o próprio mês base (para accumulatedValue do mês base)
+    const fetchRange = monthRange(globalStart.year, globalStart.month, referenceYear, referenceMonth);
+
     const indexRecords = await prisma.indexSeries.findMany({
         where: {
             indexName: params.correctionIndex,
-            OR: monthRange(globalStart.year, globalStart.month + 1, referenceYear, referenceMonth)
-                .map(({ year, month }) => ({ year, month })),
+            OR: fetchRange.map(({ year, month }) => ({ year, month })),
         },
     });
 
-    // Mapa rápido: "YYYY-MM" → monthlyRate
-    const rateMap = new Map<string, number>();
+    // Mapa: "YYYY-MM" → { monthlyRate, accumulatedValue }
+    const rateMap = new Map<string, { monthlyRate: number; accumulatedValue: number | null }>();
     for (const rec of indexRecords) {
-        rateMap.set(`${rec.year}-${String(rec.month).padStart(2, '0')}`, rec.monthlyRate);
+        rateMap.set(`${rec.year}-${String(rec.month).padStart(2, '0')}`, {
+            monthlyRate:     rec.monthlyRate,
+            accumulatedValue: rec.accumulatedValue ?? null,
+        });
     }
 
     // 2. Calcula cada parcela
@@ -147,15 +150,37 @@ export async function calculateJudicialDebt(
         // Meses a corrigir: mês seguinte ao base → referência
         const corrMonths = monthRange(sy, sm + 1, referenceYear, referenceMonth);
 
-        // Fator de correção acumulado e detalhamento
+        // Chaves para o ratio acumulado
+        const baseKey = `${sy}-${String(sm).padStart(2, '0')}`;
+        const refKey  = `${referenceYear}-${String(referenceMonth).padStart(2, '0')}`;
+        const baseRec = rateMap.get(baseKey);
+        const refRec  = rateMap.get(refKey);
+
         let factor = 1;
         const breakdown: MonthBreakdown[] = [];
 
-        for (const { year, month } of corrMonths) {
-            const key  = `${year}-${String(month).padStart(2, '0')}`;
-            const rate = rateMap.get(key) ?? 0;
-            factor *= (1 + rate / 100);
-            breakdown.push({ year, month, monthlyRate: rate, accumulated: factor });
+        if (baseRec?.accumulatedValue && refRec?.accumulatedValue) {
+            // Modo 1 (preferencial): ratio direto — elimina erro de arredondamento acumulado
+            factor = refRec.accumulatedValue / baseRec.accumulatedValue;
+
+            // Reconstrói breakdown apenas para exibição
+            let runAcc = baseRec.accumulatedValue;
+            for (const { year, month } of corrMonths) {
+                const key = `${year}-${String(month).padStart(2, '0')}`;
+                const rec = rateMap.get(key);
+                const monthlyRate = rec?.monthlyRate ?? 0;
+                const thisAcc     = rec?.accumulatedValue ?? runAcc * (1 + monthlyRate / 100);
+                runAcc = thisAcc;
+                breakdown.push({ year, month, monthlyRate, accumulated: thisAcc / baseRec.accumulatedValue });
+            }
+        } else {
+            // Modo 2 (fallback): produto dos fatores mensais
+            for (const { year, month } of corrMonths) {
+                const key  = `${year}-${String(month).padStart(2, '0')}`;
+                const rate = rateMap.get(key)?.monthlyRate ?? 0;
+                factor *= (1 + rate / 100);
+                breakdown.push({ year, month, monthlyRate: rate, accumulated: factor });
+            }
         }
 
         const correctedValue = inst.baseValue * factor;

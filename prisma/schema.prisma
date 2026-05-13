@@ -332,11 +332,12 @@ model SystemSettings {
 model IndexSeries {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   // "TJSP_LEI14905" | "IPCA_E" | "INPC" | "IPCA15" | "SELIC"
-  indexName   String
-  year        Int
-  month       Int
-  monthlyRate Float    // variação mensal em % (ex: 0.52 = 0,52%)
-  createdAt   DateTime @default(now())
+  indexName       String
+  year            Int
+  month           Int
+  monthlyRate     Float    // variação mensal em % (ex: 0.52 = 0,52%)
+  accumulatedValue Float?  // valor acumulado da tabela oficial (ex: drcalc)
+  createdAt       DateTime @default(now())
 
   @@unique([indexName, year, month])
 }

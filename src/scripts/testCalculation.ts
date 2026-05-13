@@ -79,7 +79,11 @@ async function main() {
         await prisma.$disconnect();
         return;
     }
-    console.log(`✅ ${indexCount} meses de TJSP_LEI14905 no banco\n`);
+    const accCount = await prisma.indexSeries.count({
+        where: { indexName: 'TJSP_LEI14905', accumulatedValue: { not: null } },
+    });
+    console.log(`✅ ${indexCount} meses de TJSP_LEI14905 no banco`);
+    console.log(`   ${accCount > 0 ? `✅ ${accCount} com valor acumulado (modo ratio — precisão máxima)` : '⚠️  Sem valores acumulados (modo fallback — produto mensal)'}\n`);
 
     // Lista os meses de set/2024 a mai/2026 (período crítico do Caso 2)
     const criticos = await prisma.indexSeries.findMany({
