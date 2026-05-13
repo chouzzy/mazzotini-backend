@@ -189,17 +189,24 @@ export async function calculateJudicialDebt(
             }
         }
 
-        // Base para honorários
-        const feesBase = correctedValue + moratoryInterest + compensatoryInterest;
-        const feesValue    = feesBase * (params.feesPercentage / 100);
+        // Subtotal A: base para honorários (corrigido + juros)
+        const subtotalA = correctedValue + moratoryInterest + compensatoryInterest;
 
-        // Multa Art. 523
-        const penaltyValue = correctedValue * (params.penaltyPercentage / 100);
+        // Honorários principais (10% sobre Subtotal A)
+        const feesValue = subtotalA * (params.feesPercentage / 100);
 
-        // Honorários sobre multa (opcional)
-        const feesOnPenalty = params.feesOnPenalty ? penaltyValue * (params.feesPercentage / 100) : 0;
+        // Subtotal B: base para Art. 523 (Subtotal A + honorários)
+        const subtotalB = subtotalA + feesValue;
 
-        const subtotal = correctedValue + moratoryInterest + compensatoryInterest + feesValue + feesOnPenalty + penaltyValue;
+        // Art. 523 § 1.º — multa (% sobre Subtotal B)
+        const penaltyValue = subtotalB * (params.penaltyPercentage / 100);
+
+        // Art. 523 § 1.º — honorários advocatícios (% sobre Subtotal B, se habilitado)
+        const feesOnPenaltyValue = params.feesOnPenalty
+            ? subtotalB * (params.feesPercentage / 100)
+            : 0;
+
+        const subtotal = subtotalB + penaltyValue + feesOnPenaltyValue;
 
         installmentResults.push({
             installmentIndex: i + 1,
@@ -211,7 +218,7 @@ export async function calculateJudicialDebt(
             moratoryMonths:   nMoratory,
             moratoryInterest: round2(moratoryInterest),
             compensatoryInterest: round2(compensatoryInterest),
-            feesValue:    round2(feesValue + feesOnPenalty),
+            feesValue:    round2(feesValue + feesOnPenaltyValue),
             penaltyValue: round2(penaltyValue),
             subtotal:     round2(subtotal),
             monthBreakdown: breakdown,
@@ -221,7 +228,7 @@ export async function calculateJudicialDebt(
         totalCorrected    += correctedValue;
         totalMoratory     += moratoryInterest;
         totalCompensatory += compensatoryInterest;
-        totalFees         += feesValue + feesOnPenalty;
+        totalFees         += feesValue + feesOnPenaltyValue;
         totalPenalty      += penaltyValue;
     }
 

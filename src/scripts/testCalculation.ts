@@ -17,33 +17,36 @@ const BRL = (v: number) =>
 
 async function main() {
     const now   = new Date();
-    const refY  = now.getFullYear();
-    const refM  = now.getMonth() + 1;
+    // Data de referência fixa para bater com o drcalc (maio/2026)
+    const refY  = 2026;
+    const refM  = 5;
 
     console.log('\n══════════════════════════════════════════════════════');
     console.log('  TESTE DE VALIDAÇÃO — CÁLCULO JUDICIAL');
-    console.log(`  Referência: ${String(refM).padStart(2,'0')}/${refY}`);
+    console.log(`  Referência: ${String(refM).padStart(2,'0')}/${refY} (fixo para bater com drcalc)`);
     console.log('══════════════════════════════════════════════════════\n');
 
-    // Parâmetros do cliente
+    // Parâmetros do teste de validação (drcalc.net)
+    // drcalc esperado: corrigido=1.401.527,52 | juros=939.023,44 | total=3.089.527,28
     const params: CalculationParams = {
         correctionIndex:    'TJSP_LEI14905',
-        moratoryRate:       1.0,          // 1% a.m. simples
+        moratoryRate:       1.0,
         moratoryType:       'SIMPLES',
-        moratoryStartDate:  null,         // começa da data base
+        moratoryStartDate:  null,
         compensatoryRate:   0,
         compensatoryType:   'SIMPLES',
-        feesPercentage:     10,           // 10% honorários
-        penaltyPercentage:  10,           // 10% multa Art. 523
-        feesOnPenalty:      false,
+        feesPercentage:     10,
+        penaltyPercentage:  10,
+        feesOnPenalty:      true,   // Art.523: multa 10% + honorários 10% sobre o mesmo total
         installments: [
             {
-                baseValue:   1_150_972.30,
-                baseDate:    '2010-05-24',
-                description: 'Valor base informado pelo cliente',
+                baseValue:   1_000_000,
+                baseDate:    '2020-10-01',
+                description: 'Teste de validação drcalc',
             },
         ],
     };
+    const refY = 2026; const refM = 5; // referência: maio/2026
 
     console.log('Parâmetros utilizados:');
     console.log(`  Índice de correção : ${params.correctionIndex}`);
@@ -69,7 +72,15 @@ async function main() {
     console.log(`✅ Índices disponíveis: ${indexCount} meses de TJSP_LEI14905\n`);
 
     try {
-        const result = await calculateJudicialDebt(params, refY, refM);
+        const result = await calculateJudicialDebt(params, refY, refM);  // use fixed ref date
+        console.log('\n─── REFERÊNCIA drcalc.net (esperado) ───────────────────');
+        console.log('  Valor Corrigido  : R$ 1.401.527,52');
+        console.log('  Juros Moratórios : R$   939.023,44');
+        console.log('  Honorários 10%   : R$   234.055,10');
+        console.log('  Art.523 multa 10%: R$   257.460,61');
+        console.log('  Art.523 hon. 10% : R$   257.460,61');
+        console.log('  TOTAL GERAL      : R$ 3.089.527,28');
+        console.log('─────────────────────────────────────────────────────────');
         const inst   = result.installmentResults[0];
 
         console.log('══════════════════════════════════════════════════════');
