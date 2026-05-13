@@ -153,6 +153,7 @@ model CreditAsset {
   investors            Investment[]
   updates              AssetUpdate[]
   documents            Document[]
+  calculationParams    ProcessCalculationParams?
 
   // CORREÇÃO: Nulos permitidos
   createdAt            DateTime?     @default(now())
@@ -323,6 +324,84 @@ model SystemSettings {
   autoImportProceduralIssues  Boolean  @default(true)
   updatedAt                   DateTime @updatedAt
   updatedBy                   String?
+}
+
+// ==========================================
+//  MODEL: SÉRIES DE ÍNDICES JUDICIAIS
+// ==========================================
+model IndexSeries {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  // "TJSP_LEI14905" | "IPCA_E" | "INPC" | "IPCA15" | "SELIC"
+  indexName   String
+  year        Int
+  month       Int
+  monthlyRate Float    // variação mensal em % (ex: 0.52 = 0,52%)
+  createdAt   DateTime @default(now())
+
+  @@unique([indexName, year, month])
+}
+
+// ==========================================
+//  MODEL: PARÂMETROS DE CÁLCULO DO PROCESSO
+// ==========================================
+model ProcessCalculationParams {
+  id      String      @id @default(auto()) @map("_id") @db.ObjectId
+  assetId String      @unique @db.ObjectId
+  asset   CreditAsset @relation(fields: [assetId], references: [id])
+
+  // Índice de correção monetária
+  correctionIndex     String   @default("TJSP_LEI14905")
+
+  // Juros moratórios
+  moratoryRate        Float    @default(0)
+  moratoryType        String   @default("SIMPLES")   // "SIMPLES" | "COMPOSTO"
+  moratoryStartDate   DateTime?
+
+  // Juros compensatórios
+  compensatoryRate    Float    @default(0)
+  compensatoryType    String   @default("SIMPLES")
+
+  // Honorários e multa
+  feesPercentage      Float    @default(0)
+  penaltyPercentage   Float    @default(0)
+  feesOnPenalty       Boolean  @default(false)
+
+  // Parcelas do valor base: [{baseValue, baseDate, description}]
+  installments        Json     @default("[]")
+
+  // Resultado do último cálculo
+  lastCalculatedValue Float?
+  lastCalculatedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==========================================
+//  MODEL: LOG DE CÁLCULO
+// ==========================================
+model CalculationLog {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  assetId      String   @db.ObjectId
+
+  calculatedAt   DateTime @default(now())
+  calculatedBy   String   @default("cron")   // "cron" | auth0UserId
+  referenceMonth Int
+  referenceYear  Int
+
+  baseTotal            Float
+  correctedValue       Float
+  moratoryInterest     Float
+  compensatoryInterest Float  @default(0)
+  feesValue            Float  @default(0)
+  penaltyValue         Float  @default(0)
+  totalValue           Float
+
+  // Detalhamento mês a mês (JSON)
+  breakdown Json
+
+  @@index([assetId])
+  @@index([calculatedAt])
 }
 
 // ==========================================

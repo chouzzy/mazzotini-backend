@@ -10,6 +10,7 @@ import { notificationsRoutes } from "./notifications.routes";
 import { assetsRoutes } from "./assets.routes";
 import { adminRoutes } from "./admin.routes";
 import { associateRoutes } from "./associate.routes";
+import { calculatorRoutes } from "./calculator.routes";
 
 const router = Router();
 
@@ -27,5 +28,6 @@ router.use(managementRoutes);
 router.use(notificationsRoutes);
 router.use(adminRoutes);
 router.use(associateRoutes);
+router.use(calculatorRoutes);
 
 export { router };
