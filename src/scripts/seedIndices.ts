@@ -15,7 +15,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { fetchIndexSeries, fetchTJSPSeries, IBGEDataPoint } from '../services/ibgeService';
+import { fetchIndexSeries, fetchTJSPSeries, fetchSelicSeries, IBGEDataPoint } from '../services/ibgeService';
 
 const prisma = new PrismaClient();
 const START_YEAR  = 2000;
@@ -49,6 +49,7 @@ async function main() {
         { name: 'INPC',   label: 'INPC',                            fetcher: () => fetchIndexSeries('INPC',   START_YEAR, START_MONTH) },
         { name: 'IPCA',   label: 'IPCA',                            fetcher: () => fetchIndexSeries('IPCA',   START_YEAR, START_MONTH) },
         { name: 'TJSP_LEI14905', label: 'TJSP Lei 14905 (INPC até 12/2023 + IPCA-E de 01/2024)', fetcher: () => fetchTJSPSeries(START_YEAR, START_MONTH) },
+        { name: 'SELIC', label: 'Meta SELIC (% mensal)', fetcher: () => fetchSelicSeries(START_YEAR, START_MONTH) },
     ];
 
     for (const idx of indices) {

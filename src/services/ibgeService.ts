@@ -1,28 +1,22 @@
 /**
  * IndexService — busca séries de índices via API do Banco Central do Brasil (BCB/SGS)
  *
- * A API do BCB (Sistema Gerenciador de Séries Temporais) é a fonte oficial
- * e retorna variação mensal diretamente.
- *
- * Endpoint: https://api.bcb.gov.br/dados/serie/bcdata.sgs.{código}/dados
- *
  * Séries utilizadas:
- *   IPCA-E  : 10764
- *   INPC    : 188
- *   IPCA-15 : 13522
- *   IPCA    : 433
+ *   IPCA-E  : 10764  (variação mensal, %)
+ *   INPC    : 188    (variação mensal, %)
+ *   IPCA    : 433    (variação mensal, %)
+ *   SELIC   : 11     (meta SELIC, % a.a.) — convertida para mensal no fetchSelicSeries
  */
 
 import axios from 'axios';
 
 const BCB_BASE = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs';
 
-// Mapeamento: nome interno → código da série no BCB/SGS (variação mensal)
-// Confirmados em https://www3.bcb.gov.br/sgspub
 const SERIES_CODES: Record<string, number> = {
-    IPCA_E: 10764,  // IPCA-E variação mensal
-    INPC:   188,    // INPC variação mensal
-    IPCA:   433,    // IPCA variação mensal
+    IPCA_E: 10764,
+    INPC:   188,
+    IPCA:   433,
+    SELIC:  4390, // Selic acumulada no mês (% a.a.) — requer conversão para mensal
 };
 
 export interface IBGEDataPoint {
@@ -74,6 +68,41 @@ export async function fetchIndexSeries(
         if (!isNaN(rate)) points.push({ year, month, monthlyRate: rate });
     }
 
+    return points.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+}
+
+/**
+ * Meta SELIC (BCB série 11) — retorna variação MENSAL efetiva.
+ * A série 11 publica % a.a.; cada valor é convertido por:
+ *   mensal = ((1 + aa/100)^(1/12) - 1) × 100
+ */
+export async function fetchSelicSeries(
+    startYear: number,
+    startMonth: number,
+    endYear?: number,
+    endMonth?: number,
+): Promise<IBGEDataPoint[]> {
+    const now    = new Date();
+    const eYear  = endYear  ?? now.getFullYear();
+    const eMonth = endMonth ?? now.getMonth() + 1;
+    const code   = SERIES_CODES['SELIC'];
+
+    const url = `${BCB_BASE}.${code}/dados?formato=json&dataInicial=${formatDateBCB(startYear, startMonth)}&dataFinal=${formatDateBCB(eYear, eMonth)}`;
+    const response = await axios.get<{ data: string; valor: string }[]>(url, { timeout: 20000 });
+    const data = response.data;
+
+    if (!Array.isArray(data) || data.length === 0) throw new Error('Sem dados SELIC do BCB');
+
+    // Série 4390 já retorna % mensal diretamente (ex: 0.84 = 0,84%/mês)
+    const points: IBGEDataPoint[] = [];
+    for (const item of data) {
+        const parts = item.data.split('/');
+        const month = parseInt(parts[1], 10);
+        const year  = parseInt(parts[2], 10);
+        const rate  = parseFloat(item.valor.replace(',', '.'));
+        if (isNaN(rate)) continue;
+        points.push({ year, month, monthlyRate: rate });
+    }
     return points.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
 }
 

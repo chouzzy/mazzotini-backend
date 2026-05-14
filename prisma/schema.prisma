@@ -354,7 +354,8 @@ model ProcessCalculationParams {
   correctionIndex     String   @default("TJSP_LEI14905")
 
   // Juros moratórios
-  moratoryRate        Float    @default(0)
+  moratoryMode        String   @default("TAXA_LEGAL") // "TAXA_LEGAL" | "PERSONALIZADO"
+  moratoryRate        Float    @default(1)
   moratoryType        String   @default("SIMPLES")   // "SIMPLES" | "COMPOSTO"
   moratoryStartDate   DateTime?
 

@@ -4,6 +4,7 @@ import { Installment } from '../../../../services/judicialCalculatorService';
 interface IRequest {
     legalOneId: number;
     correctionIndex: string;
+    moratoryMode?: string;
     moratoryRate: number;
     moratoryType: string;
     moratoryStartDate?: string | null;
@@ -25,6 +26,7 @@ class SetCalculationParamsUseCase {
             create: {
                 assetId:         asset.id,
                 correctionIndex: data.correctionIndex,
+                moratoryMode:    data.moratoryMode ?? 'TAXA_LEGAL',
                 moratoryRate:    data.moratoryRate,
                 moratoryType:    data.moratoryType,
                 moratoryStartDate: data.moratoryStartDate ? new Date(data.moratoryStartDate) : null,
@@ -37,6 +39,7 @@ class SetCalculationParamsUseCase {
             },
             update: {
                 correctionIndex: data.correctionIndex,
+                moratoryMode:    data.moratoryMode ?? 'TAXA_LEGAL',
                 moratoryRate:    data.moratoryRate,
                 moratoryType:    data.moratoryType,
                 moratoryStartDate: data.moratoryStartDate ? new Date(data.moratoryStartDate) : null,

@@ -29,7 +29,8 @@ export interface Installment {
 
 export interface CalculationParams {
     correctionIndex:     string;
-    moratoryRate:        number;  // % mensal
+    moratoryMode?:       string;  // "TAXA_LEGAL" (default) | "PERSONALIZADO"
+    moratoryRate:        number;  // usado quando PERSONALIZADO
     moratoryType:        string;  // "SIMPLES" | "COMPOSTO"
     moratoryStartDate?:  string | null;
     compensatoryRate:    number;
@@ -97,6 +98,61 @@ function monthRange(sy: number, sm: number, ey: number, em: number): { year: num
         if (m > 12) { m = 1; y++; }
     }
     return months;
+}
+
+// ── Taxa Legal art.406/CC — juros moratórios piecewise ───────────────────────
+//
+//  Períodos (art. 406 CC / Lei 14905/2024):
+//   P1  ≤ Jan/2003               : 6% a.a.  = 0,5%/mês
+//   P2  Fev/2003 → Ago/2024      : 12% a.a. = 1%/mês
+//   P3  Set/2024+                 : SELIC mensal − IPCA mensal
+//
+async function computeTaxaLegalMoratory(
+    correctedValue: number,
+    startYear:  number,
+    startMonth: number,
+    refYear:    number,
+    refMonth:   number,
+): Promise<{ interest: number; months: number }> {
+
+    const hasP3 = refYear > 2024 || (refYear === 2024 && refMonth >= 9);
+
+    const selicMap = new Map<string, number>();
+    const ipcaMap  = new Map<string, number>();
+
+    if (hasP3) {
+        const p3Range = monthRange(2024, 9, refYear, refMonth);
+        const p3Where = p3Range.map(({ year, month }) => ({ year, month }));
+        const [selicRecs, ipcaRecs] = await Promise.all([
+            prisma.indexSeries.findMany({ where: { indexName: 'SELIC', OR: p3Where } }),
+            prisma.indexSeries.findMany({ where: { indexName: 'IPCA',  OR: p3Where } }),
+        ]);
+        for (const r of selicRecs) selicMap.set(`${r.year}-${String(r.month).padStart(2,'0')}`, r.monthlyRate);
+        for (const r of ipcaRecs)  ipcaMap.set(`${r.year}-${String(r.month).padStart(2,'0')}`, r.monthlyRate);
+    }
+
+    // Começa a partir do mês SEGUINTE ao início (igual ao comportamento do PERSONALIZADO)
+    const nextM = startMonth === 12 ? 1  : startMonth + 1;
+    const nextY = startMonth === 12 ? startYear + 1 : startYear;
+    const allMonths = monthRange(nextY, nextM, refYear, refMonth);
+    let totalRate = 0;
+
+    for (const { year, month } of allMonths) {
+        let rate: number;
+        if (year < 2003 || (year === 2003 && month <= 1)) {
+            rate = 0.5;                                                           // P1
+        } else if (year < 2024 || (year === 2024 && month <= 8)) {
+            rate = 1.0;                                                           // P2
+        } else {
+            const key = `${year}-${String(month).padStart(2,'0')}`;
+            const selic = selicMap.get(key) ?? 0;
+            const ipca  = ipcaMap.get(key) ?? 0;
+            rate = Math.max(selic - ipca, 0);                                     // P3
+        }
+        totalRate += rate;
+    }
+
+    return { interest: correctedValue * totalRate / 100, months: allMonths.length };
 }
 
 // ── engine principal ──────────────────────────────────────────────────────────
@@ -190,17 +246,29 @@ export async function calculateJudicialDebt(
             ? parseYM(params.moratoryStartDate)
             : { year: sy, month: sm };
 
-        const nMoratory = Math.max(0, monthsBetween(
-            moratoryStart.year, moratoryStart.month,
-            referenceYear, referenceMonth,
-        ));
-
         let moratoryInterest = 0;
-        if (params.moratoryRate > 0 && nMoratory > 0) {
-            if (params.moratoryType === 'SIMPLES') {
-                moratoryInterest = correctedValue * (params.moratoryRate / 100) * nMoratory;
-            } else {
-                moratoryInterest = correctedValue * (Math.pow(1 + params.moratoryRate / 100, nMoratory) - 1);
+        let nMoratory = 0;
+
+        if ((params.moratoryMode ?? 'TAXA_LEGAL') === 'TAXA_LEGAL') {
+            // Piecewise legal: P1=0.5%/m, P2=1%/m, P3=SELIC-IPCA
+            const ml = await computeTaxaLegalMoratory(
+                correctedValue,
+                moratoryStart.year, moratoryStart.month,
+                referenceYear, referenceMonth,
+            );
+            moratoryInterest = ml.interest;
+            nMoratory = ml.months;
+        } else {
+            nMoratory = Math.max(0, monthsBetween(
+                moratoryStart.year, moratoryStart.month,
+                referenceYear, referenceMonth,
+            ));
+            if (params.moratoryRate > 0 && nMoratory > 0) {
+                if (params.moratoryType === 'SIMPLES') {
+                    moratoryInterest = correctedValue * (params.moratoryRate / 100) * nMoratory;
+                } else {
+                    moratoryInterest = correctedValue * (Math.pow(1 + params.moratoryRate / 100, nMoratory) - 1);
+                }
             }
         }
 

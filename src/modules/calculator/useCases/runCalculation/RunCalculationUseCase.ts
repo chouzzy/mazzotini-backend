@@ -22,6 +22,7 @@ class RunCalculationUseCase {
 
         const calcParams: CalculationParams = {
             correctionIndex:    params.correctionIndex,
+            moratoryMode:       (params as any).moratoryMode ?? 'TAXA_LEGAL',
             moratoryRate:       params.moratoryRate,
             moratoryType:       params.moratoryType,
             moratoryStartDate:  params.moratoryStartDate?.toISOString() ?? null,
