@@ -49,7 +49,8 @@ async function main() {
         { name: 'INPC',   label: 'INPC',                            fetcher: () => fetchIndexSeries('INPC',   START_YEAR, START_MONTH) },
         { name: 'IPCA',   label: 'IPCA',                            fetcher: () => fetchIndexSeries('IPCA',   START_YEAR, START_MONTH) },
         { name: 'TJSP_LEI14905', label: 'TJSP Lei 14905 (INPC até 12/2023 + IPCA-E de 01/2024)', fetcher: () => fetchTJSPSeries(START_YEAR, START_MONTH) },
-        { name: 'SELIC', label: 'Meta SELIC (% mensal)', fetcher: () => fetchSelicSeries(START_YEAR, START_MONTH) },
+        // SELIC: série 11 diária — janela max 10 anos; só precisamos de set/2024+ (P3 da Taxa Legal)
+        { name: 'SELIC', label: 'Meta SELIC diária acumulada (jan/2024+)', fetcher: () => fetchSelicSeries(2024, 1) },
     ];
 
     for (const idx of indices) {

@@ -16,7 +16,7 @@ const SERIES_CODES: Record<string, number> = {
     IPCA_E: 10764,
     INPC:   188,
     IPCA:   433,
-    SELIC:  4390, // Selic acumulada no mês (% a.a.) — requer conversão para mensal
+    // SELIC: série 11 (taxa diária "over", % a.d.) — acumulação mensal feita em fetchSelicSeries
 };
 
 export interface IBGEDataPoint {
@@ -72,9 +72,12 @@ export async function fetchIndexSeries(
 }
 
 /**
- * Meta SELIC (BCB série 11) — retorna variação MENSAL efetiva.
- * A série 11 publica % a.a.; cada valor é convertido por:
- *   mensal = ((1 + aa/100)^(1/12) - 1) × 100
+ * SELIC mensal com precisão máxima — acumula taxas DIÁRIAS da série 11 (% a.d.).
+ *
+ * A série 4390 publica o mensal com 2 casas decimais (ex: 0.84%).
+ * A série 11 publica a taxa diária "over" com 6 casas (ex: 0.039270%).
+ * Acumulando dia a dia: ∏(1 + taxa_diária/100) - 1
+ * Isso elimina o erro de arredondamento mensal.
  */
 export async function fetchSelicSeries(
     startYear: number,
@@ -85,23 +88,34 @@ export async function fetchSelicSeries(
     const now    = new Date();
     const eYear  = endYear  ?? now.getFullYear();
     const eMonth = endMonth ?? now.getMonth() + 1;
-    const code   = SERIES_CODES['SELIC'];
 
-    const url = `${BCB_BASE}.${code}/dados?formato=json&dataInicial=${formatDateBCB(startYear, startMonth)}&dataFinal=${formatDateBCB(eYear, eMonth)}`;
-    const response = await axios.get<{ data: string; valor: string }[]>(url, { timeout: 20000 });
+    // Último dia do mês final (garante todos os dias úteis)
+    const lastDay = new Date(eYear, eMonth, 0).getDate();
+    const endDate = `${String(lastDay).padStart(2, '0')}/${String(eMonth).padStart(2, '0')}/${eYear}`;
+
+    const url = `${BCB_BASE}.11/dados?formato=json&dataInicial=${formatDateBCB(startYear, startMonth)}&dataFinal=${endDate}`;
+    const response = await axios.get<{ data: string; valor: string }[]>(url, { timeout: 60000 });
     const data = response.data;
 
-    if (!Array.isArray(data) || data.length === 0) throw new Error('Sem dados SELIC do BCB');
+    if (!Array.isArray(data) || data.length === 0) throw new Error('Sem dados SELIC diários do BCB (série 11)');
 
-    // Série 4390 já retorna % mensal diretamente (ex: 0.84 = 0,84%/mês)
-    const points: IBGEDataPoint[] = [];
+    // Acumula produto diário por mês
+    const monthMap = new Map<string, number>();
     for (const item of data) {
-        const parts = item.data.split('/');
-        const month = parseInt(parts[1], 10);
-        const year  = parseInt(parts[2], 10);
-        const rate  = parseFloat(item.valor.replace(',', '.'));
-        if (isNaN(rate)) continue;
-        points.push({ year, month, monthlyRate: rate });
+        const parts     = item.data.split('/');
+        const month     = parseInt(parts[1], 10);
+        const year      = parseInt(parts[2], 10);
+        const dailyRate = parseFloat(item.valor.replace(',', '.'));
+        if (isNaN(dailyRate)) continue;
+        const key = `${year}-${month}`;
+        monthMap.set(key, (monthMap.get(key) ?? 1) * (1 + dailyRate / 100));
+    }
+
+    const points: IBGEDataPoint[] = [];
+    for (const [key, product] of monthMap.entries()) {
+        const [year, month] = key.split('-').map(Number);
+        const monthlyRate   = parseFloat(((product - 1) * 100).toFixed(6));
+        points.push({ year, month, monthlyRate });
     }
     return points.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
 }
