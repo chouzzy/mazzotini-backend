@@ -102,10 +102,10 @@ function monthRange(sy: number, sm: number, ey: number, em: number): { year: num
 
 // ── Taxa Legal art.406/CC — juros moratórios piecewise ───────────────────────
 //
-//  Períodos conforme art. 406 CC / Lei 14905/2024:
-//   P1  ≤ Dez/2002               : 6% a.a.  = 0,5%/mês
-//   P2  Jan/2003 → Jul/2024      : 12% a.a. = 1%/mês
-//   P3  Ago/2024+  (lei 30/08/24): SELIC mensal − IPCA mensal
+//  Períodos conforme art. 406 CC / Lei 14905/2024 (texto drcalc):
+//   P1  anterior a 11/02/03  (≤ Jan/2003) : 6% a.a.  = 0,5%/mês
+//   P2  12/02/03 a 30/08/24 (fev/03-ago/24): 12% a.a. = 1%/mês
+//   P3  a partir de 30/08/24 (set/2024+)  : SELIC mensal − IPCA mensal
 //
 async function computeTaxaLegalMoratory(
     correctedValue: number,
@@ -115,13 +115,13 @@ async function computeTaxaLegalMoratory(
     refMonth:   number,
 ): Promise<{ interest: number; months: number }> {
 
-    const hasP3 = refYear > 2024 || (refYear === 2024 && refMonth >= 8);
+    const hasP3 = refYear > 2024 || (refYear === 2024 && refMonth >= 9);
 
     const selicMap = new Map<string, number>();
     const ipcaMap  = new Map<string, number>();
 
     if (hasP3) {
-        const p3Range = monthRange(2024, 8, refYear, refMonth);
+        const p3Range = monthRange(2024, 9, refYear, refMonth);
         const p3Where = p3Range.map(({ year, month }) => ({ year, month }));
         const [selicRecs, ipcaRecs] = await Promise.all([
             prisma.indexSeries.findMany({ where: { indexName: 'SELIC', OR: p3Where } }),
@@ -137,10 +137,10 @@ async function computeTaxaLegalMoratory(
 
     for (const { year, month } of allMonths) {
         let rate: number;
-        if (year <= 2002) {
-            rate = 0.5;                                                           // P1: ≤ dez/2002
-        } else if (year < 2024 || (year === 2024 && month < 8)) {
-            rate = 1.0;                                                           // P2: jan/2003 → jul/2024
+        if (year < 2003 || (year === 2003 && month <= 1)) {
+            rate = 0.5;                                                           // P1: ≤ jan/2003
+        } else if (year < 2024 || (year === 2024 && month <= 8)) {
+            rate = 1.0;                                                           // P2: fev/2003 → ago/2024
         } else {
             const key = `${year}-${String(month).padStart(2,'0')}`;
             const selic = selicMap.get(key) ?? 0;
