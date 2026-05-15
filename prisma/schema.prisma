@@ -360,12 +360,14 @@ model ProcessCalculationParams {
   moratoryStartDate   DateTime?
 
   // Juros compensatórios
-  compensatoryRate    Float    @default(0)
-  compensatoryType    String   @default("SIMPLES")
+  compensatoryRate      Float     @default(0)
+  compensatoryType      String    @default("SIMPLES")
+  compensatoryStartDate DateTime?
 
   // Honorários e multa
   feesPercentage      Float    @default(0)
   penaltyPercentage   Float    @default(0)
+  penaltyStartDate    DateTime?
   feesOnPenalty       Boolean  @default(false)
 
   // Parcelas do valor base: [{baseValue, baseDate, description}]

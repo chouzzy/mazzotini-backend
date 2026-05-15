@@ -22,17 +22,19 @@ export interface Installment {
 }
 
 export interface CalculationParams {
-    correctionIndex:     string;
-    moratoryMode?:       string;  // "TAXA_LEGAL" (default) | "PERSONALIZADO"
-    moratoryRate:        number;
-    moratoryType:        string;  // "SIMPLES" | "COMPOSTO"
-    moratoryStartDate?:  string | null;
-    compensatoryRate:    number;
-    compensatoryType:    string;
-    feesPercentage:      number;
-    penaltyPercentage:   number;
-    feesOnPenalty:       boolean;
-    installments:        Installment[];
+    correctionIndex:          string;
+    moratoryMode?:            string;  // "TAXA_LEGAL" (default) | "PERSONALIZADO"
+    moratoryRate:             number;
+    moratoryType:             string;  // "SIMPLES" | "COMPOSTO"
+    moratoryStartDate?:       string | null;
+    compensatoryRate:         number;
+    compensatoryType:         string;
+    compensatoryStartDate?:   string | null;
+    feesPercentage:           number;
+    penaltyPercentage:        number;
+    penaltyStartDate?:        string | null;
+    feesOnPenalty:            boolean;
+    installments:             Installment[];
 }
 
 export interface MonthBreakdown {
@@ -254,9 +256,15 @@ export async function calculateJudicialDebt(
 
         let compensatoryInterest = 0;
         if (params.compensatoryRate > 0) {
-            compensatoryInterest = params.compensatoryType === 'SIMPLES'
-                ? correctedValue * (params.compensatoryRate / 100) * corrMonths.length
-                : correctedValue * (Math.pow(1 + params.compensatoryRate / 100, corrMonths.length) - 1);
+            const compStart = params.compensatoryStartDate
+                ? parseYM(params.compensatoryStartDate)
+                : { year: sy, month: sm };
+            const nComp = Math.max(0, monthsBetween(compStart.year, compStart.month, referenceYear, referenceMonth));
+            if (nComp > 0) {
+                compensatoryInterest = params.compensatoryType === 'SIMPLES'
+                    ? correctedValue * (params.compensatoryRate / 100) * nComp
+                    : correctedValue * (Math.pow(1 + params.compensatoryRate / 100, nComp) - 1);
+            }
         }
 
         const subtotalA = correctedValue + moratoryInterest + compensatoryInterest;
@@ -314,7 +322,11 @@ export async function calculateJudicialDebt(
     // APOS_HONORARIOS — antes de Art.523
     const effectiveSubtotalB = subtotalB - deductAt('APOS_HONORARIOS');
 
-    const penaltyValue      = effectiveSubtotalB * (params.penaltyPercentage / 100);
+    const penaltyApplies = params.penaltyPercentage > 0 && (
+        !params.penaltyStartDate ||
+        (() => { const ps = parseYM(params.penaltyStartDate!); return referenceYear > ps.year || (referenceYear === ps.year && referenceMonth >= ps.month); })()
+    );
+    const penaltyValue      = penaltyApplies ? effectiveSubtotalB * (params.penaltyPercentage / 100) : 0;
     const feesOnPenaltyValue = params.feesOnPenalty ? effectiveSubtotalB * (params.feesPercentage / 100) : 0;
     const afterArt523        = effectiveSubtotalB + penaltyValue + feesOnPenaltyValue;
 

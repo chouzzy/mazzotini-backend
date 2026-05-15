@@ -20,18 +20,21 @@ class RunCalculationUseCase {
         const refY  = referenceYear  ?? now.getFullYear();
         const refM  = referenceMonth ?? (now.getMonth() + 1);
 
+        const p = params as any;
         const calcParams: CalculationParams = {
-            correctionIndex:    params.correctionIndex,
-            moratoryMode:       (params as any).moratoryMode ?? 'TAXA_LEGAL',
-            moratoryRate:       params.moratoryRate,
-            moratoryType:       params.moratoryType,
-            moratoryStartDate:  params.moratoryStartDate?.toISOString() ?? null,
-            compensatoryRate:   params.compensatoryRate,
-            compensatoryType:   params.compensatoryType,
-            feesPercentage:     params.feesPercentage,
-            penaltyPercentage:  params.penaltyPercentage,
-            feesOnPenalty:      params.feesOnPenalty,
-            installments:       params.installments as unknown as Installment[],
+            correctionIndex:       params.correctionIndex,
+            moratoryMode:          p.moratoryMode ?? 'TAXA_LEGAL',
+            moratoryRate:          params.moratoryRate,
+            moratoryType:          params.moratoryType,
+            moratoryStartDate:     params.moratoryStartDate?.toISOString()  ?? null,
+            compensatoryRate:      params.compensatoryRate,
+            compensatoryType:      params.compensatoryType,
+            compensatoryStartDate: p.compensatoryStartDate ? new Date(p.compensatoryStartDate).toISOString() : null,
+            feesPercentage:        params.feesPercentage,
+            penaltyPercentage:     params.penaltyPercentage,
+            penaltyStartDate:      p.penaltyStartDate ? new Date(p.penaltyStartDate).toISOString() : null,
+            feesOnPenalty:         params.feesOnPenalty,
+            installments:          params.installments as unknown as Installment[],
         };
 
         const result = await calculateJudicialDebt(calcParams, refY, refM);

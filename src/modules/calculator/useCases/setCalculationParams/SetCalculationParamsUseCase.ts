@@ -10,8 +10,10 @@ interface IRequest {
     moratoryStartDate?: string | null;
     compensatoryRate: number;
     compensatoryType: string;
+    compensatoryStartDate?: string | null;
     feesPercentage: number;
     penaltyPercentage: number;
+    penaltyStartDate?: string | null;
     feesOnPenalty: boolean;
     installments: Installment[];
 }
@@ -21,35 +23,26 @@ class SetCalculationParamsUseCase {
         const asset = await prisma.creditAsset.findUnique({ where: { legalOneId: data.legalOneId } });
         if (!asset) throw new Error('Processo não encontrado.');
 
+        const shared = {
+            correctionIndex:      data.correctionIndex,
+            moratoryMode:         data.moratoryMode ?? 'TAXA_LEGAL',
+            moratoryRate:         data.moratoryRate,
+            moratoryType:         data.moratoryType,
+            moratoryStartDate:    data.moratoryStartDate    ? new Date(data.moratoryStartDate)    : null,
+            compensatoryRate:     data.compensatoryRate,
+            compensatoryType:     data.compensatoryType,
+            compensatoryStartDate: data.compensatoryStartDate ? new Date(data.compensatoryStartDate) : null,
+            feesPercentage:       data.feesPercentage,
+            penaltyPercentage:    data.penaltyPercentage,
+            penaltyStartDate:     data.penaltyStartDate     ? new Date(data.penaltyStartDate)     : null,
+            feesOnPenalty:        data.feesOnPenalty,
+            installments:         data.installments as any,
+        };
+
         const params = await prisma.processCalculationParams.upsert({
             where:  { assetId: asset.id },
-            create: {
-                assetId:         asset.id,
-                correctionIndex: data.correctionIndex,
-                moratoryMode:    data.moratoryMode ?? 'TAXA_LEGAL',
-                moratoryRate:    data.moratoryRate,
-                moratoryType:    data.moratoryType,
-                moratoryStartDate: data.moratoryStartDate ? new Date(data.moratoryStartDate) : null,
-                compensatoryRate:  data.compensatoryRate,
-                compensatoryType:  data.compensatoryType,
-                feesPercentage:    data.feesPercentage,
-                penaltyPercentage: data.penaltyPercentage,
-                feesOnPenalty:     data.feesOnPenalty,
-                installments:      data.installments as any,
-            },
-            update: {
-                correctionIndex: data.correctionIndex,
-                moratoryMode:    data.moratoryMode ?? 'TAXA_LEGAL',
-                moratoryRate:    data.moratoryRate,
-                moratoryType:    data.moratoryType,
-                moratoryStartDate: data.moratoryStartDate ? new Date(data.moratoryStartDate) : null,
-                compensatoryRate:  data.compensatoryRate,
-                compensatoryType:  data.compensatoryType,
-                feesPercentage:    data.feesPercentage,
-                penaltyPercentage: data.penaltyPercentage,
-                feesOnPenalty:     data.feesOnPenalty,
-                installments:      data.installments as any,
-            },
+            create: { assetId: asset.id, ...shared },
+            update: shared,
         });
 
         return params;
