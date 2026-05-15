@@ -17,8 +17,8 @@ class CreateCreditAssetController {
             origemProcesso: yup.string().required(),
             legalOneId: yup.number().required(),
             legalOneType: yup.string().required(),
-            acquisitionValue: yup.number().positive().required(),
-            originalValue: yup.number().positive().required(),
+            acquisitionValue: yup.number().min(0).required(),
+            originalValue: yup.number().min(0).required(),
             acquisitionDate: yup.date().required(),
             
             investors: yup.array().of(
