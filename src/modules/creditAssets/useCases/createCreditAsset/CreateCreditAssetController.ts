@@ -40,9 +40,9 @@ class CreateCreditAssetController {
         });
 
         try {
-            await validationSchema.validate(request.body, { abortEarly: false });
+            const validatedData = await validationSchema.validate(request.body, { abortEarly: false, stripUnknown: true });
             const createUseCase = new CreateCreditAssetUseCase();
-            const newAsset = await createUseCase.execute(request.body);
+            const newAsset = await createUseCase.execute(validatedData as any);
             return response.status(201).json(newAsset);
         } catch (err: any) {
             return response.status(400).json({ error: err.message, details: err.errors });
