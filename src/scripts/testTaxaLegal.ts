@@ -50,7 +50,7 @@ async function main() {
         installments: [{ baseValue: 1_000_000, baseDate: '2000-01-01T00:00:00Z', description: 'Caso Jan/2000' }],
     };
 
-    const r = await calculateJudicialDebt(params, 2026, 5);
+    const r = await calculateJudicialDebt(params, 2026, 4);
     const inst = r.installmentResults[0];
 
     console.log('──────────────────────────────────────────────────');

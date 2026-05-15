@@ -1,36 +1,30 @@
 /**
  * JudicialCalculatorService
  *
- * Engine de cálculo de débitos judiciais.
- *
- * Fator de correção (dois modos):
- *   Modo 1 (acumulado, preferencial):
- *     factor = accumulatedValue(referência) / accumulatedValue(base)
- *     Usa os valores acumulados oficiais (tabela drcalc.net), eliminando
- *     erro de arredondamento acumulado do produto mensal.
- *   Modo 2 (fallback, produto mensal):
- *     factor = ∏(1 + taxa_i / 100)
- *
- * Demais componentes:
- *   Juros moratórios simples  = valorCorrigido × (taxa% × nMeses)
- *   Honorários = (corrigido + juros) × hon%
- *   Subtotal B = corrigido + juros + honorários
- *   Multa Art.523 = subtotalB × multa%
- *   Honorários Art.523 = subtotalB × hon%  (se habilitado)
+ * Suporta:
+ *   - Parcelas de débito (tipo DEBITO) e abatimentos/descontos (tipo ABATIMENTO)
+ *   - Abatimentos corrigidos pelo mesmo índice até o mês de referência
+ *   - 4 pontos de dedução: DO_VALOR_CORRIGIDO | APOS_HONORARIOS | APOS_MULTA | APOS_TUDO
+ *   - Juros Moratórios: Taxa Legal piecewise (art.406/CC) ou Personalizado
+ *   - Juros Remuneratórios: taxa adicional (compensatoryRate)
  */
 
 import { prisma } from '../prisma';
 
+export type DeductionPoint = 'DO_VALOR_CORRIGIDO' | 'APOS_HONORARIOS' | 'APOS_MULTA' | 'APOS_TUDO';
+
 export interface Installment {
-    baseValue: number;
-    baseDate:  string; // ISO date string
-    description?: string;
+    baseValue:      number;
+    baseDate:       string; // ISO date string
+    description?:   string;
+    type?:          'DEBITO' | 'ABATIMENTO';  // default DEBITO
+    deductionPoint?: DeductionPoint;           // only for ABATIMENTO, default APOS_TUDO
 }
 
 export interface CalculationParams {
     correctionIndex:     string;
     moratoryMode?:       string;  // "TAXA_LEGAL" (default) | "PERSONALIZADO"
-    moratoryRate:        number;  // usado quando PERSONALIZADO
+    moratoryRate:        number;
     moratoryType:        string;  // "SIMPLES" | "COMPOSTO"
     moratoryStartDate?:  string | null;
     compensatoryRate:    number;
@@ -42,39 +36,53 @@ export interface CalculationParams {
 }
 
 export interface MonthBreakdown {
-    year:         number;
-    month:        number;
-    monthlyRate:  number;
-    accumulated:  number; // fator acumulado até este mês
+    year:        number;
+    month:       number;
+    monthlyRate: number;
+    accumulated: number;
 }
 
 export interface InstallmentResult {
-    installmentIndex: number;
-    description:      string;
-    baseValue:        number;
-    baseDate:         string;
-    correctionFactor: number;
-    correctedValue:   number;
-    moratoryMonths:   number;
-    moratoryInterest: number;
+    installmentIndex:     number;
+    description:          string;
+    baseValue:            number;
+    baseDate:             string;
+    correctionFactor:     number;
+    correctedValue:       number;
+    moratoryMonths:       number;
+    moratoryInterest:     number;
     compensatoryInterest: number;
-    feesValue:        number;
-    penaltyValue:     number;
-    subtotal:         number;
-    monthBreakdown:   MonthBreakdown[];
+    feesValue:            number;
+    penaltyValue:         number;
+    subtotal:             number;
+    monthBreakdown:       MonthBreakdown[];
+}
+
+export interface AbatimentoResult {
+    description:      string;
+    baseDate:         string;
+    baseValue:        number;
+    correctionFactor: number;
+    correctedValue:   number;   // valor atualizado até o mês de referência
+    deductionPoint:   DeductionPoint;
 }
 
 export interface CalculationResult {
-    referenceMonth:      number;
-    referenceYear:       number;
-    baseTotal:           number;
-    correctedValue:      number;
-    moratoryInterest:    number;
+    referenceMonth:       number;
+    referenceYear:        number;
+    baseTotal:            number;
+    correctedValue:       number;
+    moratoryInterest:     number;
     compensatoryInterest: number;
-    feesValue:           number;
-    penaltyValue:        number;
-    totalValue:          number;
-    installmentResults:  InstallmentResult[];
+    subtotalA:            number;   // corrected + moratory + compensatory
+    feesValue:            number;   // honorários principais
+    subtotalB:            number;   // subtotalA + fees
+    penaltyValue:         number;   // multa Art.523
+    grossTotal:           number;   // antes dos abatimentos
+    abatimentoResults:    AbatimentoResult[];
+    abatimentoTotal:      number;   // total deduzido
+    totalValue:           number;   // grossTotal − abatimentoTotal
+    installmentResults:   InstallmentResult[];
 }
 
 // ── utilidades de data ────────────────────────────────────────────────────────
@@ -84,11 +92,10 @@ function parseYM(isoDate: string): { year: number; month: number } {
     return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
 }
 
-function monthsBetween(startYear: number, startMonth: number, endYear: number, endMonth: number): number {
-    return (endYear - startYear) * 12 + (endMonth - startMonth);
+function monthsBetween(sy: number, sm: number, ey: number, em: number): number {
+    return (ey - sy) * 12 + (em - sm);
 }
 
-// Retorna lista de {year, month} de startMonth até endMonth (inclusive)
 function monthRange(sy: number, sm: number, ey: number, em: number): { year: number; month: number }[] {
     const months: { year: number; month: number }[] = [];
     let y = sy, m = sm;
@@ -100,57 +107,84 @@ function monthRange(sy: number, sm: number, ey: number, em: number): { year: num
     return months;
 }
 
-// ── Taxa Legal art.406/CC — juros moratórios piecewise ───────────────────────
+function round2(n: number): number { return Math.round(n * 100) / 100; }
+
+// ── Taxa Legal piecewise (art.406/CC / Lei 14905/2024) ────────────────────────
 //
-//  Períodos conforme art. 406 CC / Lei 14905/2024 (texto drcalc):
-//   P1  anterior a 11/02/03  (≤ Jan/2003) : 6% a.a.  = 0,5%/mês
-//   P2  12/02/03 a 30/08/24 (fev/03-ago/24): 12% a.a. = 1%/mês
-//   P3  a partir de 30/08/24 (set/2024+)  : SELIC mensal − IPCA mensal
+//   P1  ≤ Jan/2003               : 6% a.a.  = 0,5%/mês
+//   P2  Fev/2003 → Ago/2024      : 12% a.a. = 1%/mês
+//   P3  Set/2024+                 : SELIC mensal − IPCA mensal
 //
 async function computeTaxaLegalMoratory(
     correctedValue: number,
-    startYear:  number,
-    startMonth: number,
-    refYear:    number,
-    refMonth:   number,
+    startYear: number, startMonth: number,
+    refYear: number,   refMonth: number,
 ): Promise<{ interest: number; months: number }> {
-
     const hasP3 = refYear > 2024 || (refYear === 2024 && refMonth >= 9);
-
     const selicMap = new Map<string, number>();
     const ipcaMap  = new Map<string, number>();
 
     if (hasP3) {
         const p3Range = monthRange(2024, 9, refYear, refMonth);
-        const p3Where = p3Range.map(({ year, month }) => ({ year, month }));
-        const [selicRecs, ipcaRecs] = await Promise.all([
-            prisma.indexSeries.findMany({ where: { indexName: 'SELIC', OR: p3Where } }),
-            prisma.indexSeries.findMany({ where: { indexName: 'IPCA',  OR: p3Where } }),
+        const where   = p3Range.map(({ year, month }) => ({ year, month }));
+        const [sR, iR] = await Promise.all([
+            prisma.indexSeries.findMany({ where: { indexName: 'SELIC', OR: where } }),
+            prisma.indexSeries.findMany({ where: { indexName: 'IPCA',  OR: where } }),
         ]);
-        for (const r of selicRecs) selicMap.set(`${r.year}-${String(r.month).padStart(2,'0')}`, r.monthlyRate);
-        for (const r of ipcaRecs)  ipcaMap.set(`${r.year}-${String(r.month).padStart(2,'0')}`, r.monthlyRate);
+        for (const r of sR) selicMap.set(`${r.year}-${String(r.month).padStart(2,'0')}`, r.monthlyRate);
+        for (const r of iR) ipcaMap.set(`${r.year}-${String(r.month).padStart(2,'0')}`, r.monthlyRate);
     }
 
-    // Inclui o mês base (consistente com como drcalc computa o período total)
     const allMonths = monthRange(startYear, startMonth, refYear, refMonth);
     let totalRate = 0;
-
     for (const { year, month } of allMonths) {
         let rate: number;
-        if (year < 2003 || (year === 2003 && month <= 1)) {
-            rate = 0.5;                                                           // P1: ≤ jan/2003
-        } else if (year < 2024 || (year === 2024 && month <= 8)) {
-            rate = 1.0;                                                           // P2: fev/2003 → ago/2024
-        } else {
+        if (year < 2003 || (year === 2003 && month <= 1))      rate = 0.5;
+        else if (year < 2024 || (year === 2024 && month <= 8)) rate = 1.0;
+        else {
             const key = `${year}-${String(month).padStart(2,'0')}`;
-            const selic = selicMap.get(key) ?? 0;
-            const ipca  = ipcaMap.get(key) ?? 0;
-            rate = Math.max(selic - ipca, 0);                                     // P3: ago/2024+
+            rate = Math.max((selicMap.get(key) ?? 0) - (ipcaMap.get(key) ?? 0), 0);
         }
         totalRate += rate;
     }
-
     return { interest: correctedValue * totalRate / 100, months: allMonths.length };
+}
+
+// ── helper: fator de correção para uma data base ──────────────────────────────
+
+function computeFactor(
+    sy: number, sm: number,
+    refYear: number, refMonth: number,
+    rateMap: Map<string, { monthlyRate: number; accumulatedValue: number | null }>,
+): { factor: number; breakdown: MonthBreakdown[] } {
+    const corrMonths = monthRange(sy, sm + 1, refYear, refMonth);
+    const baseKey    = `${sy}-${String(sm).padStart(2,'0')}`;
+    const refKey     = `${refYear}-${String(refMonth).padStart(2,'0')}`;
+    const baseRec    = rateMap.get(baseKey);
+    const refRec     = rateMap.get(refKey);
+    let factor = 1;
+    const breakdown: MonthBreakdown[] = [];
+
+    if (baseRec?.accumulatedValue && refRec?.accumulatedValue) {
+        factor = refRec.accumulatedValue / baseRec.accumulatedValue;
+        let runAcc = baseRec.accumulatedValue;
+        for (const { year, month } of corrMonths) {
+            const key         = `${year}-${String(month).padStart(2,'0')}`;
+            const rec         = rateMap.get(key);
+            const monthlyRate = rec?.monthlyRate ?? 0;
+            const thisAcc     = rec?.accumulatedValue ?? runAcc * (1 + monthlyRate / 100);
+            runAcc = thisAcc;
+            breakdown.push({ year, month, monthlyRate, accumulated: thisAcc / baseRec.accumulatedValue });
+        }
+    } else {
+        for (const { year, month } of corrMonths) {
+            const key  = `${year}-${String(month).padStart(2,'0')}`;
+            const rate = rateMap.get(key)?.monthlyRate ?? 0;
+            factor *= (1 + rate / 100);
+            breakdown.push({ year, month, monthlyRate: rate, accumulated: factor });
+        }
+    }
+    return { factor, breakdown };
 }
 
 // ── engine principal ──────────────────────────────────────────────────────────
@@ -161,182 +195,152 @@ export async function calculateJudicialDebt(
     referenceMonth: number,
 ): Promise<CalculationResult> {
 
-    // 1. Busca índices do banco — inclui o mês base para poder usar o ratio acumulado
-    const sortedInstallments = [...params.installments].sort(
-        (a, b) => new Date(a.baseDate).getTime() - new Date(b.baseDate).getTime()
-    );
-    if (sortedInstallments.length === 0) throw new Error('Nenhuma parcela informada.');
+    const allInstallments = params.installments;
+    if (allInstallments.length === 0) throw new Error('Nenhuma parcela informada.');
 
-    const globalStart = parseYM(sortedInstallments[0].baseDate);
+    const debitoInstallments    = allInstallments.filter(i => (i.type ?? 'DEBITO') === 'DEBITO');
+    const abatimentoInstallments = allInstallments.filter(i => i.type === 'ABATIMENTO');
 
-    // Range inclui o próprio mês base (para accumulatedValue do mês base)
-    const fetchRange = monthRange(globalStart.year, globalStart.month, referenceYear, referenceMonth);
+    if (debitoInstallments.length === 0) throw new Error('Informe ao menos uma parcela de débito.');
+
+    // 1. Busca índices do banco
+    const sortedDebito  = [...debitoInstallments].sort((a, b) => new Date(a.baseDate).getTime() - new Date(b.baseDate).getTime());
+    const sortedAbat    = [...abatimentoInstallments].sort((a, b) => new Date(a.baseDate).getTime() - new Date(b.baseDate).getTime());
+    const allSorted     = [...sortedDebito, ...sortedAbat].sort((a, b) => new Date(a.baseDate).getTime() - new Date(b.baseDate).getTime());
+    const globalStart   = parseYM(allSorted[0].baseDate);
+    const fetchRange    = monthRange(globalStart.year, globalStart.month, referenceYear, referenceMonth);
 
     const indexRecords = await prisma.indexSeries.findMany({
-        where: {
-            indexName: params.correctionIndex,
-            OR: fetchRange.map(({ year, month }) => ({ year, month })),
-        },
+        where: { indexName: params.correctionIndex, OR: fetchRange.map(({ year, month }) => ({ year, month })) },
     });
 
-    // Mapa: "YYYY-MM" → { monthlyRate, accumulatedValue }
     const rateMap = new Map<string, { monthlyRate: number; accumulatedValue: number | null }>();
     for (const rec of indexRecords) {
-        rateMap.set(`${rec.year}-${String(rec.month).padStart(2, '0')}`, {
+        rateMap.set(`${rec.year}-${String(rec.month).padStart(2,'0')}`, {
             monthlyRate:     rec.monthlyRate,
             accumulatedValue: rec.accumulatedValue ?? null,
         });
     }
 
-    // 2. Calcula cada parcela
+    // 2. Processa parcelas de DÉBITO
     const installmentResults: InstallmentResult[] = [];
-    let totalBase        = 0;
-    let totalCorrected   = 0;
-    let totalMoratory    = 0;
+    let totalBase         = 0;
+    let totalCorrected    = 0;
+    let totalMoratory     = 0;
     let totalCompensatory = 0;
-    let totalFees        = 0;
-    let totalPenalty     = 0;
 
-    for (let i = 0; i < params.installments.length; i++) {
-        const inst = params.installments[i];
+    for (let i = 0; i < debitoInstallments.length; i++) {
+        const inst = debitoInstallments[i];
         const { year: sy, month: sm } = parseYM(inst.baseDate);
-
-        // Meses a corrigir: mês seguinte ao base → referência
         const corrMonths = monthRange(sy, sm + 1, referenceYear, referenceMonth);
-
-        // Chaves para o ratio acumulado
-        const baseKey = `${sy}-${String(sm).padStart(2, '0')}`;
-        const refKey  = `${referenceYear}-${String(referenceMonth).padStart(2, '0')}`;
-        const baseRec = rateMap.get(baseKey);
-        const refRec  = rateMap.get(refKey);
-
-        let factor = 1;
-        const breakdown: MonthBreakdown[] = [];
-
-        if (baseRec?.accumulatedValue && refRec?.accumulatedValue) {
-            // Modo 1 (preferencial): ratio direto — elimina erro de arredondamento acumulado
-            factor = refRec.accumulatedValue / baseRec.accumulatedValue;
-
-            // Reconstrói breakdown apenas para exibição
-            let runAcc = baseRec.accumulatedValue;
-            for (const { year, month } of corrMonths) {
-                const key = `${year}-${String(month).padStart(2, '0')}`;
-                const rec = rateMap.get(key);
-                const monthlyRate = rec?.monthlyRate ?? 0;
-                const thisAcc     = rec?.accumulatedValue ?? runAcc * (1 + monthlyRate / 100);
-                runAcc = thisAcc;
-                breakdown.push({ year, month, monthlyRate, accumulated: thisAcc / baseRec.accumulatedValue });
-            }
-        } else {
-            // Modo 2 (fallback): produto dos fatores mensais
-            for (const { year, month } of corrMonths) {
-                const key  = `${year}-${String(month).padStart(2, '0')}`;
-                const rate = rateMap.get(key)?.monthlyRate ?? 0;
-                factor *= (1 + rate / 100);
-                breakdown.push({ year, month, monthlyRate: rate, accumulated: factor });
-            }
-        }
-
+        const { factor, breakdown } = computeFactor(sy, sm, referenceYear, referenceMonth, rateMap);
         const correctedValue = inst.baseValue * factor;
 
-        // Juros moratórios
-        const moratoryStart = params.moratoryStartDate
-            ? parseYM(params.moratoryStartDate)
-            : { year: sy, month: sm };
-
-        let moratoryInterest = 0;
-        let nMoratory = 0;
+        const moratoryStart = params.moratoryStartDate ? parseYM(params.moratoryStartDate) : { year: sy, month: sm };
+        let moratoryInterest = 0, nMoratory = 0;
 
         if ((params.moratoryMode ?? 'TAXA_LEGAL') === 'TAXA_LEGAL') {
-            // Piecewise legal: P1=0.5%/m, P2=1%/m, P3=SELIC-IPCA
-            const ml = await computeTaxaLegalMoratory(
-                correctedValue,
-                moratoryStart.year, moratoryStart.month,
-                referenceYear, referenceMonth,
-            );
+            const ml = await computeTaxaLegalMoratory(correctedValue, moratoryStart.year, moratoryStart.month, referenceYear, referenceMonth);
             moratoryInterest = ml.interest;
             nMoratory = ml.months;
         } else {
-            nMoratory = Math.max(0, monthsBetween(
-                moratoryStart.year, moratoryStart.month,
-                referenceYear, referenceMonth,
-            ));
+            nMoratory = Math.max(0, monthsBetween(moratoryStart.year, moratoryStart.month, referenceYear, referenceMonth));
             if (params.moratoryRate > 0 && nMoratory > 0) {
-                if (params.moratoryType === 'SIMPLES') {
-                    moratoryInterest = correctedValue * (params.moratoryRate / 100) * nMoratory;
-                } else {
-                    moratoryInterest = correctedValue * (Math.pow(1 + params.moratoryRate / 100, nMoratory) - 1);
-                }
+                moratoryInterest = params.moratoryType === 'SIMPLES'
+                    ? correctedValue * (params.moratoryRate / 100) * nMoratory
+                    : correctedValue * (Math.pow(1 + params.moratoryRate / 100, nMoratory) - 1);
             }
         }
 
-        // Juros compensatórios
         let compensatoryInterest = 0;
         if (params.compensatoryRate > 0) {
-            if (params.compensatoryType === 'SIMPLES') {
-                compensatoryInterest = correctedValue * (params.compensatoryRate / 100) * corrMonths.length;
-            } else {
-                compensatoryInterest = correctedValue * (Math.pow(1 + params.compensatoryRate / 100, corrMonths.length) - 1);
-            }
+            compensatoryInterest = params.compensatoryType === 'SIMPLES'
+                ? correctedValue * (params.compensatoryRate / 100) * corrMonths.length
+                : correctedValue * (Math.pow(1 + params.compensatoryRate / 100, corrMonths.length) - 1);
         }
 
-        // Subtotal A: base para honorários (corrigido + juros)
         const subtotalA = correctedValue + moratoryInterest + compensatoryInterest;
-
-        // Honorários principais (10% sobre Subtotal A)
-        const feesValue = subtotalA * (params.feesPercentage / 100);
-
-        // Subtotal B: base para Art. 523 (Subtotal A + honorários)
-        const subtotalB = subtotalA + feesValue;
-
-        // Art. 523 § 1.º — multa (% sobre Subtotal B)
-        const penaltyValue = subtotalB * (params.penaltyPercentage / 100);
-
-        // Art. 523 § 1.º — honorários advocatícios (% sobre Subtotal B, se habilitado)
-        const feesOnPenaltyValue = params.feesOnPenalty
-            ? subtotalB * (params.feesPercentage / 100)
-            : 0;
-
-        const subtotal = subtotalB + penaltyValue + feesOnPenaltyValue;
-
         installmentResults.push({
-            installmentIndex: i + 1,
-            description: inst.description || `Parcela ${i + 1}`,
-            baseValue:    inst.baseValue,
-            baseDate:     inst.baseDate,
-            correctionFactor: parseFloat(factor.toFixed(8)),
-            correctedValue:   round2(correctedValue),
-            moratoryMonths:   nMoratory,
-            moratoryInterest: round2(moratoryInterest),
+            installmentIndex:     i + 1,
+            description:          inst.description || `Parcela ${i + 1}`,
+            baseValue:            inst.baseValue,
+            baseDate:             inst.baseDate,
+            correctionFactor:     parseFloat(factor.toFixed(8)),
+            correctedValue:       round2(correctedValue),
+            moratoryMonths:       nMoratory,
+            moratoryInterest:     round2(moratoryInterest),
             compensatoryInterest: round2(compensatoryInterest),
-            feesValue:    round2(feesValue + feesOnPenaltyValue),
-            penaltyValue: round2(penaltyValue),
-            subtotal:     round2(subtotal),
-            monthBreakdown: breakdown,
+            feesValue:            0, // calculado no agregado
+            penaltyValue:         0,
+            subtotal:             round2(subtotalA),
+            monthBreakdown:       breakdown,
         });
 
         totalBase         += inst.baseValue;
         totalCorrected    += correctedValue;
         totalMoratory     += moratoryInterest;
         totalCompensatory += compensatoryInterest;
-        totalFees         += feesValue + feesOnPenaltyValue;
-        totalPenalty      += penaltyValue;
     }
+
+    // 3. Processa ABATIMENTOS — corrigi cada um pelo mesmo índice
+    const abatimentoResults: AbatimentoResult[] = [];
+    for (const abat of abatimentoInstallments) {
+        const { year: sy, month: sm } = parseYM(abat.baseDate);
+        const { factor } = computeFactor(sy, sm, referenceYear, referenceMonth, rateMap);
+        const correctedDeduction = abat.baseValue * factor;
+        abatimentoResults.push({
+            description:      abat.description || 'Abatimento',
+            baseDate:         abat.baseDate,
+            baseValue:        abat.baseValue,
+            correctionFactor: parseFloat(factor.toFixed(8)),
+            correctedValue:   round2(correctedDeduction),
+            deductionPoint:   abat.deductionPoint ?? 'APOS_TUDO',
+        });
+    }
+
+    function deductAt(point: DeductionPoint): number {
+        return abatimentoResults.filter(a => a.deductionPoint === point).reduce((s, a) => s + a.correctedValue, 0);
+    }
+
+    // 4. Aplica deduções em cascata
+    const grossSubtotalA = totalCorrected + totalMoratory + totalCompensatory;
+
+    // DO_VALOR_CORRIGIDO — reduz a base antes dos honorários
+    const effectiveSubtotalA = grossSubtotalA - deductAt('DO_VALOR_CORRIGIDO');
+
+    const feesValue    = effectiveSubtotalA * (params.feesPercentage / 100);
+    const subtotalB    = effectiveSubtotalA + feesValue;
+
+    // APOS_HONORARIOS — antes de Art.523
+    const effectiveSubtotalB = subtotalB - deductAt('APOS_HONORARIOS');
+
+    const penaltyValue      = effectiveSubtotalB * (params.penaltyPercentage / 100);
+    const feesOnPenaltyValue = params.feesOnPenalty ? effectiveSubtotalB * (params.feesPercentage / 100) : 0;
+    const afterArt523        = effectiveSubtotalB + penaltyValue + feesOnPenaltyValue;
+
+    // APOS_MULTA — após Art.523 completo
+    const afterMultaDed = afterArt523 - deductAt('APOS_MULTA');
+
+    // APOS_TUDO — após tudo
+    const finalTotal = afterMultaDed - deductAt('APOS_TUDO');
+
+    const abatimentoTotal = abatimentoResults.reduce((s, a) => s + a.correctedValue, 0);
 
     return {
         referenceMonth,
         referenceYear,
-        baseTotal:           round2(totalBase),
-        correctedValue:      round2(totalCorrected),
-        moratoryInterest:    round2(totalMoratory),
+        baseTotal:            round2(totalBase),
+        correctedValue:       round2(totalCorrected),
+        moratoryInterest:     round2(totalMoratory),
         compensatoryInterest: round2(totalCompensatory),
-        feesValue:           round2(totalFees),
-        penaltyValue:        round2(totalPenalty),
-        totalValue:          round2(totalCorrected + totalMoratory + totalCompensatory + totalFees + totalPenalty),
+        subtotalA:            round2(grossSubtotalA),
+        feesValue:            round2(feesValue + feesOnPenaltyValue),
+        subtotalB:            round2(subtotalB),
+        penaltyValue:         round2(penaltyValue),
+        grossTotal:           round2(afterArt523),
+        abatimentoResults,
+        abatimentoTotal:      round2(abatimentoTotal),
+        totalValue:           round2(finalTotal),
         installmentResults,
     };
-}
-
-function round2(n: number): number {
-    return Math.round(n * 100) / 100;
 }
