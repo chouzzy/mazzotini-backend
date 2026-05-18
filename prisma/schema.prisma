@@ -364,10 +364,12 @@ model ProcessCalculationParams {
   compensatoryType      String    @default("SIMPLES")
   compensatoryStartDate DateTime?
 
-  // Honorários e multa
+  // Multa sobre o valor corrigido (diferente da Art.523)
+  multaPercentage     Float    @default(0)
+
+  // Honorários e multa Art.523
   feesPercentage      Float    @default(0)
   penaltyPercentage   Float    @default(0)
-  penaltyStartDate    DateTime?
   feesOnPenalty       Boolean  @default(false)
 
   // Parcelas do valor base: [{baseValue, baseDate, description}]

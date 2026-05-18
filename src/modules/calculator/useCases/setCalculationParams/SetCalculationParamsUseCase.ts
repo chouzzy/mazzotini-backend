@@ -11,9 +11,9 @@ interface IRequest {
     compensatoryRate: number;
     compensatoryType: string;
     compensatoryStartDate?: string | null;
+    multaPercentage?: number;
     feesPercentage: number;
     penaltyPercentage: number;
-    penaltyStartDate?: string | null;
     feesOnPenalty: boolean;
     installments: Installment[];
 }
@@ -29,13 +29,13 @@ class SetCalculationParamsUseCase {
             moratoryRate:         data.moratoryRate,
             moratoryType:         data.moratoryType,
             moratoryStartDate:    data.moratoryStartDate    ? new Date(data.moratoryStartDate)    : null,
-            compensatoryRate:     data.compensatoryRate,
-            compensatoryType:     data.compensatoryType,
+            compensatoryRate:      data.compensatoryRate,
+            compensatoryType:      data.compensatoryType,
             compensatoryStartDate: data.compensatoryStartDate ? new Date(data.compensatoryStartDate) : null,
-            feesPercentage:       data.feesPercentage,
-            penaltyPercentage:    data.penaltyPercentage,
-            penaltyStartDate:     data.penaltyStartDate     ? new Date(data.penaltyStartDate)     : null,
-            feesOnPenalty:        data.feesOnPenalty,
+            multaPercentage:       data.multaPercentage ?? 0,
+            feesPercentage:        data.feesPercentage,
+            penaltyPercentage:     data.penaltyPercentage,
+            feesOnPenalty:         data.feesOnPenalty,
             installments:         data.installments as any,
         };
 

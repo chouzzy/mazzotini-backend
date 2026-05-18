@@ -30,9 +30,9 @@ class RunCalculationUseCase {
             compensatoryRate:      params.compensatoryRate,
             compensatoryType:      params.compensatoryType,
             compensatoryStartDate: p.compensatoryStartDate ? new Date(p.compensatoryStartDate).toISOString() : null,
+            multaPercentage:       p.multaPercentage ?? 0,
             feesPercentage:        params.feesPercentage,
             penaltyPercentage:     params.penaltyPercentage,
-            penaltyStartDate:      p.penaltyStartDate ? new Date(p.penaltyStartDate).toISOString() : null,
             feesOnPenalty:         params.feesOnPenalty,
             installments:          params.installments as unknown as Installment[],
         };

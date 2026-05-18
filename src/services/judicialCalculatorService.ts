@@ -30,9 +30,9 @@ export interface CalculationParams {
     compensatoryRate:         number;
     compensatoryType:         string;
     compensatoryStartDate?:   string | null;
+    multaPercentage?:         number;   // multa sobre o valor corrigido (diferente da Art.523)
     feesPercentage:           number;
     penaltyPercentage:        number;
-    penaltyStartDate?:        string | null;
     feesOnPenalty:            boolean;
     installments:             Installment[];
 }
@@ -76,7 +76,8 @@ export interface CalculationResult {
     correctedValue:       number;
     moratoryInterest:     number;
     compensatoryInterest: number;
-    subtotalA:            number;   // corrected + moratory + compensatory
+    multaValue:           number;   // multa sobre o valor corrigido
+    subtotalA:            number;   // corrected + moratory + compensatory + multa
     feesValue:            number;   // honorários principais
     subtotalB:            number;   // subtotalA + fees
     penaltyValue:         number;   // multa Art.523
@@ -311,7 +312,8 @@ export async function calculateJudicialDebt(
     }
 
     // 4. Aplica deduções em cascata
-    const grossSubtotalA = totalCorrected + totalMoratory + totalCompensatory;
+    const multaValue     = totalCorrected * ((params.multaPercentage ?? 0) / 100);
+    const grossSubtotalA = totalCorrected + totalMoratory + totalCompensatory + multaValue;
 
     // DO_VALOR_CORRIGIDO — reduz a base antes dos honorários
     const effectiveSubtotalA = grossSubtotalA - deductAt('DO_VALOR_CORRIGIDO');
@@ -322,11 +324,7 @@ export async function calculateJudicialDebt(
     // APOS_HONORARIOS — antes de Art.523
     const effectiveSubtotalB = subtotalB - deductAt('APOS_HONORARIOS');
 
-    const penaltyApplies = params.penaltyPercentage > 0 && (
-        !params.penaltyStartDate ||
-        (() => { const ps = parseYM(params.penaltyStartDate!); return referenceYear > ps.year || (referenceYear === ps.year && referenceMonth >= ps.month); })()
-    );
-    const penaltyValue      = penaltyApplies ? effectiveSubtotalB * (params.penaltyPercentage / 100) : 0;
+    const penaltyValue       = effectiveSubtotalB * (params.penaltyPercentage / 100);
     const feesOnPenaltyValue = params.feesOnPenalty ? effectiveSubtotalB * (params.feesPercentage / 100) : 0;
     const afterArt523        = effectiveSubtotalB + penaltyValue + feesOnPenaltyValue;
 
@@ -345,6 +343,7 @@ export async function calculateJudicialDebt(
         correctedValue:       round2(totalCorrected),
         moratoryInterest:     round2(totalMoratory),
         compensatoryInterest: round2(totalCompensatory),
+        multaValue:           round2(multaValue),
         subtotalA:            round2(grossSubtotalA),
         feesValue:            round2(feesValue + feesOnPenaltyValue),
         subtotalB:            round2(subtotalB),
