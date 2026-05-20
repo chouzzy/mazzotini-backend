@@ -29,9 +29,14 @@ class ListAllFoldersUseCase {
         // O filtro de busca olha para o código da pasta, descrição OU dados dos ativos dentro dela
         const where: Prisma.ProcessFolderWhereInput = {};
 
-        // Filtro de Privacidade (Se for investidor, só vê pastas que tenham seus ativos)
+        // Filtro de Privacidade
+        const isAssociate = roles.includes('ASSOCIATE');
         if (!isAdmin) {
-            where.assets = { some: { investors: { some: { userId: currentUserId } } } };
+            where.assets = {
+                some: isAssociate
+                    ? { OR: [{ associateId: currentUserId }, { investors: { some: { userId: currentUserId } } }] }
+                    : { investors: { some: { userId: currentUserId } } }
+            };
         }
 
         // Filtro de Busca
@@ -70,9 +75,12 @@ class ListAllFoldersUseCase {
 
         // 3. FORMATAÇÃO E FILTRO DE VISIBILIDADE DOS ATIVOS
         const items = folders.map(folder => {
-            const visibleAssets = isAdmin 
-                ? folder.assets 
-                : folder.assets.filter(asset => asset.investors.some(inv => inv.user?.id === currentUserId));
+            const visibleAssets = isAdmin
+                ? folder.assets
+                : folder.assets.filter(asset =>
+                    asset.investors.some(inv => inv.user?.id === currentUserId) ||
+                    (isAssociate && asset.associateId === currentUserId)
+                  );
 
             const totalAcquisition = visibleAssets.reduce((sum, a) => sum + a.acquisitionValue, 0);
             const totalCurrent = visibleAssets.reduce((sum, a) => sum + a.currentValue, 0);
