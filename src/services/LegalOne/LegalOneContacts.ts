@@ -2,6 +2,7 @@ import axios from 'axios';
 import { User } from '@prisma/client';
 import { LegalOneAuth } from './LegalOneAuth';
 import { maskCPFOrCNPJ, maskRG, unmask } from '../../utils/masks';
+import { AppError } from '../../errors/AppError';
 import {
     LegalOneContact,
     LegalOneCreatePersonPayload,
@@ -205,6 +206,23 @@ export class LegalOneContacts extends LegalOneAuth {
         } catch { return null; }
     }
 
+    public async getContactByEmail(email: string): Promise<LegalOneContact | null> {
+        const headers = await this.getAuthHeader();
+        const apiRestUrl = `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest`;
+        const filter = `emails/any(e: e/email eq '${email}')`;
+        try {
+            const res = await axios.get<LegalOnePagedResponse<LegalOneContact>>(`${apiRestUrl}/individuals`, {
+                headers, params: { '$filter': filter, '$top': 1 }
+            });
+            if (res.data.value?.[0]) return res.data.value[0];
+            // Tenta também em companies
+            const resComp = await axios.get<LegalOnePagedResponse<LegalOneContact>>(`${apiRestUrl}/companies`, {
+                headers, params: { '$filter': filter, '$top': 1 }
+            });
+            return resComp.data.value?.[0] || null;
+        } catch { return null; }
+    }
+
     public async getContactDetails(contactId: number, isPJ: boolean): Promise<LegalOneContact> {
         const headers = await this.getAuthHeader();
         const endpointType = isPJ ? 'companies' : 'individuals';
@@ -244,8 +262,34 @@ export class LegalOneContacts extends LegalOneAuth {
             if (associateName) await this.updateAssociateCustomField(newContact.id, associateName, isPJ);
             return newContact;
         } catch (error: any) {
+            const details: Array<{ target?: string; message?: string }> = error.response?.data?.error?.details || [];
             if (error.response?.data) console.log('[Legal One API] Erro create:', JSON.stringify(error.response.data));
-            throw new Error("Erro ao criar contato no Legal One.");
+
+            const hasInvalidDoc = details.some(d => typeof d.target === 'string' && d.target.toLowerCase().includes('identificationnumber'));
+            if (hasInvalidDoc) {
+                throw new AppError("CPF/CNPJ inválido no Legal One. Verifique o documento do usuário antes de aprovar.", 422);
+            }
+
+            const hasEmailError = details.some(d => typeof d.target === 'string' && d.target.toLowerCase().includes('email'));
+            if (hasEmailError) {
+                console.log('[Legal One API] E-mail duplicado detectado. Retentando sem e-mail...');
+                try {
+                    const { emails: _emails, ...payloadWithoutEmails } = finalPayload;
+                    const retryRes = await axios.post<LegalOneContact>(
+                        `${process.env.LEGAL_ONE_API_BASE_URL}/v1/api/rest/${endpointType}`,
+                        payloadWithoutEmails,
+                        { headers }
+                    );
+                    const newContact = retryRes.data;
+                    if (associateName) await this.updateAssociateCustomField(newContact.id, associateName, isPJ);
+                    return newContact;
+                } catch (retryError: any) {
+                    console.error('[Legal One API] Falha na retentativa sem e-mail:', retryError.response?.data || retryError.message);
+                    throw new AppError("Erro ao criar contato no Legal One (e-mail duplicado).", 500);
+                }
+            }
+
+            throw new AppError("Erro ao criar contato no Legal One. Tente novamente.", 500);
         }
     }
 

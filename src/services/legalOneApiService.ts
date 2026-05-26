@@ -38,6 +38,7 @@ class LegalOneApiService {
     public updateContact = this.contacts.updateContact.bind(this.contacts);
     public getContactByCPF = this.contacts.getContactByCPF.bind(this.contacts);
     public getContactByRG = this.contacts.getContactByRG.bind(this.contacts);
+    public getContactByEmail = this.contacts.getContactByEmail.bind(this.contacts);
     public getContactDetails = this.contacts.getContactDetails.bind(this.contacts); // Busca específica (PF/PJ)
 
     // NOVO: Busca Genérica

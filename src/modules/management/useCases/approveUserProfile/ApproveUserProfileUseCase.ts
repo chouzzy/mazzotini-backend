@@ -83,6 +83,11 @@ class ApproveUserProfileUseCase {
         if (!legalOneContact && user.rg) {
             legalOneContact = await legalOneApiService.getContactByRG(user.rg);
         }
+        // Fallback para e-mail (evita criar duplicata quando o contato já existe com esse e-mail)
+        if (!legalOneContact && user.email) {
+            legalOneContact = await legalOneApiService.getContactByEmail(user.email);
+            if (legalOneContact) console.log(`[ADMIN] Contato encontrado por e-mail (ID: ${legalOneContact.id}).`);
+        }
 
         if (legalOneContact) {
             console.log(`[ADMIN] Contato já existe (ID: ${legalOneContact.id}). Atualizando...`);
