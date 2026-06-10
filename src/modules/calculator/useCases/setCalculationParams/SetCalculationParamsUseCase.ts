@@ -6,13 +6,17 @@ interface IRequest {
     correctionIndex: string;
     moratoryMode?: string;
     moratoryRate: number;
+    moratoryRateUnit?: string;
     moratoryType: string;
     moratoryStartDate?: string | null;
     compensatoryRate: number;
+    compensatoryRateUnit?: string;
     compensatoryType: string;
     compensatoryStartDate?: string | null;
     multaPercentage?: number;
+    feesMode?: string;
     feesPercentage: number;
+    feesFixedValue?: number;
     penaltyPercentage: number;
     feesOnPenalty: boolean;
     installments: Installment[];
@@ -24,19 +28,23 @@ class SetCalculationParamsUseCase {
         if (!asset) throw new Error('Processo não encontrado.');
 
         const shared = {
-            correctionIndex:      data.correctionIndex,
-            moratoryMode:         data.moratoryMode ?? 'TAXA_LEGAL',
-            moratoryRate:         data.moratoryRate,
-            moratoryType:         data.moratoryType,
-            moratoryStartDate:    data.moratoryStartDate    ? new Date(data.moratoryStartDate)    : null,
+            correctionIndex:       data.correctionIndex,
+            moratoryMode:          data.moratoryMode      ?? 'TAXA_LEGAL',
+            moratoryRate:          data.moratoryRate,
+            moratoryRateUnit:      data.moratoryRateUnit  ?? 'AM',
+            moratoryType:          data.moratoryType,
+            moratoryStartDate:     data.moratoryStartDate     ? new Date(data.moratoryStartDate)     : null,
             compensatoryRate:      data.compensatoryRate,
+            compensatoryRateUnit:  data.compensatoryRateUnit  ?? 'AM',
             compensatoryType:      data.compensatoryType,
             compensatoryStartDate: data.compensatoryStartDate ? new Date(data.compensatoryStartDate) : null,
-            multaPercentage:       data.multaPercentage ?? 0,
+            multaPercentage:       data.multaPercentage   ?? 0,
+            feesMode:              data.feesMode          ?? 'PERCENTUAL',
             feesPercentage:        data.feesPercentage,
+            feesFixedValue:        data.feesFixedValue    ?? 0,
             penaltyPercentage:     data.penaltyPercentage,
             feesOnPenalty:         data.feesOnPenalty,
-            installments:         data.installments as any,
+            installments:          data.installments as any,
         };
 
         const params = await prisma.processCalculationParams.upsert({

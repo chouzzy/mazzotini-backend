@@ -234,7 +234,7 @@ model Document {
   sourceStagingDocId String?
   uploadedByUserId   String?     @db.ObjectId
 
-  // Para docs de PRIVADO_FINANCEIRO: scoped ao investidor específico
+  // Para docs de PRIVADO_FINANCEIRO: scoped ao cliente específico
   investorUserId     String?     @db.ObjectId
 
   assetId            String      @db.ObjectId
@@ -356,11 +356,13 @@ model ProcessCalculationParams {
   // Juros moratórios
   moratoryMode        String   @default("TAXA_LEGAL") // "TAXA_LEGAL" | "PERSONALIZADO"
   moratoryRate        Float    @default(1)
-  moratoryType        String   @default("SIMPLES")   // "SIMPLES" | "COMPOSTO"
+  moratoryRateUnit    String   @default("AM")         // "AM" | "AA"
+  moratoryType        String   @default("SIMPLES")    // "SIMPLES" | "COMPOSTO"
   moratoryStartDate   DateTime?
 
   // Juros compensatórios
   compensatoryRate      Float     @default(0)
+  compensatoryRateUnit  String    @default("AM")      // "AM" | "AA"
   compensatoryType      String    @default("SIMPLES")
   compensatoryStartDate DateTime?
 
@@ -368,6 +370,8 @@ model ProcessCalculationParams {
   multaPercentage     Float    @default(0)
 
   // Honorários e multa Art.523
+  feesMode            String   @default("PERCENTUAL") // "PERCENTUAL" | "FIXO"
+  feesFixedValue      Float    @default(0)
   feesPercentage      Float    @default(0)
   penaltyPercentage   Float    @default(0)
   feesOnPenalty       Boolean  @default(false)
@@ -405,6 +409,9 @@ model CalculationLog {
 
   // Detalhamento mês a mês (JSON)
   breakdown Json
+
+  // Snapshot dos parâmetros usados neste cálculo (para reabertura/edição)
+  paramsSnapshot Json?
 
   @@index([assetId])
   @@index([calculatedAt])

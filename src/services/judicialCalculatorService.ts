@@ -25,13 +25,17 @@ export interface CalculationParams {
     correctionIndex:          string;
     moratoryMode?:            string;  // "TAXA_LEGAL" (default) | "PERSONALIZADO"
     moratoryRate:             number;
+    moratoryRateUnit?:        string;  // "AM" (default) | "AA"
     moratoryType:             string;  // "SIMPLES" | "COMPOSTO"
     moratoryStartDate?:       string | null;
     compensatoryRate:         number;
+    compensatoryRateUnit?:    string;  // "AM" (default) | "AA"
     compensatoryType:         string;
     compensatoryStartDate?:   string | null;
-    multaPercentage?:         number;   // multa sobre o valor corrigido (diferente da Art.523)
+    multaPercentage?:         number;
+    feesMode?:                string;  // "PERCENTUAL" (default) | "FIXO"
     feesPercentage:           number;
+    feesFixedValue?:          number;
     penaltyPercentage:        number;
     feesOnPenalty:            boolean;
     installments:             Installment[];
@@ -111,6 +115,13 @@ function monthRange(sy: number, sm: number, ey: number, em: number): { year: num
 }
 
 function round2(n: number): number { return Math.round(n * 100) / 100; }
+
+// Converte taxa anual para mensal (preserva zero)
+function toMonthlyRate(rate: number, unit: string | undefined, type: string): number {
+    if (!rate || !unit || unit === 'AM') return rate;
+    if (type === 'COMPOSTO') return (Math.pow(1 + rate / 100, 1 / 12) - 1) * 100;
+    return rate / 12; // SIMPLES: divisão direta
+}
 
 // ── Taxa Legal piecewise (art.406/CC / Lei 14905/2024) ────────────────────────
 //
@@ -232,6 +243,10 @@ export async function calculateJudicialDebt(
     let totalMoratory     = 0;
     let totalCompensatory = 0;
 
+    // Converte taxas a.a. → a.m. uma única vez antes do loop
+    const effectiveMoratoryRate     = toMonthlyRate(params.moratoryRate,     params.moratoryRateUnit,     params.moratoryType);
+    const effectiveCompensatoryRate = toMonthlyRate(params.compensatoryRate, params.compensatoryRateUnit, params.compensatoryType);
+
     for (let i = 0; i < debitoInstallments.length; i++) {
         const inst = debitoInstallments[i];
         const { year: sy, month: sm } = parseYM(inst.baseDate);
@@ -248,23 +263,23 @@ export async function calculateJudicialDebt(
             nMoratory = ml.months;
         } else {
             nMoratory = Math.max(0, monthsBetween(moratoryStart.year, moratoryStart.month, referenceYear, referenceMonth));
-            if (params.moratoryRate > 0 && nMoratory > 0) {
+            if (effectiveMoratoryRate > 0 && nMoratory > 0) {
                 moratoryInterest = params.moratoryType === 'SIMPLES'
-                    ? correctedValue * (params.moratoryRate / 100) * nMoratory
-                    : correctedValue * (Math.pow(1 + params.moratoryRate / 100, nMoratory) - 1);
+                    ? correctedValue * (effectiveMoratoryRate / 100) * nMoratory
+                    : correctedValue * (Math.pow(1 + effectiveMoratoryRate / 100, nMoratory) - 1);
             }
         }
 
         let compensatoryInterest = 0;
-        if (params.compensatoryRate > 0) {
+        if (effectiveCompensatoryRate > 0) {
             const compStart = params.compensatoryStartDate
                 ? parseYM(params.compensatoryStartDate)
                 : { year: sy, month: sm };
             const nComp = Math.max(0, monthsBetween(compStart.year, compStart.month, referenceYear, referenceMonth));
             if (nComp > 0) {
                 compensatoryInterest = params.compensatoryType === 'SIMPLES'
-                    ? correctedValue * (params.compensatoryRate / 100) * nComp
-                    : correctedValue * (Math.pow(1 + params.compensatoryRate / 100, nComp) - 1);
+                    ? correctedValue * (effectiveCompensatoryRate / 100) * nComp
+                    : correctedValue * (Math.pow(1 + effectiveCompensatoryRate / 100, nComp) - 1);
             }
         }
 
@@ -318,14 +333,20 @@ export async function calculateJudicialDebt(
     // DO_VALOR_CORRIGIDO — reduz a base antes dos honorários
     const effectiveSubtotalA = grossSubtotalA - deductAt('DO_VALOR_CORRIGIDO');
 
-    const feesValue    = effectiveSubtotalA * (params.feesPercentage / 100);
-    const subtotalB    = effectiveSubtotalA + feesValue;
+    const isFeesFixed = params.feesMode === 'FIXO';
+    const feesValue   = isFeesFixed
+        ? (params.feesFixedValue ?? 0)
+        : effectiveSubtotalA * (params.feesPercentage / 100);
+    const subtotalB   = effectiveSubtotalA + feesValue;
 
     // APOS_HONORARIOS — antes de Art.523
     const effectiveSubtotalB = subtotalB - deductAt('APOS_HONORARIOS');
 
     const penaltyValue       = effectiveSubtotalB * (params.penaltyPercentage / 100);
-    const feesOnPenaltyValue = params.feesOnPenalty ? effectiveSubtotalB * (params.feesPercentage / 100) : 0;
+    // feesOnPenalty só se aplica no modo percentual
+    const feesOnPenaltyValue = (params.feesOnPenalty && !isFeesFixed)
+        ? effectiveSubtotalB * (params.feesPercentage / 100)
+        : 0;
     const afterArt523        = effectiveSubtotalB + penaltyValue + feesOnPenaltyValue;
 
     // APOS_MULTA — após Art.523 completo
