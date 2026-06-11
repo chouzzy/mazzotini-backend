@@ -13,10 +13,12 @@ import axios from 'axios';
 const BCB_BASE = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs';
 
 const SERIES_CODES: Record<string, number> = {
-    IPCA_E: 10764,
-    INPC:   188,
-    IPCA:   433,
-    // SELIC: série 11 (taxa diária "over", % a.d.) — acumulação mensal feita em fetchSelicSeries
+    IPCA_E:     10764,
+    INPC:       188,
+    IPCA:       433,
+    IGP_M:      189,    // IGP-M variação mensal %
+    CDI_MENSAL: 4391,   // CDI acumulado no mês %
+    // SELIC e CDI_DIARIA: série 11 / 12 (taxa diária "over", % a.d.) — acumulação mensal feita em fetchSelicSeries/fetchCDIDiariaSereis
 };
 
 export interface IBGEDataPoint {
@@ -100,6 +102,49 @@ export async function fetchSelicSeries(
     if (!Array.isArray(data) || data.length === 0) throw new Error('Sem dados SELIC diários do BCB (série 11)');
 
     // Acumula produto diário por mês
+    const monthMap = new Map<string, number>();
+    for (const item of data) {
+        const parts     = item.data.split('/');
+        const month     = parseInt(parts[1], 10);
+        const year      = parseInt(parts[2], 10);
+        const dailyRate = parseFloat(item.valor.replace(',', '.'));
+        if (isNaN(dailyRate)) continue;
+        const key = `${year}-${month}`;
+        monthMap.set(key, (monthMap.get(key) ?? 1) * (1 + dailyRate / 100));
+    }
+
+    const points: IBGEDataPoint[] = [];
+    for (const [key, product] of monthMap.entries()) {
+        const [year, month] = key.split('-').map(Number);
+        const monthlyRate   = parseFloat(((product - 1) * 100).toFixed(6));
+        points.push({ year, month, monthlyRate });
+    }
+    return points.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+}
+
+/**
+ * CDI Diária — acumula taxas DIÁRIAS da série BCB 12 (% a.d.) em produto mensal.
+ * Mesma lógica da SELIC (série 11), mas usando a série CDI over (série 12).
+ */
+export async function fetchCDIDiariaSeries(
+    startYear: number,
+    startMonth: number,
+    endYear?: number,
+    endMonth?: number,
+): Promise<IBGEDataPoint[]> {
+    const now    = new Date();
+    const eYear  = endYear  ?? now.getFullYear();
+    const eMonth = endMonth ?? now.getMonth() + 1;
+
+    const lastDay = new Date(eYear, eMonth, 0).getDate();
+    const endDate = `${String(lastDay).padStart(2, '0')}/${String(eMonth).padStart(2, '0')}/${eYear}`;
+
+    const url = `${BCB_BASE}.12/dados?formato=json&dataInicial=${formatDateBCB(startYear, startMonth)}&dataFinal=${endDate}`;
+    const response = await axios.get<{ data: string; valor: string }[]>(url, { timeout: 60000 });
+    const data = response.data;
+
+    if (!Array.isArray(data) || data.length === 0) throw new Error('Sem dados CDI diários do BCB (série 12)');
+
     const monthMap = new Map<string, number>();
     for (const item of data) {
         const parts     = item.data.split('/');

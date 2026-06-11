@@ -432,13 +432,17 @@ model SystemHealthLog {
 //  MODEL: NOTIFICAÇÕES (SystemNotification)
 // ==========================================
 model SystemNotification {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  title     String
-  message   String
-  type      String   @default("info")
-  link      String?
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  title            String
+  message          String
+  type             String   @default("info")
+  link             String?
+  notificationType String   @default("GENERAL")
+  relatedEntityId  String?
+  relatedEntityType String?
+  relatedEntityName String?
+  readBy           String[] @default([])
 
-  // CORREÇÃO: Nulos permitidos
   createdAt DateTime? @default(now())
   updatedAt DateTime? @updatedAt
 }

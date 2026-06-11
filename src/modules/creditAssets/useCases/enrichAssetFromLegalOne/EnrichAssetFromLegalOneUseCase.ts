@@ -2,6 +2,7 @@
 import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { getSystemSettings } from '../../../admin/useCases/systemSettings/SystemSettingsService';
+import { notifyAllAdmins } from '../../../../services/notificationService';
 
 
 const TAG_ANDAMENTO = "#RelatórioMAA";
@@ -162,6 +163,20 @@ class EnrichAssetFromLegalOneUseCase {
                 where: { id: creditAssetId },
                 data: { status: 'FAILED_ENRICHMENT' },
             });
+            const failedAsset = await prisma.creditAsset.findUnique({
+                where: { id: creditAssetId },
+                select: { processNumber: true },
+            });
+            await notifyAllAdmins({
+                title: 'Falha no enriquecimento Legal One',
+                message: `O processo ${failedAsset?.processNumber ?? creditAssetId} falhou ao sincronizar com o Legal One. Verifique a integração ou os dados do processo.`,
+                type: 'error',
+                notificationType: 'FAILED_ENRICHMENT',
+                relatedEntityId: creditAssetId,
+                relatedEntityType: 'CreditAsset',
+                relatedEntityName: failedAsset?.processNumber,
+                link: `/processos`,
+            });
         }
     }
 
@@ -241,7 +256,7 @@ class EnrichAssetFromLegalOneUseCase {
                         }
                     });
 
-                    // Clona os investidores exatos do pai para o filho resgatado
+                    // Clona os clientes exatos do pai para o filho resgatado
                     if (parent.investors && parent.investors.length > 0) {
                         await tx.investment.createMany({
                             data: parent.investors.map((inv: any) => ({

@@ -1,4 +1,5 @@
 import { prisma } from '../../../../prisma';
+import { notifyAllAdmins } from '../../../../services/notificationService';
 // /src/modules/users/useCases/updateMyProfile/UpdateMyProfileUseCase.ts
 
 
@@ -69,19 +70,31 @@ class UpdateMyProfileUseCase {
             ...validData,
         };
 
-        if (!existingUser || existingUser.status !== "ACTIVE") {
+        const isMovingToPendingReview = !existingUser || existingUser.status !== "ACTIVE";
+        if (isMovingToPendingReview) {
             // Ao completar o perfil, o status muda para aguardar a revisão do Admin.
             updateData.status = "PENDING_REVIEW";
         }
 
-        await prisma.user.update({
+        const updatedUser = await prisma.user.update({
             where: { auth0UserId },
             data: updateData,
+            select: { id: true, name: true },
         });
 
         console.log(`[PROFILE] Perfil de ${auth0UserId} atualizado.`);
-        if (!existingUser || existingUser.status !== "ACTIVE") {
+        if (isMovingToPendingReview) {
             console.log(`[PROFILE] Perfil de ${auth0UserId} movido para 'PENDING_REVIEW'.`);
+            await notifyAllAdmins({
+                title: 'Novo cadastro aguardando aprovação',
+                message: `${updatedUser.name} concluiu o preenchimento do perfil e aguarda aprovação do administrador.`,
+                type: 'info',
+                notificationType: 'NEW_USER_PENDING_REVIEW',
+                relatedEntityId: updatedUser.id,
+                relatedEntityType: 'User',
+                relatedEntityName: updatedUser.name,
+                link: `/gestao/aprovacoes`,
+            });
         }
     }
 }

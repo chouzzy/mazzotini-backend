@@ -1,4 +1,5 @@
 import { prisma } from '../../../../prisma';
+import { notifyAllAdmins } from '../../../../services/notificationService';
 
 
 class RequestProfileChangeUseCase {
@@ -17,6 +18,17 @@ class RequestProfileChangeUseCase {
                 proposedData,
                 status: "PENDING",
             }
+        });
+
+        await notifyAllAdmins({
+            title: 'Solicitação de alteração de perfil',
+            message: `${user.name} solicitou alterações em seu perfil cadastral. Acesse a gestão de usuários para revisar e aprovar.`,
+            type: 'info',
+            notificationType: 'PROFILE_CHANGE_REQUESTED',
+            relatedEntityId: userId,
+            relatedEntityType: 'User',
+            relatedEntityName: user.name,
+            link: `/gestao/usuarios/${userId}`,
         });
 
         return request;

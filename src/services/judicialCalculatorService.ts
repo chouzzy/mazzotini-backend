@@ -116,11 +116,21 @@ function monthRange(sy: number, sm: number, ey: number, em: number): { year: num
 
 function round2(n: number): number { return Math.round(n * 100) / 100; }
 
-// Converte taxa anual para mensal (preserva zero)
+// Converte taxa a.a. ou a.d. para mensal
 function toMonthlyRate(rate: number, unit: string | undefined, type: string): number {
     if (!rate || !unit || unit === 'AM') return rate;
-    if (type === 'COMPOSTO') return (Math.pow(1 + rate / 100, 1 / 12) - 1) * 100;
-    return rate / 12; // SIMPLES: divisão direta
+    if (unit === 'AA') {
+        return type === 'COMPOSTO'
+            ? (Math.pow(1 + rate / 100, 1 / 12) - 1) * 100
+            : rate / 12;
+    }
+    if (unit === 'AD') {
+        // Diária → mensal usando 30 dias/mês como convenção
+        return type === 'COMPOSTO'
+            ? (Math.pow(1 + rate / 100, 30) - 1) * 100
+            : rate * 30;
+    }
+    return rate;
 }
 
 // ── Taxa Legal piecewise (art.406/CC / Lei 14905/2024) ────────────────────────
