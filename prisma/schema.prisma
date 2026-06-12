@@ -94,6 +94,11 @@ model User {
   // Documentos transitórios financeiros (staging)
   stagingDocuments      UserStagingDocument[]
 
+  // Consentimento LGPD
+  consentedToTermsAt   DateTime?
+  consentedToPrivacyAt DateTime?
+  termsVersion         String?
+
   // CORREÇÃO: Nulos permitidos
   createdAt             DateTime?    @default(now())
   updatedAt             DateTime?    @updatedAt

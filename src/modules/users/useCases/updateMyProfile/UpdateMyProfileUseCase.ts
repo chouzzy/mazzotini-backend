@@ -40,6 +40,10 @@ interface IRequestData {
     nationality?: string | null;
     maritalStatus?: string | null;
     referredById?: string | null; // O ID do Associado (vendedor) que o indicou
+
+    consentedToTermsAt?: Date | null;
+    consentedToPrivacyAt?: Date | null;
+    termsVersion?: string | null;
 }
 
 interface IRequest {

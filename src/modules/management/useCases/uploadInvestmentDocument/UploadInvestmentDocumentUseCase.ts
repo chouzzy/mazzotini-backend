@@ -36,7 +36,7 @@ class UploadInvestmentDocumentUseCase {
 
             // Lógica de Fallback: Se não tiver ID salvo, busca pelo CPF/CNPJ
             if (!targetContactId && user.cpfOrCnpj) {
-                console.log(`[UPLOAD INV] ID Legal One não encontrado. Buscando por CPF: ${user.cpfOrCnpj}`);
+                console.log(`[UPLOAD INV] ID Legal One não encontrado. Buscando por CPF: ***`);
                 const contact = await legalOneApiService.getContactByCPF(user.cpfOrCnpj);
                 if (contact) {
                     targetContactId = contact.id;

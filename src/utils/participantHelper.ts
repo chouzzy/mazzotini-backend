@@ -59,7 +59,7 @@ export const syncParticipantsAsUsers = async (participants: LegalOneParticipant[
                         }
                     });
                     if (realUser) {
-                        console.log(`[PARTICIPANTS] Shadow user detectado para CPF ${user.cpfOrCnpj}. Preferindo usuário real: ${realUser.email}`);
+                        console.log(`[PARTICIPANTS] Shadow user detectado para CPF ***. Preferindo usuário real: ${realUser.email}`);
                         if (!realUser.legalOneContactId) {
                             await prisma.user.update({
                                 where: { id: realUser.id },
