@@ -1,6 +1,7 @@
 
 import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
+import { parseDocumentMeta } from '../../../../utils/documentNameParser';
 
 
 
@@ -89,6 +90,18 @@ class SyncProcessUpdatesUseCase {
 
                 const sortedNewUpdates = newUpdates.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+                // Resolve CPF → investorUserId antes da transaction (leitura simples, fora do tx)
+                const docMetaMap = new Map<number, { cleanName: string; section: string; investorUserId: string | null }>();
+                for (const doc of newDocuments) {
+                    const { cleanName, section, cpf } = parseDocumentMeta(doc.archive || `Documento ${doc.id}`, TAG_DOCUMENTO);
+                    let investorUserId: string | null = null;
+                    if (cpf) {
+                        const user = await prisma.user.findFirst({ where: { cpfOrCnpj: cpf }, select: { id: true } });
+                        investorUserId = user?.id ?? null;
+                    }
+                    docMetaMap.set(doc.id, { cleanName, section, investorUserId });
+                }
+
                 await prisma.$transaction(async (tx) => {
                     let currentAssetValues = {
                         originalValue: asset.originalValue,
@@ -126,19 +139,16 @@ class SyncProcessUpdatesUseCase {
                     if (newDocuments.length > 0) {
                         console.log(`[CRON JOB] Processo ${asset.processNumber}: ${newDocuments.length} novo(s) documento(s) com a tag ${TAG_DOCUMENTO}!`);
                         for (const doc of newDocuments) {
-                            // Limpa o nome do arquivo removendo a tag, se desejar
-                            const cleanName = (doc.archive ?? '').replace(TAG_DOCUMENTO, '').trim();
-
-                            // O link de download é gerado sob demanda, mas se quiser salvar uma url temporária:
-                            // const downloadUrl = await legalOneApiService.getDocumentDownloadUrl(doc.id);
-                            
+                            const meta = docMetaMap.get(doc.id)!;
                             await tx.document.create({
                                 data: {
                                     assetId: asset.id,
                                     legalOneDocumentId: doc.id,
-                                    name: cleanName || doc.archive || '',
+                                    name: meta.cleanName,
                                     category: doc.type || 'Documento Legal One',
-                                    url: '', // URL vazia indica que deve ser buscada no Legal One na hora do download
+                                    section: meta.section,
+                                    investorUserId: meta.investorUserId,
+                                    url: '',
                                 }
                             });
                         }

@@ -35,7 +35,7 @@
  * Ao final de cada sincronização, se o ativo for um `Lawsuit` (processo pai),
  * o use case chama `syncChildren()` para descobrir recursos (`Appeal`) e
  * incidentes (`ProceduralIssue`) filhos que ainda não foram cadastrados.
- * Filhos novos são criados com status `PENDING_ENRICHMENT` e têm os investidores
+ * Filhos novos são criados com status `PENDING_ENRICHMENT` e têm os clientes
  * do pai automaticamente clonados. Após criados, o `EnrichAssetFromLegalOneUseCase`
  * é chamado para populá-los com dados completos.
  *
@@ -47,6 +47,7 @@ import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/EnrichAssetFromLegalOneUseCase";
 import { getSystemSettings } from '../../../admin/useCases/systemSettings/SystemSettingsService';
+import { parseDocumentMeta } from '../../../../utils/documentNameParser';
 
 
 
@@ -109,7 +110,7 @@ class SyncSingleAssetUseCase {
             include: {
                 updates: { select: { legalOneUpdateId: true, id: true } },
                 documents: { select: { legalOneDocumentId: true } },
-                investors: true // <--- ADICIONADO: Necessário para a Malha Fina clonar os investidores
+                investors: true // <--- ADICIONADO: Necessário para a Malha Fina clonar os clientes
             }
         });
 
@@ -172,6 +173,19 @@ class SyncSingleAssetUseCase {
 
         const sortedNewUpdates = updatesToProcess.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+        // Resolve CPF → investorUserId antes da transaction (leitura simples, fora do tx)
+        const docMetaMap = new Map<number, { cleanName: string; section: string; investorUserId: string | null }>();
+        for (const doc of documentsToProcess) {
+            const { cleanName, section, cpf } = parseDocumentMeta(doc.archive || `Documento ${doc.id}`, TAG_DOCUMENTO);
+            let investorUserId: string | null = null;
+            if (cpf) {
+                const user = await prisma.user.findFirst({ where: { cpfOrCnpj: cpf }, select: { id: true } });
+                investorUserId = user?.id ?? null;
+                if (!investorUserId) console.log(`[SYNC MANUAL] CPF ${cpf} não encontrado no banco — documento sem investorUserId.`);
+            }
+            docMetaMap.set(doc.id, { cleanName, section, investorUserId });
+        }
+
         await prisma.$transaction(async (tx) => {
             let currentAssetValues = {
                 originalValue: asset.originalValue,
@@ -218,18 +232,16 @@ class SyncSingleAssetUseCase {
 
             // Salva Documentos
             for (const doc of documentsToProcess) {
-                let rawName = doc.archive || `Documento ${doc.id}`;
-                const regexTag = new RegExp(TAG_DOCUMENTO, 'i');
-                let cleanName = rawName.replace(regexTag, '').replace(/^\s*-\s*/, '').trim();
-                if (!cleanName) cleanName = "Documento Sincronizado";
-                
+                const meta = docMetaMap.get(doc.id)!;
                 await tx.document.create({
                     data: {
                         assetId: asset.id,
                         legalOneDocumentId: doc.id,
-                        name: cleanName,
+                        name: meta.cleanName,
                         category: doc.type || 'Documento Legal One',
-                        url: '', 
+                        section: meta.section,
+                        investorUserId: meta.investorUserId,
+                        url: '',
                     }
                 });
             }
