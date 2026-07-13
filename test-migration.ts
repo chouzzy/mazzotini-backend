@@ -104,7 +104,7 @@ async function main() {
         const asset = await uc.execute(LEGAL_ONE_ID, 'test|admin', ['ADMIN']);
         if (asset && asset.legalOneId === LEGAL_ONE_ID) {
             ok(`GetAssetByProcessNumberUseCase(${LEGAL_ONE_ID}) → retornou "${asset.processNumber}"`);
-            if (asset.investors) ok(`  → inclui ${asset.investors.length} investidor(es)`);
+            if (asset.investors) ok(`  → inclui ${asset.investors.length} cliente(es)`);
             if (asset.updates)   ok(`  → inclui ${asset.updates.length} andamento(s)`);
             if (asset.folder)    ok(`  → pasta: ${asset.folder.folderCode}`);
         } else {
@@ -217,7 +217,7 @@ async function main() {
         const comInvestidores = await prisma.creditAsset.count({ where: { investors: { some: {} } } });
         const semPasta = await prisma.creditAsset.count({ where: { folderId: null } });
         ok(`Total de ativos: ${total}`);
-        ok(`Com investidores: ${comInvestidores}`);
+        ok(`Com clientes: ${comInvestidores}`);
         console.log(`     ℹ️  Sem pasta: ${semPasta} (ativos aguardando sync-folders)`);
     } catch (e: any) {
         fail('Contagem geral', e.message);

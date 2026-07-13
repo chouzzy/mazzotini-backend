@@ -2,7 +2,7 @@
  * investment.routes.ts — Rotas de Investimentos
  *
  * Cobre a consulta da carteira do usuário autenticado.
- * Investidores veem seus próprios investimentos; admins e operadores veem todos
+ * Clientes veem seus próprios investimentos; admins e operadores veem todos
  * (controlado no use case via role do token).
  */
 
@@ -43,7 +43,7 @@ const updateInvestmentAssociateController = new UpdateInvestmentAssociateControl
  *                   investorShare:
  *                     type: number
  *                     example: 30
- *                     description: "Percentual do investidor (%)"
+ *                     description: "Percentual do cliente (%)"
  *                   mazzotiniShare:
  *                     type: number
  *                     example: 5

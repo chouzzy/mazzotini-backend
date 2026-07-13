@@ -19,7 +19,7 @@ class ListMyInvestmentsController {
       const investments = await listMyInvestmentsUseCase.execute(auth0UserId);
 
       // Etapa crucial: Mapear os dados do banco para o formato que o frontend precisa.
-      // Aqui calculamos os valores proporcionais à participação do investidor.
+      // Aqui calculamos os valores proporcionais à participação do cliente.
       const formattedInvestments = investments.map(inv => {
         const investorShareDecimal = inv.investorShare / 100;
         
@@ -31,10 +31,10 @@ class ListMyInvestmentsController {
           investorShare: inv.investorShare,
           updateIndexType: inv.asset.updateIndexType || 'N/A',
           
-          // Calcula o valor que o investidor de fato pagou.
+          // Calcula o valor que o cliente de fato pagou.
           investedValue: inv.asset.acquisitionValue * investorShareDecimal,
           
-          // Calcula o valor atual da parte do investidor.
+          // Calcula o valor atual da parte do cliente.
           currentValue: inv.asset.currentValue * investorShareDecimal,
         };
       });

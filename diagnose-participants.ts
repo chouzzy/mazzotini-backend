@@ -114,7 +114,7 @@ async function main() {
     console.log(`   ID interno : ${asset.id}`);
     console.log(`   Legal One ID: ${asset.legalOneId}`);
     console.log(`   Status     : ${asset.status}`);
-    console.log(`   Investidores no banco: ${asset.investors.length}\n`);
+    console.log(`   Clientes no banco: ${asset.investors.length}\n`);
 
     // 2. Busca TODOS os participantes do Legal One (com paginação)
     console.log(`🔍 Buscando participantes no Legal One (com paginação)...`);
@@ -138,7 +138,7 @@ async function main() {
     const customers = allParticipants.filter(p => p.type === 'Customer');
     console.log(`\n  → Apenas "Customer" serão sincronizados: ${customers.length}`);
 
-    // IDs dos investidores no banco
+    // IDs dos clientes no banco
     const dbContactIds = new Set(
         asset.investors
             .map(inv => inv.user?.legalOneContactId)
@@ -194,7 +194,7 @@ async function main() {
                 const isShadow = existingByCpf.auth0UserId.startsWith('legalone|import|');
                 console.log(`  [CPF NO BANCO] #${p.contactId} — ${p.contactName} | CPF: ${cpf}`);
                 console.log(`                 → Usuário no banco: "${existingByCpf.name}" (${isShadow ? 'shadow' : 'real'}) | legalOneContactId: ${existingByCpf.legalOneContactId ?? 'NULL'}`);
-                console.log(`                 ⚠️  Este usuário existe mas NÃO está vinculado como investidor neste processo.`);
+                console.log(`                 ⚠️  Este usuário existe mas NÃO está vinculado como cliente neste processo.`);
             } else {
                 importavel++;
                 console.log(`  [IMPORTÁVEL]   #${p.contactId} — ${p.contactName} | CPF: ${cpf} | e-mail: ${contact.email || '—'}`);
@@ -207,11 +207,11 @@ async function main() {
         console.log(`  Total faltantes       : ${missing.length}`);
         console.log(`  Sem contactId         : ${semContactId}  (bug — Legal One não retornou ID)`);
         console.log(`  Sem CPF/CNPJ          : ${semCpf}  (pulados pelo participantHelper — sem como identificar)`);
-        console.log(`  CPF já no banco, sem vínculo: ${cpfDuplicado}  (usuário existe, mas não é investidor do processo)`);
+        console.log(`  CPF já no banco, sem vínculo: ${cpfDuplicado}  (usuário existe, mas não é cliente do processo)`);
         console.log(`  Novos (importáveis)   : ${importavel}  (seria criado shadow user na re-importação)`);
     }
 
-    // 4. Lista os investidores já importados para conferência
+    // 4. Lista os clientes já importados para conferência
     console.log(`\n${sep()}`);
     console.log(`  INVESTIDORES JÁ NO BANCO (${asset.investors.length})`);
     console.log(sep());

@@ -218,9 +218,9 @@ describe('CreateCreditAssetUseCase', () => {
     });
 
     // -----------------------------------------------------------------------
-    // 6. Múltiplos investidores: mazzotiniShare só no primeiro
+    // 6. Múltiplos clientes: mazzotiniShare só no primeiro
     // -----------------------------------------------------------------------
-    it('deve distribuir mazzotiniShare apenas para o primeiro investidor', async () => {
+    it('deve distribuir mazzotiniShare apenas para o primeiro cliente', async () => {
         const testUserId2 = await createTestUser('002');
 
         const result = await useCase.execute({

@@ -106,7 +106,7 @@ export const translateRole = (role: string): string => {
         case 'ASSOCIATE':
             return 'Associado';
         case 'INVESTOR':
-            return 'Investidor';
+            return 'Cliente';
         case 'OPERATOR':
             return 'Operador';
         default:
@@ -129,7 +129,7 @@ export const getRoleColorScheme = (role: string): string => {
         case 'ASSOCIATE':
             return 'blue'; // Associado (Equipa)
         case 'INVESTOR':
-            return 'cyan'; // Investidor (Cliente)
+            return 'cyan'; // Cliente (Cliente)
         default:
             return 'gray'; // Padrão
     }

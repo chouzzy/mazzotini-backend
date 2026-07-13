@@ -52,7 +52,7 @@ class GetAssetByProcessNumberUseCase {
         // Associados não veem documentos
         if (viewerIsAssociate) return { ...asset, documents: [] };
 
-        // Investidores veem:
+        // Clientes veem:
         //  - docs globais (JURIDICO, PROCESSUAL) — investorUserId === null
         //  - docs privados (PRIVADO_FINANCEIRO) apenas os próprios — investorUserId === user.id
         const filteredDocs = asset.documents.filter(doc => {

@@ -176,6 +176,25 @@ export interface LegalOneDocumentPayload {
     }[];
 }
 
+// ============================================================================
+//  INTERFACES DE CONTRATOS DE HONORÁRIOS (Services)
+// ============================================================================
+export interface LegalOneFeeContract {
+    id: number;
+    folder: string;
+    status?: string;
+    subject?: string;
+}
+
+export interface LegalOneServiceParticipant {
+    type: string;
+    contactId: number;
+    contactName?: string;
+    isMainParticipant?: boolean;
+}
+
+// ============================================================================
+
 export interface LegalOneState { id: number; name: string; stateCode: string; }
 export interface LegalOneStateApiResponse { value: LegalOneState[]; }
 export interface LegalOneCountry { id: number; name: string; }

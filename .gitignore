@@ -3,3 +3,5 @@ node_modules
 .env
 adeptos.json
 teste.js
+# Backups locais
+backups/

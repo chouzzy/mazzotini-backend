@@ -28,6 +28,7 @@ import { ImportNewAssetsController } from '../modules/creditAssets/useCases/impo
 import { ListAllFoldersController } from '../modules/creditAssets/useCases/listAllFolders/ListAllFoldersController';
 import { UploadProcessDocumentController } from '../modules/creditAssets/useCases/uploadProcessDocument/UploadProcessDocumentController';
 import { DeleteProcessDocumentController } from '../modules/creditAssets/useCases/deleteProcessDocument/DeleteProcessDocumentController';
+import { SyncFeeContractsController } from '../modules/creditAssets/useCases/syncFeeContracts/SyncFeeContractsController';
 import { ROLES } from '../types';
 import multer from 'multer';
 import uploadConfig from '../config/upload';
@@ -49,6 +50,7 @@ const importNewAssetsController        = new ImportNewAssetsController();
 const listAllFoldersController         = new ListAllFoldersController();
 const uploadProcessDocumentController  = new UploadProcessDocumentController();
 const deleteProcessDocumentController  = new DeleteProcessDocumentController();
+const syncFeeContractsController       = new SyncFeeContractsController();
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -138,7 +140,7 @@ creditAssetRoutes.post(
  *     summary: Lista todos os ativos de crédito (com filtros e paginação)
  *     description: |
  *       Retorna um resumo paginado de todos os ativos. Suporta filtros por status,
- *       pasta, número do processo e busca textual. Investidores só veem seus próprios ativos.
+ *       pasta, número do processo e busca textual. Clientes só veem seus próprios ativos.
  *     tags: [Ativos]
  *     security:
  *       - bearerAuth: []
@@ -225,7 +227,7 @@ creditAssetRoutes.get(
  *     summary: Busca processo no Legal One pelo número judicial
  *     description: |
  *       Consulta a API do Legal One usando o número CNJ do processo.
- *       Retorna dados para pré-preenchimento do formulário e sugere investidores vinculados.
+ *       Retorna dados para pré-preenchimento do formulário e sugere clientes vinculados.
  *     tags: [Legal One]
  *     security:
  *       - bearerAuth: []
@@ -237,7 +239,7 @@ creditAssetRoutes.get(
  *         example: 1021601-47.1997.8.26.0100
  *     responses:
  *       200:
- *         description: Dados do processo + investidores sugeridos
+ *         description: Dados do processo + clientes sugeridos
  *       404:
  *         description: Processo não encontrado no Legal One
  */
@@ -258,7 +260,7 @@ creditAssetRoutes.get(
  * /api/assets/{legalOneId}:
  *   get:
  *     summary: Retorna os detalhes completos de um ativo
- *     description: Inclui andamentos, documentos, investidores e estimativa de valor.
+ *     description: Inclui andamentos, documentos, clientes e estimativa de valor.
  *     tags: [Ativos]
  *     security:
  *       - bearerAuth: []
@@ -489,5 +491,12 @@ creditAssetRoutes.delete(
     deleteProcessDocumentController.handle
 );
 
+
+creditAssetRoutes.post(
+    '/api/assets/sync-fee-contracts',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    syncFeeContractsController.handle
+);
 
 export { creditAssetRoutes };

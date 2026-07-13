@@ -68,6 +68,13 @@ class LegalOneApiService {
     public getUploadContainer = this.documents.getUploadContainer.bind(this.documents);
     public uploadFileToContainer = this.documents.uploadFileToContainer.bind(this.documents);
     public finalizeDocument = this.documents.finalizeDocument.bind(this.documents);
+
+    // --- Contratos de Honorários ---
+    public listFeeContracts = this.documents.listFeeContracts.bind(this.documents);
+    public getServiceParticipants = this.documents.getServiceParticipants.bind(this.documents);
+    public getContactIdentification = this.documents.getContactIdentification.bind(this.documents);
+    public getContractDocuments = this.documents.getContractDocuments.bind(this.documents);
+    public getPrivateDocuments = this.documents.getPrivateDocuments.bind(this.documents);
 }
 
 export const legalOneApiService = new LegalOneApiService();

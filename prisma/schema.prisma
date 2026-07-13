@@ -242,16 +242,20 @@ model Document {
   // Para docs de PRIVADO_FINANCEIRO: scoped ao cliente específico
   investorUserId     String?     @db.ObjectId
 
-  assetId            String      @db.ObjectId
-  asset              CreditAsset @relation(fields: [assetId], references: [id])
+  // Processo vinculado — opcional para docs de contrato de honorário (nível cliente)
+  assetId            String?     @db.ObjectId
+  asset              CreditAsset? @relation(fields: [assetId], references: [id])
 
   legalOneDocumentId Int?
+  // ID do contrato de honorário no Legal One (origem para docs de cliente)
+  legalOneServiceId  Int?
 
   createdAt          DateTime?   @default(now())
   updatedAt          DateTime?   @updatedAt
 
   @@index([assetId])
   @@index([section])
+  @@index([investorUserId])
 }
 
 // ==========================================

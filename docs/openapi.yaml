@@ -155,7 +155,7 @@
 #                         city: "São Paulo"
 #                         state: "SP"
 #                         zipCode: "01234-567"
-#                       investorProfileName: "João Investidor"
+#                       investorProfileName: "João Cliente"
 #                       investorProfileDescription: "Buscando investimentos de longo prazo"
 #                       role: "INVESTOR"
 #                 error:
@@ -736,10 +736,10 @@
 #               description: CEP
 #         investorProfileName:
 #           type: string
-#           description: Nome do perfil de investidor (opcional)
+#           description: Nome do perfil de cliente (opcional)
 #         investorProfileDescription:
 #           type: string
-#           description: Descrição do perfil de investidor (opcional)
+#           description: Descrição do perfil de cliente (opcional)
 #         role:
 #           type: string
 #           enum: [INVESTOR, PROJECT_MANAGER, ADMINISTRATOR]
@@ -813,10 +813,10 @@
 #               description: CEP
 #         investorProfileName:
 #           type: string
-#           description: Nome do perfil de investidor (opcional)
+#           description: Nome do perfil de cliente (opcional)
 #         investorProfileDescription:
 #           type: string
-#           description: Descrição do perfil de investidor (opcional)
+#           description: Descrição do perfil de cliente (opcional)
 
 #     UpdateUserResponse:
 #       type: object
@@ -872,10 +872,10 @@
 #                   description: CEP
 #             investorProfileName:
 #               type: string
-#               description: Nome do perfil de investidor (opcional)
+#               description: Nome do perfil de cliente (opcional)
 #             investorProfileDescription:
 #               type: string
-#               description: Descrição do perfil de investidor (opcional)
+#               description: Descrição do perfil de cliente (opcional)
 #         successMessage:
 #           type: string
 #           example: "Usuário atualizado com sucesso!"

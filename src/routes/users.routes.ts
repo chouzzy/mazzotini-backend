@@ -111,7 +111,7 @@ userRoutes.post('/api/users/sync', checkJwt, syncAuth0UserController.handle);
  * /api/users:
  *   get:
  *     summary: Lista todos os usuários (para selects)
- *     description: Retorna nome e ID de todos os usuários. Usado para preencher seletores de investidor no formulário de ativos.
+ *     description: Retorna nome e ID de todos os usuários. Usado para preencher seletores de cliente no formulário de ativos.
  *     tags: [Usuários]
  *     security:
  *       - bearerAuth: []

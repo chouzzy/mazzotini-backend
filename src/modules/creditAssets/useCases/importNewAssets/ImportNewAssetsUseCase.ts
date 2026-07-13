@@ -13,7 +13,7 @@
  * 2. **Deduplicação** — verifica pelo `legalOneId` se já existe no banco.
  *    Se existir, pula silenciosamente (incrementa `skippedCount`)
  * 3. **Lookup** — chama `LookupAssetFromLegalOneUseCase` para buscar dados
- *    completos (partes, pasta, investidores sugeridos) antes de criar o registro
+ *    completos (partes, pasta, clientes sugeridos) antes de criar o registro
  * 4. **Criação** — chama `CreateCreditAssetUseCase` com todos os dados enriquecidos
  *
  * ## Throttling
@@ -119,7 +119,7 @@ class ImportNewAssetsUseCase {
                 // 3. Faz o Lookup 
                 const lookupData = await lookupUseCase.execute(processNumber);
 
-                // 4. Prepara investidores sugeridos
+                // 4. Prepara clientes sugeridos
                 const investors = (lookupData.suggestedInvestors || []).map((inv: { userId: string; share?: number }) => ({
                     userId: inv.userId,
                     share: inv.share || 0

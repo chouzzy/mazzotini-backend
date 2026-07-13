@@ -58,7 +58,7 @@ class LookupAssetFromLegalOneUseCase {
             processFolderId = await ensureProcessFolderExists(processData.folder, processData.title) || undefined;
         }
 
-        // Monta a sugestão de investidores
+        // Monta a sugestão de clientes
         const suggestedInvestors = syncedUsers.map(u => ({
             userId: u.id,
             name: u.name || u.email,

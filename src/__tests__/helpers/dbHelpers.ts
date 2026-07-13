@@ -57,7 +57,7 @@ export async function cleanTestDb() {
 }
 
 /**
- * Cria um usuário investidor de teste no banco e retorna seu ID.
+ * Cria um usuário cliente de teste no banco e retorna seu ID.
  */
 export async function createTestUser(suffix = '001'): Promise<string> {
     const user = await prisma.user.upsert({
@@ -65,7 +65,7 @@ export async function createTestUser(suffix = '001'): Promise<string> {
         create: {
             auth0UserId: `test|investor-${suffix}`,
             email: `test-investor-${suffix}@mazzotini.test`,
-            name: `Investidor de Teste ${suffix}`,
+            name: `Cliente de Teste ${suffix}`,
             role: 'INVESTOR',
             status: 'ACTIVE',
         },

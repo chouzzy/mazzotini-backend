@@ -14,7 +14,7 @@
  * - Nenhum investimento com shares acima de 100%
  * - Cada ativo do tipo Recurso/Incidente tem um processo pai correspondente
  * - Nenhum usuário shadow com email placeholder tem investimentos ativos
- *   sem um investidor real vinculado
+ *   sem um cliente real vinculado
  */
 
 import { testPrisma } from './helpers/dbHelpers';
