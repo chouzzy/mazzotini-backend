@@ -58,11 +58,14 @@ class ImportNewAssetsUseCase {
         if (startDate) console.log(`   - Desde: ${startDate.toISOString()}`);
         console.log(`==================================================\n`);
 
-        // 1. Busca lista UNIFICADA no Legal One (Lawsuits, Appeals, ProceduralIssues)
+        // 1. Busca APENAS Lawsuits (Processos Principais) no Legal One.
+        //    Appeals e ProceduralIssues são descobertos pela Malha Fina (fluxo separado).
         let legalOneEntities: LegalOneEntity[] = [];
         try {
-            legalOneEntities = await legalOneApiService.listLawsuits(startDate);
-            console.log(`[IMPORT ROBOT] Total de entidades encontradas na API: ${legalOneEntities.length}`);
+            const allEntities = await legalOneApiService.listLawsuits(startDate);
+            legalOneEntities = allEntities.filter(e => e.__legalOneType === 'Lawsuit');
+            const skippedTypes = allEntities.length - legalOneEntities.length;
+            console.log(`[IMPORT ROBOT] Total na API: ${allEntities.length} | Apenas Lawsuits: ${legalOneEntities.length} | Recursos/Incidentes ignorados: ${skippedTypes}`);
         } catch (error: any) {
             console.error(`[IMPORT ROBOT] Falha fatal ao listar processos: ${error.message}`);
             return;
