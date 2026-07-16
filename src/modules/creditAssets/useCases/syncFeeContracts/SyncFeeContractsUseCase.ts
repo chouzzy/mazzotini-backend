@@ -4,6 +4,7 @@ import { legalOneApiService } from '../../../../services/legalOneApiService';
 const TYPE_TO_CATEGORY: Record<string, string> = {
     'cessao':                'CESSAO',
     'cessão':                'CESSAO',
+    'ho':                    'HONORARIOS',
     'honorarios':            'HONORARIOS',
     'honorários':            'HONORARIOS',
     'orientacao financeira': 'ORIENTACAO_FINANCEIRA',
