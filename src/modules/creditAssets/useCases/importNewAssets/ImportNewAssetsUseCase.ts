@@ -68,6 +68,12 @@ class ImportNewAssetsUseCase {
             console.log(`[IMPORT ROBOT] Total na API: ${allEntities.length} | Apenas Lawsuits: ${legalOneEntities.length} | Recursos/Incidentes ignorados: ${skippedTypes}`);
         } catch (error: any) {
             console.error(`[IMPORT ROBOT] Falha fatal ao listar processos: ${error.message}`);
+            if (logId) {
+                await prisma.importLog.update({
+                    where: { id: logId },
+                    data: { status: 'failed', finishedAt: new Date(), durationMs: Date.now() - startTime },
+                }).catch(() => {});
+            }
             return;
         }
         const lookupUseCase = new LookupAssetFromLegalOneUseCase();
