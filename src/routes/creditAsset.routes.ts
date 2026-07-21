@@ -29,6 +29,7 @@ import { ListAllFoldersController } from '../modules/creditAssets/useCases/listA
 import { UploadProcessDocumentController } from '../modules/creditAssets/useCases/uploadProcessDocument/UploadProcessDocumentController';
 import { DeleteProcessDocumentController } from '../modules/creditAssets/useCases/deleteProcessDocument/DeleteProcessDocumentController';
 import { SyncFeeContractsController } from '../modules/creditAssets/useCases/syncFeeContracts/SyncFeeContractsController';
+import { BackfillInvestorsController } from '../modules/creditAssets/useCases/backfillInvestors/BackfillInvestorsController';
 import { ROLES } from '../types';
 import multer from 'multer';
 import uploadConfig from '../config/upload';
@@ -51,6 +52,7 @@ const listAllFoldersController         = new ListAllFoldersController();
 const uploadProcessDocumentController  = new UploadProcessDocumentController();
 const deleteProcessDocumentController  = new DeleteProcessDocumentController();
 const syncFeeContractsController       = new SyncFeeContractsController();
+const backfillInvestorsController      = new BackfillInvestorsController();
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -497,6 +499,13 @@ creditAssetRoutes.post(
     checkJwt,
     checkRole([ROLES.ADMIN]),
     syncFeeContractsController.handle
+);
+
+creditAssetRoutes.post(
+    '/api/assets/backfill-investors',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    backfillInvestorsController.handle
 );
 
 export { creditAssetRoutes };
