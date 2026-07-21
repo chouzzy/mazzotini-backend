@@ -16,7 +16,7 @@ class CreateUserController {
      */
     async handle(request: Request, response: Response): Promise<Response> {
 
-        console.log("🔍 Criando novo utilizador...", request.body);
+        console.log("🔍 Criando novo utilizador...", request.body.email);
         // 1. Define o schema de validação para os dados do formulário.
         const validationSchema = yup.object().shape({
             email: yup.string().email("Formato de e-mail inválido.").required("O e-mail é obrigatório."),

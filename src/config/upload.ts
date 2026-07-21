@@ -27,7 +27,21 @@ export default {
 
     // Limites de segurança
     limits: {
-        // Limite de 150MB por arquivo (em bytes)
-        fileSize: 150 * 1024 * 1024, 
+        fileSize: 150 * 1024 * 1024,
+    },
+
+    fileFilter(request: any, file: Express.Multer.File, callback: multer.FileFilterCallback) {
+        const allowed = [
+            'application/pdf',
+            'image/jpeg',
+            'image/png',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ];
+        if (allowed.includes(file.mimetype)) {
+            callback(null, true);
+        } else {
+            callback(new Error(`Tipo de arquivo não permitido: ${file.mimetype}`));
+        }
     },
 };

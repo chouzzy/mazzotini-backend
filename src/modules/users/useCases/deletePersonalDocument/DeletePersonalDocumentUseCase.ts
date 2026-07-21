@@ -23,20 +23,22 @@ class DeletePersonalDocumentUseCase {
             throw new Error("Usuário não encontrado.");
         }
 
-        // 2. Apaga o arquivo físico no Spaces (S3)
-        // Fazemos isso antes ou em paralelo ao banco. Se falhar, o log avisa.
-        await fileUploadService.deleteFile(documentUrl);
+        // 2. Verifica se a URL pertence ao usuário antes de deletar
+        if (!user.personalDocumentUrls.includes(documentUrl)) {
+            throw new Error("Documento não encontrado ou sem permissão.");
+        }
 
         // 3. Filtra a lista removendo a URL específica
         const updatedUrls = user.personalDocumentUrls.filter(url => url !== documentUrl);
 
-        // 4. Atualiza o banco de dados com a nova lista
+        // 4. Atualiza o banco antes de deletar o arquivo físico
         await prisma.user.update({
             where: { id: user.id },
-            data: {
-                personalDocumentUrls: updatedUrls
-            }
+            data: { personalDocumentUrls: updatedUrls }
         });
+
+        // 5. Apaga o arquivo físico no Spaces (S3)
+        await fileUploadService.deleteFile(documentUrl);
 
         console.log(`[DELETE DOC] Documento removido do perfil do usuário ${user.id}.`);
     }

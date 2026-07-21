@@ -17,6 +17,7 @@ import express, { NextFunction, Request, Response } from 'express';
 import swaggerUi from 'swagger-ui-express';
 import { router } from './routes';
 import { AppError } from './errors/AppError';
+import { checkJwt } from './middleware/auth';
 import { swaggerSpec } from './swagger/swagger.config';
 import cors from 'cors';
 
@@ -52,14 +53,13 @@ app.use(cors({
 app.options('*', cors());
 
 // ─── Body Parsers ─────────────────────────────────────────────────────────────
-// Limite alto para suportar uploads de documentos em base64 via JSON
-app.use(express.json({ limit: '500mb' }));
-app.use(express.urlencoded({ limit: '500mb', extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // ─── Swagger UI ───────────────────────────────────────────────────────────────
 // Documentação interativa da API. Clique em "Authorize" e cole o Bearer token para testar.
 // URL: http://localhost:8080/api-docs
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+app.use('/api-docs', checkJwt, swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     customSiteTitle: 'Mazzotini API — Docs',
     swaggerOptions: {
         // Mantém o token entre recarregamentos da página no browser
@@ -81,7 +81,7 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     console.error('[UNHANDLED ERROR]', err);
     return res.status(500).json({
         status: 'error',
-        message: `⛔ Internal Server Error: ${err.message}`,
+        message: process.env.NODE_ENV === 'production' ? 'Erro interno do servidor.' : `⛔ Internal Server Error: ${err.message}`,
     });
 });
 
