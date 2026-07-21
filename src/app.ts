@@ -59,7 +59,7 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 // ─── Swagger UI ───────────────────────────────────────────────────────────────
 // Documentação interativa da API. Clique em "Authorize" e cole o Bearer token para testar.
 // URL: http://localhost:8080/api-docs
-app.use('/api-docs', checkJwt, swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     customSiteTitle: 'Mazzotini API — Docs',
     swaggerOptions: {
         // Mantém o token entre recarregamentos da página no browser
