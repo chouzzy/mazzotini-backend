@@ -322,6 +322,7 @@ model ImportLog {
   status         String    @default("running") // "running" | "completed" | "failed"
   finishedAt     DateTime?
   durationMs     Int?
+  errorMessage   String?
 }
 
 // ==========================================

@@ -67,11 +67,19 @@ class ImportNewAssetsUseCase {
             const skippedTypes = allEntities.length - legalOneEntities.length;
             console.log(`[IMPORT ROBOT] Total na API: ${allEntities.length} | Apenas Lawsuits: ${legalOneEntities.length} | Recursos/Incidentes ignorados: ${skippedTypes}`);
         } catch (error: any) {
-            console.error(`[IMPORT ROBOT] Falha fatal ao listar processos: ${error.message}`);
+            const errMsg = error?.response
+                ? `HTTP ${error.response.status}: ${JSON.stringify(error.response.data).substring(0, 300)}`
+                : (error.message || 'Erro desconhecido');
+            console.error(`[IMPORT ROBOT] Falha fatal ao listar processos: ${errMsg}`);
             if (logId) {
                 await prisma.importLog.update({
                     where: { id: logId },
-                    data: { status: 'failed', finishedAt: new Date(), durationMs: Date.now() - startTime },
+                    data: {
+                        status: 'failed',
+                        finishedAt: new Date(),
+                        durationMs: Date.now() - startTime,
+                        errorMessage: errMsg.substring(0, 500),
+                    },
                 }).catch(() => {});
             }
             return;

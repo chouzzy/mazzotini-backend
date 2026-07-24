@@ -74,7 +74,10 @@ class BackfillInvestorsUseCase {
                     `participants(${asset.legalOneId})`
                 );
 
-                const customers = participants.filter(p => p.type === 'Customer');
+                // Todos os participantes são candidatos — o CPF no nosso DB é o único filtro de segurança.
+                // Usar apenas 'Customer' excluía posições como 'Cessionário' (type='Party' ou 'Other').
+                const customers = participants;
+                const typesSummary = participants.map(p => `${p.contactName || p.contactId}(${p.type})`).join(', ');
 
                 if (customers.length === 0) {
                     result.skipped++;
@@ -82,7 +85,7 @@ class BackfillInvestorsUseCase {
                     continue;
                 }
 
-                console.log(`[BACKFILL] ${asset.processNumber}: ${customers.length} cliente(s) encontrado(s).`);
+                console.log(`[BACKFILL] ${asset.processNumber}: ${customers.length} participante(s) — ${typesSummary}`);
 
                 for (const customer of customers) {
                     await sleep(DELAY_BETWEEN_CONTACTS_MS);
