@@ -103,12 +103,15 @@ class ImportNewAssetsUseCase {
                 continue;
             }
 
-            // 2. Verifica se já existe no banco (Evita duplicidade)
-            const exists = await prisma.creditAsset.findUnique({
+            // 2. Verifica se já existe no banco (por legalOneId ou por processNumber)
+            const existsByLegalOneId = await prisma.creditAsset.findUnique({
                 where: { legalOneId: entity.id }
             });
+            const existsByProcessNumber = existsByLegalOneId ? null : await prisma.creditAsset.findFirst({
+                where: { processNumber }
+            });
 
-            if (exists) {
+            if (existsByLegalOneId || existsByProcessNumber) {
                 skippedCount++;
                 continue;
             }
