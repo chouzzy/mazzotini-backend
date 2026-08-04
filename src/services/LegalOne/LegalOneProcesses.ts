@@ -291,7 +291,10 @@ export class LegalOneProcesses extends LegalOneAuth {
 
         try {
             while (requestUrl) {
-                const res: AxiosResponse<ListResponse> = await axios.get<ListResponse>(requestUrl, { headers });
+                const currentUrl = requestUrl;
+                const res: AxiosResponse<ListResponse> = await this.requestWithRetry(() =>
+                    axios.get<ListResponse>(currentUrl, { headers })
+                );
 
                 if (res.data.value && res.data.value.length > 0) {
                     const itemsWithType: LegalOneEntity[] = res.data.value.map((item: LegalOneLawsuit | LegalOneAppeal | LegalOneProceduralIssue) => ({
