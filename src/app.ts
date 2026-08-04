@@ -78,6 +78,11 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     if (err instanceof AppError) {
         return res.status(err.statusCode).json({ message: err.message });
     }
+    // Erros com status HTTP explícito (ex: InvalidTokenError do express-oauth2-jwt-bearer)
+    const httpStatus = (err as any).status ?? (err as any).statusCode;
+    if (typeof httpStatus === 'number' && httpStatus < 500) {
+        return res.status(httpStatus).json({ status: 'error', message: err.message });
+    }
     console.error('[UNHANDLED ERROR]', err);
     return res.status(500).json({
         status: 'error',
