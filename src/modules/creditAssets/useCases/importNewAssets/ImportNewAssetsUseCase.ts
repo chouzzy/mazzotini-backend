@@ -172,8 +172,13 @@ class ImportNewAssetsUseCase {
                 console.log(`✅ [IMPORT ROBOT] Sucesso: ${processNumber} (${typeLabel}) importado.`);
 
             } catch (err: any) {
-                errorCount++;
-                console.error(`❌ [IMPORT ROBOT] Falha em ${processNumber}:`, err.message);
+                if (err?.statusCode === 409 || err?.message?.includes('Já existe um ativo')) {
+                    skippedCount++;
+                    console.log(`⏩ [IMPORT ROBOT] Duplicata ignorada: ${processNumber}`);
+                } else {
+                    errorCount++;
+                    console.error(`❌ [IMPORT ROBOT] Falha em ${processNumber}:`, err.message);
+                }
             }
 
             await wait(3000);
