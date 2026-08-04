@@ -34,15 +34,18 @@ export class LegalOneProcesses extends LegalOneAuth {
         try {
             while (url) {
                 const headers = await this.getAuthHeader();
+                const currentUrl = url;
                 type ParticipantPage = { value: LegalOneParticipant[]; '@odata.nextLink'?: string };
-                const response: AxiosResponse<ParticipantPage> = await axios.get<ParticipantPage>(url, { headers });
+                const response: AxiosResponse<ParticipantPage> = await this.requestWithRetry(() =>
+                    axios.get<ParticipantPage>(currentUrl, { headers })
+                );
                 all = all.concat(response.data.value || []);
                 url = response.data['@odata.nextLink'] || null;
             }
             return all;
         } catch (error: any) {
             console.warn(`[Legal One API] Falha ao buscar participantes:`, error.message);
-            return all; // retorna o que já coletou antes do erro
+            return all;
         }
     }
 
