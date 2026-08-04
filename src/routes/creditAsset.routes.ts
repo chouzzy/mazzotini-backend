@@ -508,4 +508,11 @@ creditAssetRoutes.post(
     backfillInvestorsController.handle
 );
 
+creditAssetRoutes.get(
+    '/api/assets/backfill-investors/status',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    backfillInvestorsController.status
+);
+
 export { creditAssetRoutes };

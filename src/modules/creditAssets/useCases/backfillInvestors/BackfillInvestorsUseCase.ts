@@ -1,6 +1,7 @@
 import { prisma } from '../../../../prisma';
 import { legalOneApiService } from '../../../../services/legalOneApiService';
 import { unmask } from '../../../../utils/masks';
+import { resetBackfillState, updateBackfillState } from './backfillState';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -58,13 +59,16 @@ class BackfillInvestorsUseCase {
         });
 
         result.totalAssets = assets.length;
+        resetBackfillState(assets.length);
         console.log(`[BACKFILL] Iniciando backfill de ${assets.length} ativo(s)...`);
 
         for (const asset of assets) {
+            updateBackfillState({ currentProcess: asset.processNumber });
             const endpointType = asset.legalOneType ? ENDPOINT_MAP[asset.legalOneType] : null;
 
             if (!asset.legalOneId || !endpointType) {
                 result.skipped++;
+                updateBackfillState({ skipped: result.skipped, processed: result.processed });
                 continue;
             }
 
@@ -81,6 +85,7 @@ class BackfillInvestorsUseCase {
 
                 if (customers.length === 0) {
                     result.skipped++;
+                    updateBackfillState({ skipped: result.skipped });
                     await sleep(DELAY_BETWEEN_ASSETS_MS);
                     continue;
                 }
@@ -141,6 +146,7 @@ class BackfillInvestorsUseCase {
 
                         console.log(`[BACKFILL] ✅ ${user.name} → ${asset.processNumber}`);
                         result.linked++;
+                        updateBackfillState({ linked: result.linked });
 
                     } catch (contactErr: any) {
                         console.error(`[BACKFILL] Erro no contato ${customer.contactId}:`, contactErr.message);
@@ -148,6 +154,7 @@ class BackfillInvestorsUseCase {
                 }
 
                 result.processed++;
+                updateBackfillState({ processed: result.processed, alreadyLinked: result.alreadyLinked });
 
             } catch (err: any) {
                 console.error(`[BACKFILL] Ativo ${asset.processNumber} falhou:`, err.message);
@@ -160,6 +167,13 @@ class BackfillInvestorsUseCase {
 
             await sleep(DELAY_BETWEEN_ASSETS_MS);
         }
+
+        updateBackfillState({
+            status: 'completed',
+            finishedAt: new Date().toISOString(),
+            currentProcess: null,
+            errors: result.errors.length,
+        });
 
         console.log(
             `[BACKFILL] Concluído — Total: ${result.totalAssets} | Processados: ${result.processed} | ` +
