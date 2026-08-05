@@ -15,9 +15,12 @@ async function withRetry<T>(fn: () => Promise<T>, label: string, maxRetries = 3)
             return await fn();
         } catch (err: any) {
             const status = err?.response?.status;
+            const retryAfter = err?.response?.headers?.['retry-after'];
             if (status === 429 && attempt < maxRetries) {
-                // Exponencial: 5s, 10s, 20s
-                const waitMs = Math.pow(2, attempt) * 5000;
+                // Usa Retry-After se disponível; caso contrário exponencial longo: 30s, 60s, 120s
+                const waitMs = retryAfter
+                    ? parseInt(retryAfter) * 1000
+                    : Math.pow(2, attempt) * 30000;
                 console.warn(`[BACKFILL] 429 em "${label}". Aguardando ${waitMs / 1000}s (retry ${attempt + 1}/${maxRetries})...`);
                 await sleep(waitMs);
             } else {
@@ -44,7 +47,7 @@ export interface BackfillResult {
 }
 
 class BackfillInvestorsUseCase {
-    async execute(): Promise<BackfillResult> {
+    async execute(processNumbers?: string[]): Promise<BackfillResult> {
         const result: BackfillResult = {
             totalAssets: 0,
             processed: 0,
@@ -55,12 +58,16 @@ class BackfillInvestorsUseCase {
         };
 
         const assets = await prisma.creditAsset.findMany({
+            where: processNumbers?.length
+                ? { processNumber: { in: processNumbers } }
+                : undefined,
             select: { id: true, legalOneId: true, legalOneType: true, processNumber: true },
         });
 
         result.totalAssets = assets.length;
         resetBackfillState(assets.length);
-        console.log(`[BACKFILL] Iniciando backfill de ${assets.length} ativo(s)...`);
+        const label = processNumbers?.length ? `${assets.length} ativo(s) específico(s)` : `${assets.length} ativo(s)`;
+        console.log(`[BACKFILL] Iniciando backfill de ${label}...`);
 
         for (const asset of assets) {
             updateBackfillState({ currentProcess: asset.processNumber });

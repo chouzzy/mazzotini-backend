@@ -44,8 +44,8 @@ export class LegalOneProcesses extends LegalOneAuth {
             }
             return all;
         } catch (error: any) {
-            console.warn(`[Legal One API] Falha ao buscar participantes:`, error.message);
-            return all;
+            console.error(`[Legal One API] Falha ao buscar participantes para ${endpointType}/${entityId}:`, error.message);
+            throw error;
         }
     }
 

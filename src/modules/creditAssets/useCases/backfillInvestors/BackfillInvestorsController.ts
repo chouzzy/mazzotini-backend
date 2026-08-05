@@ -9,16 +9,17 @@ class BackfillInvestorsController {
             return response.status(409).json({ status: 'running', message: 'Backfill já em andamento.' });
         }
 
+        const processNumbers: string[] | undefined = request.body?.processNumbers;
         const useCase = new BackfillInvestorsUseCase();
 
-        useCase.execute()
+        useCase.execute(processNumbers)
             .then(result => console.log('[BACKFILL] Resultado final:', JSON.stringify(result)))
             .catch(err => {
                 console.error('[BACKFILL] Erro fatal:', err.message);
                 updateBackfillState({ status: 'error', finishedAt: new Date().toISOString(), currentProcess: null });
             });
 
-        return response.status(202).json({ status: 'started' });
+        return response.status(202).json({ status: 'started', targeted: processNumbers?.length ?? 0 });
     };
 
     status = (request: Request, response: Response): Response => {
