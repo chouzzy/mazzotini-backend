@@ -116,17 +116,20 @@ class BackfillInvestorsUseCase {
                         const cpfUnmasked = unmask(cpfFromApi);
                         if (!cpfUnmasked) continue;
 
-                        // Busca usuário REAL (exclui shadow users criados pela importação)
-                        const user = await prisma.user.findFirst({
+                        // Busca usuário REAL pelo CPF.
+                        // Filtra shadow users em JS em vez de no Prisma: o Prisma+MongoDB
+                        // não escapa "|" em startsWith, gerando regex /^legalone|import|/
+                        // que casa com qualquer string e exclui todos os usuários.
+                        const candidates = await prisma.user.findMany({
                             where: {
                                 OR: [
                                     { cpfOrCnpj: cpfUnmasked },
                                     { cpfOrCnpj: cpfFromApi },
                                 ],
-                                NOT: { auth0UserId: { startsWith: 'legalone|import|' } },
                             },
-                            select: { id: true, name: true },
+                            select: { id: true, name: true, auth0UserId: true },
                         });
+                        const user = candidates.find(u => !u.auth0UserId?.startsWith('legalone|import|')) ?? null;
 
                         if (!user) {
                             console.log(`[BACKFILL] Nenhum usuário real com CPF ***${cpfUnmasked.slice(-4)}. Pulando.`);
