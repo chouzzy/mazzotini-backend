@@ -16,6 +16,12 @@ class ListUsersUseCase {
         console.log("[ListUsers] Buscando usuários para dropdown (Banco Local)...");
 
         const users = await prisma.user.findMany({
+            where: {
+                // Exclui shadow users criados pela importação do LegalOne.
+                // Usa contains:'legalone' (sem | que é special char em regex no MongoDB)
+                // pois auth0UserId de shadow users começa com 'legalone|import|'.
+                NOT: { auth0UserId: { contains: 'legalone', mode: 'insensitive' } },
+            },
             orderBy: { name: 'asc' },
             select: {
                 id: true,
