@@ -196,6 +196,12 @@ class Auth0ManagementService {
         console.log(`[Auth0 Mgmt] E-mail atualizado com sucesso.`);
     }
 
+    async markEmailVerified(auth0UserId: string): Promise<void> {
+        console.log(`[Auth0 Mgmt] Marcando e-mail como verificado para: ${auth0UserId}`);
+        await managementClient.users.update({ id: auth0UserId }, { email_verified: true });
+        console.log(`[Auth0 Mgmt] E-mail verificado com sucesso.`);
+    }
+
     async deleteUser(auth0UserId: string): Promise<void> {
         console.log(`[Auth0 Mgmt] A excluir permanentemente o utilizador: ${auth0UserId}...`);
 

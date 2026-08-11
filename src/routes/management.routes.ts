@@ -36,6 +36,7 @@ import { UpdateUserEmailController } from '../modules/management/useCases/update
 import { UpdateAssociateCodeController } from '../modules/management/useCases/updateAssociateCode/UpdateAssociateCodeController';
 import { GetUserStagingDocumentsController } from '../modules/management/useCases/getUserStagingDocuments/GetUserStagingDocumentsController';
 import { AttachStagingDocumentController } from '../modules/management/useCases/attachStagingDocument/AttachStagingDocumentController';
+import { MarkEmailVerifiedController } from '../modules/management/useCases/markEmailVerified/MarkEmailVerifiedController';
 
 const managementRoutes = Router();
 
@@ -61,6 +62,7 @@ const updateUserEmailController = new UpdateUserEmailController();
 const updateAssociateCodeController = new UpdateAssociateCodeController();
 const getUserStagingDocumentsController = new GetUserStagingDocumentsController();
 const attachStagingDocumentController   = new AttachStagingDocumentController();
+const markEmailVerifiedController       = new MarkEmailVerifiedController();
 
 // Multer configurado via /src/config/upload.ts (Spaces/S3)
 const upload = multer(uploadConfig);
@@ -194,6 +196,13 @@ managementRoutes.patch(
     checkJwt,
     checkRole([ROLES.ADMIN]),
     updateUserEmailController.handle
+);
+
+managementRoutes.post(
+    '/api/management/users/:auth0UserId/verify-email',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    markEmailVerifiedController.handle
 );
 
 managementRoutes.patch(
