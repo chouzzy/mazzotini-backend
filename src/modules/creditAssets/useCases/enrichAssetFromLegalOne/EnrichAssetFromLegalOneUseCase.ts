@@ -7,12 +7,61 @@ import { notifyAllAdmins } from '../../../../services/notificationService';
 
 const TAG_ANDAMENTO = "#RelatórioMAA";
 
+/**
+ * Máximo de tentativas automáticas antes de um ativo ser considerado
+ * falha definitiva (exige intervenção humana). Um admin ainda pode forçar
+ * uma nova tentativa manualmente via `options.force`.
+ */
+export const MAX_ENRICHMENT_ATTEMPTS = 5;
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Classifica se vale a pena tentar de novo.
+ *
+ * Transitório  → quota (429), erro do servidor (5xx), falha de rede.
+ *                O processo está OK; quem falhou foi a infraestrutura.
+ * Permanente   → 400/404 e afins. O dado está errado; retentar não resolve.
+ *
+ * Essa distinção é o núcleo da correção: antes, QUALQUER erro marcava o ativo
+ * como FAILED_ENRICHMENT para sempre, então um único 429 de quota do Legal One
+ * congelava o processo permanentemente.
+ */
+function isTransientError(err: any): boolean {
+    const status = err?.response?.status;
+    if (status === 429) return true;
+    if (typeof status === 'number' && status >= 500) return true;
+    // Sem resposta HTTP = falha de rede/timeout (ECONNRESET, ETIMEDOUT, ENOTFOUND...)
+    if (!status) return true;
+    return false;
+}
+
+/**
+ * Executa `fn` retentando erros transitórios com backoff exponencial (10s, 20s, 40s),
+ * respeitando o header Retry-After quando o Legal One o envia.
+ */
+async function withRetry<T>(fn: () => Promise<T>, label: string, maxRetries = 3): Promise<T> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            return await fn();
+        } catch (err: any) {
+            if (attempt >= maxRetries || !isTransientError(err)) throw err;
+
+            const retryAfter = err?.response?.headers?.['retry-after'];
+            const waitMs = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, attempt) * 10000;
+            console.warn(`[Enrich] Erro transitório em "${label}". Aguardando ${waitMs / 1000}s (tentativa ${attempt + 1}/${maxRetries})...`);
+            await sleep(waitMs);
+        }
+    }
+    throw new Error(`Máximo de retentativas excedido para: ${label}`);
+}
+
 // Assumindo que esta função já existe no topo do seu ficheiro original
 declare function parseAndCleanDescription(description: string): { value: number | null, cleanedText: string };
 
 class EnrichAssetFromLegalOneUseCase {
-    
-    async execute(creditAssetId: string): Promise<void> {
+
+    async execute(creditAssetId: string, options?: { force?: boolean }): Promise<void> {
         // 1. Busca o ativo no nosso banco
         // IMPORTANTE: Adicionado 'include: { investors: true }' para que o syncChildren tenha os dados
         const asset = await prisma.creditAsset.findUnique({
@@ -26,15 +75,28 @@ class EnrichAssetFromLegalOneUseCase {
         }
 
         if (!asset.legalOneId || !asset.legalOneType) {
+            // Falha permanente: sem ID do Legal One não há o que buscar. Esgota as
+            // tentativas de uma vez para o cron não ficar reprocessando em vão.
             console.warn(`[Enrich] Ativo ${creditAssetId} (${asset.processNumber}) não possui 'legalOneId' ou 'legalOneType'.`);
-            if (asset.status === 'PENDING_ENRICHMENT') {
-                await prisma.creditAsset.update({ where: { id: creditAssetId }, data: { status: 'FAILED_ENRICHMENT' } });
-            }
+            await prisma.creditAsset.update({
+                where: { id: creditAssetId },
+                data: {
+                    status: 'FAILED_ENRICHMENT',
+                    enrichmentAttempts: MAX_ENRICHMENT_ATTEMPTS,
+                    lastEnrichmentAt: new Date(),
+                    lastEnrichmentError: "Ativo sem 'legalOneId' ou 'legalOneType'.",
+                },
+            });
             return;
         }
 
-        if (asset.status === 'FAILED_ENRICHMENT') {
-            console.warn(`[Enrich] Ativo ${creditAssetId} está marcado como 'FAILED'. Pulando.`);
+        // Antes existia aqui um `return` incondicional para FAILED_ENRICHMENT, o que
+        // tornava a falha permanente: um único 429 de quota congelava o ativo para
+        // sempre. Agora só desiste depois de MAX_ENRICHMENT_ATTEMPTS tentativas —
+        // e um admin ainda pode forçar via options.force.
+        const attempts = asset.enrichmentAttempts ?? 0;
+        if (asset.status === 'FAILED_ENRICHMENT' && !options?.force && attempts >= MAX_ENRICHMENT_ATTEMPTS) {
+            console.warn(`[Enrich] Ativo ${creditAssetId} esgotou ${attempts} tentativas. Requer intervenção manual.`);
             return;
         }
 
@@ -46,19 +108,28 @@ class EnrichAssetFromLegalOneUseCase {
 
             // Se for um Recurso ou Incidente, buscamos o ID do Pai via legalOneId (não processNumber)
             if (entityType === 'Appeal') {
-                const appealData = await legalOneApiService.getAppealById(asset.legalOneId);
+                const appealData = await withRetry(
+                    () => legalOneApiService.getAppealById(asset.legalOneId),
+                    `getAppealById(${asset.legalOneId})`
+                );
                 if (appealData.relatedLitigationId) {
                     entityIdToFetchUpdates = appealData.relatedLitigationId;
                 }
             } else if (entityType === 'ProceduralIssue') {
-                const issueData = await legalOneApiService.getProceduralIssueById(asset.legalOneId);
+                const issueData = await withRetry(
+                    () => legalOneApiService.getProceduralIssueById(asset.legalOneId),
+                    `getProceduralIssueById(${asset.legalOneId})`
+                );
                 if (issueData.relatedLitigationId) {
                     entityIdToFetchUpdates = issueData.relatedLitigationId;
                 }
             }
 
             // Passo 2: Busca os andamentos (Updates) DO PAI
-            const updatesData = await legalOneApiService.getProcessUpdates(entityIdToFetchUpdates);
+            const updatesData = await withRetry(
+                () => legalOneApiService.getProcessUpdates(entityIdToFetchUpdates),
+                `getProcessUpdates(${entityIdToFetchUpdates})`
+            );
 
             // =================================================================
             //  ALTERAÇÃO: FILTRO PELA NOVA TAG #RelatórioMAA
@@ -68,11 +139,13 @@ class EnrichAssetFromLegalOneUseCase {
             );
 
             if (manualUpdates.length === 0) {
+                // Chegar até aqui significa que a comunicação com o Legal One funcionou.
+                // Isso é sucesso, mesmo sem andamentos novos: zera o histórico de falha.
                 console.log(`[Enrich] Ativo ${creditAssetId} não possui novos andamentos ${TAG_ANDAMENTO}.`);
-                if (asset.status === 'PENDING_ENRICHMENT') {
+                if (asset.status === 'PENDING_ENRICHMENT' || asset.status === 'FAILED_ENRICHMENT') {
                     await prisma.creditAsset.update({
                         where: { id: creditAssetId },
-                        data: { status: 'Ativo' },
+                        data: { status: 'Ativo', enrichmentAttempts: 0, lastEnrichmentError: null },
                     });
                 }
                 
@@ -134,12 +207,14 @@ class EnrichAssetFromLegalOneUseCase {
                         data: {
                             currentValue: latestCurrentValue,
                             status: 'Ativo',
+                            enrichmentAttempts: 0,
+                            lastEnrichmentError: null,
                         },
                     });
-                } else if (asset.status === 'PENDING_ENRICHMENT') {
+                } else if (asset.status === 'PENDING_ENRICHMENT' || asset.status === 'FAILED_ENRICHMENT') {
                     await tx.creditAsset.update({
                         where: { id: creditAssetId },
-                        data: { status: 'Ativo' },
+                        data: { status: 'Ativo', enrichmentAttempts: 0, lastEnrichmentError: null },
                     });
                 }
             });
@@ -158,18 +233,40 @@ class EnrichAssetFromLegalOneUseCase {
             }
 
         } catch (error: any) {
-            console.error(`❌ Erro ao enriquecer o ativo ${creditAssetId}:`, error.message);
+            // Erro transitório já foi retentado por withRetry. Se chegou aqui, ou é
+            // permanente, ou o backoff não foi suficiente — em ambos os casos conta
+            // como uma tentativa e o cron volta a processar depois do cooldown.
+            const transient = isTransientError(error);
+            const newAttempts = attempts + 1;
+            const exhausted = newAttempts >= MAX_ENRICHMENT_ATTEMPTS;
+
+            console.error(
+                `❌ Erro ao enriquecer o ativo ${creditAssetId} ` +
+                `(${transient ? 'transitório' : 'permanente'}, tentativa ${newAttempts}/${MAX_ENRICHMENT_ATTEMPTS}):`,
+                error.message
+            );
+
             await prisma.creditAsset.update({
                 where: { id: creditAssetId },
-                data: { status: 'FAILED_ENRICHMENT' },
+                data: {
+                    status: 'FAILED_ENRICHMENT',
+                    enrichmentAttempts: newAttempts,
+                    lastEnrichmentAt: new Date(),
+                    lastEnrichmentError: String(error.message ?? error).slice(0, 500),
+                },
             });
+
+            // Só incomoda os admins quando não há mais retentativa automática pela
+            // frente. Antes, cada 429 de quota gerava uma notificação para todo mundo.
+            if (!exhausted) return;
+
             const failedAsset = await prisma.creditAsset.findUnique({
                 where: { id: creditAssetId },
                 select: { processNumber: true },
             });
             await notifyAllAdmins({
                 title: 'Falha no enriquecimento Legal One',
-                message: `O processo ${failedAsset?.processNumber ?? creditAssetId} falhou ao sincronizar com o Legal One. Verifique a integração ou os dados do processo.`,
+                message: `O processo ${failedAsset?.processNumber ?? creditAssetId} falhou ao sincronizar com o Legal One após ${newAttempts} tentativas. Último erro: ${error.message}`,
                 type: 'error',
                 notificationType: 'FAILED_ENRICHMENT',
                 relatedEntityId: creditAssetId,

@@ -145,7 +145,16 @@ model CreditAsset {
   contractualIndexRate Float?
 
   status               String        @default("PENDING_ENRICHMENT")
-  
+
+  // Controle de retentativa do enriquecimento Legal One.
+  // Substitui o antigo skip permanente de FAILED_ENRICHMENT: o cron reprocessa
+  // ativos falhos até MAX_ENRICHMENT_ATTEMPTS, respeitando um cooldown entre tentativas.
+  // Nullable de propósito: no MongoDB o @default só vale na criação, então um campo
+  // obrigatório quebraria a leitura dos ativos que já existem sem ele.
+  enrichmentAttempts   Int?
+  lastEnrichmentAt     DateTime?
+  lastEnrichmentError  String?
+
   strategyText         String?
 
   folderId             String?       @db.ObjectId

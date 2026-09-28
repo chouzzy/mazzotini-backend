@@ -30,6 +30,7 @@ import { UploadProcessDocumentController } from '../modules/creditAssets/useCase
 import { DeleteProcessDocumentController } from '../modules/creditAssets/useCases/deleteProcessDocument/DeleteProcessDocumentController';
 import { SyncFeeContractsController } from '../modules/creditAssets/useCases/syncFeeContracts/SyncFeeContractsController';
 import { BackfillInvestorsController } from '../modules/creditAssets/useCases/backfillInvestors/BackfillInvestorsController';
+import { RetryFailedEnrichmentsController } from '../modules/creditAssets/useCases/retryFailedEnrichments/RetryFailedEnrichmentsController';
 import { ROLES } from '../types';
 import multer from 'multer';
 import uploadConfig from '../config/upload';
@@ -53,6 +54,7 @@ const uploadProcessDocumentController  = new UploadProcessDocumentController();
 const deleteProcessDocumentController  = new DeleteProcessDocumentController();
 const syncFeeContractsController       = new SyncFeeContractsController();
 const backfillInvestorsController      = new BackfillInvestorsController();
+const retryFailedEnrichmentsController = new RetryFailedEnrichmentsController();
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -513,6 +515,17 @@ creditAssetRoutes.get(
     checkJwt,
     checkRole([ROLES.ADMIN]),
     backfillInvestorsController.status
+);
+
+/**
+ * Dispara manualmente o reprocessamento de ativos travados em
+ * FAILED_ENRICHMENT / PENDING_ENRICHMENT, sem esperar o cron das 3h.
+ */
+creditAssetRoutes.post(
+    '/api/assets/retry-enrichments',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    retryFailedEnrichmentsController.handle
 );
 
 export { creditAssetRoutes };

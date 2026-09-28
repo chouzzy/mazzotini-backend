@@ -1,12 +1,14 @@
 import cron from 'node-cron';
 import { SyncProcessUpdatesUseCase } from './modules/creditAssets/useCases/syncProcessUpdates/SyncProcessUpdatesUseCase';
 import { ImportNewAssetsUseCase } from './modules/creditAssets/useCases/importNewAssets/ImportNewAssetsUseCase';
+import { RetryFailedEnrichmentsUseCase } from './modules/creditAssets/useCases/retryFailedEnrichments/RetryFailedEnrichmentsUseCase';
 import { prisma } from './prisma';
 import { fetchIndexSeries, fetchTJSPSeries } from './services/ibgeService';
 import { calculateJudicialDebt, CalculationParams, Installment } from './services/judicialCalculatorService';
 
 const syncUseCase = new SyncProcessUpdatesUseCase();
 const importUseCase = new ImportNewAssetsUseCase();
+const retryEnrichmentUseCase = new RetryFailedEnrichmentsUseCase();
 
 /**
  * Inicia todos os jobs agendados da aplicação.
@@ -30,6 +32,21 @@ export const startScheduledJobs = () => {
     cron.schedule('0 1 * * *', () => {
         console.log('--- Executando job agendado: Sincronizar Andamentos ---');
         syncUseCase.execute();
+    }, {
+        timezone: "America/Sao_Paulo"
+    });
+
+    // Todos os dias às 3h: reprocessa ativos travados em FAILED/PENDING_ENRICHMENT.
+    // Roda depois do sync das 1h para a quota do Legal One já ter se recuperado.
+    // Sem este job, um único 429 deixava o processo parado para sempre — o sync
+    // diário só enxerga `status: 'Ativo'`.
+    cron.schedule('0 3 * * *', async () => {
+        console.log('--- Executando job agendado: Retentar Enriquecimentos Falhos ---');
+        try {
+            await retryEnrichmentUseCase.execute();
+        } catch (error) {
+            console.error('--- FALHA no job de retentativa de enriquecimento:', error);
+        }
     }, {
         timezone: "America/Sao_Paulo"
     });
