@@ -1,4 +1,6 @@
 import { prisma } from '../../../../prisma';
+import { Prisma } from '@prisma/client';
+import { UNSYNCED_STATUSES } from '../listAllAssets/ListAllAssetsUseCase';
 
 
 
@@ -78,8 +80,11 @@ class ListAllFoldersUseCase {
             const visibleAssets = isAdmin
                 ? folder.assets
                 : folder.assets.filter(asset =>
-                    asset.investors.some(inv => inv.user?.id === currentUserId) ||
-                    (isAssociate && asset.associateId === currentUserId)
+                    // Ativo sem dado sincronizado do Legal One não é exibido ao
+                    // cliente: viria zerado e sem andamento, só gerando dúvida.
+                    !UNSYNCED_STATUSES.includes(asset.status) &&
+                    (asset.investors.some(inv => inv.user?.id === currentUserId) ||
+                     (isAssociate && asset.associateId === currentUserId))
                   );
 
             const totalAcquisition = visibleAssets.reduce((sum, a) => sum + a.acquisitionValue, 0);

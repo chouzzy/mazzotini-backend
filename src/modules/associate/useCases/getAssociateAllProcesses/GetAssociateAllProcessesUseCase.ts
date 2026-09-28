@@ -1,4 +1,5 @@
 import { prisma } from '../../../../prisma';
+import { UNSYNCED_STATUSES } from '../../../creditAssets/useCases/listAllAssets/ListAllAssetsUseCase';
 
 export interface AssociateProcessRow {
     investmentId: string;
@@ -26,7 +27,12 @@ class GetAssociateAllProcessesUseCase {
         if (!associate) throw new Error('Associado não encontrado.');
 
         const investments = await prisma.investment.findMany({
-            where: { associateId: associate.id },
+            where: {
+                associateId: associate.id,
+                // Oculta processos sem dado sincronizado do Legal One: apareciam
+                // com R$ 0,00 e sem andamento, só gerando dúvida para o associado.
+                asset: { status: { notIn: UNSYNCED_STATUSES } },
+            },
             select: {
                 id: true,
                 user: {

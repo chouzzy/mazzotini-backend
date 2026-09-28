@@ -1,4 +1,5 @@
 import { prisma } from '../../../../prisma';
+import { Prisma } from '@prisma/client';
 // Caminho: src/modules/creditAssets/useCases/listAllAssets/ListAllAssetsUseCase.ts
 
 
@@ -11,6 +12,17 @@ const ROLES = {
     INVESTOR: process.env.ROLE_INVESTOR || 'INVESTOR',
     ASSOCIATE: process.env.ROLE_ASSOCIATE || 'ASSOCIATE',
 };
+
+/**
+ * Status que indicam que o ativo ainda não tem dado sincronizado do Legal One:
+ * valor zerado, sem andamentos, sem nada de útil para exibir.
+ *
+ * São ocultados de investidor e associado — não é só o rótulo que não deve
+ * aparecer, é a linha inteira: um processo nesse estado só gera dúvida
+ * ("por que está R$ 0,00?") sem oferecer nenhuma informação em troca.
+ * Admin e operador continuam vendo tudo, pois é a fila de trabalho deles.
+ */
+export const UNSYNCED_STATUSES = ['FAILED_ENRICHMENT', 'PENDING_ENRICHMENT'];
 
 export type AssetSummary = {
     id: string;
@@ -82,7 +94,19 @@ class ListAllAssetsUseCase {
             ];
         }
 
+        const isInternalViewer = primaryRole === ROLES.ADMIN || primaryRole === ROLES.OPERATOR;
+
+        if (!isInternalViewer) {
+            // Cliente não vê ativo sem dado sincronizado. Aplicado aqui, no backend,
+            // para não depender de cada tela lembrar de filtrar.
+            where.status = { notIn: UNSYNCED_STATUSES };
+        }
+
         if (status) {
+            // Cliente pedindo status interno explicitamente (via URL) não recebe nada.
+            if (!isInternalViewer && UNSYNCED_STATUSES.includes(status)) {
+                return { items: [], meta: { total: 0, page, limit, totalPages: 0 } };
+            }
             where.status = status;
         }
 

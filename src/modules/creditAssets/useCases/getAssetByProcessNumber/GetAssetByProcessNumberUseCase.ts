@@ -1,4 +1,5 @@
 import { prisma } from '../../../../prisma';
+import { UNSYNCED_STATUSES } from '../listAllAssets/ListAllAssetsUseCase';
 
 class GetAssetByProcessNumberUseCase {
     async execute(legalOneId: number, auth0UserId: string, roles: string[]) {
@@ -36,6 +37,12 @@ class GetAssetByProcessNumberUseCase {
 
         const user = await prisma.user.findUnique({ where: { auth0UserId }, select: { id: true } });
         if (!user) throw new Error("Acesso negado.");
+
+        // Fecha o acesso direto por URL: as listagens já ocultam ativos sem dado
+        // sincronizado, mas quem tivesse o link antigo ainda abriria o detalhe.
+        if (UNSYNCED_STATUSES.includes(asset.status)) {
+            throw new Error("Processo não encontrado.");
+        }
 
         let viewerIsAssociate = false;
 
