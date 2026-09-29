@@ -18,6 +18,28 @@ export const MAX_ENRICHMENT_ATTEMPTS = 5;
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
+ * Identifica defeito de código — não problema do processo.
+ *
+ * `ReferenceError`, `TypeError` e `SyntaxError` não são causados pelo ativo nem
+ * pelo Legal One: são bug nosso, e afetam TODOS os ativos que passam pelo mesmo
+ * caminho, não aquele em particular.
+ *
+ * Marcar o ativo como FAILED_ENRICHMENT nesse caso é errado duas vezes: culpa o
+ * dado por um defeito do código e esconde o bug atrás de um status. Foi
+ * exatamente o que aconteceu com `parseAndCleanDescription`, que existia apenas
+ * como `declare function` — 359 processos foram marcados como falha e o defeito
+ * real ficou invisível por meses.
+ *
+ * Agora o ativo é deixado intacto e os admins são avisados na hora: um alerta
+ * alto no primeiro processo, em vez de centenas de falsos positivos silenciosos.
+ */
+function isProgrammingError(err: any): boolean {
+    return err instanceof ReferenceError
+        || err instanceof TypeError
+        || err instanceof SyntaxError;
+}
+
+/**
  * Classifica se vale a pena tentar de novo.
  *
  * Transitório  → quota (429), erro do servidor (5xx), falha de rede.
@@ -235,6 +257,29 @@ class EnrichAssetFromLegalOneUseCase {
             }
 
         } catch (error: any) {
+            // Defeito de código não é falha do processo: não mexe no status, avisa
+            // os admins e propaga. Deixar o ativo intacto garante que ele seja
+            // reprocessado normalmente assim que o bug for corrigido, em vez de
+            // ficar preso num status que descreve o problema errado.
+            if (isProgrammingError(error)) {
+                console.error(
+                    `🐛 [Enrich] DEFEITO DE CÓDIGO ao processar ${asset.processNumber}: ${error.message}\n` +
+                    `   O ativo NÃO foi marcado como falha — isto afeta todos os processos, não este.`,
+                    error.stack
+                );
+                await notifyAllAdmins({
+                    title: 'Defeito de código no enriquecimento',
+                    message: `O enriquecimento falhou por um erro de programação (${error.message}). Nenhum processo foi marcado como falha. Requer correção no código — verifique os logs.`,
+                    type: 'error',
+                    notificationType: 'FAILED_ENRICHMENT',
+                    relatedEntityId: creditAssetId,
+                    relatedEntityType: 'CreditAsset',
+                    relatedEntityName: asset.processNumber,
+                    link: `/processos`,
+                }).catch(() => { /* notificação não pode mascarar o erro original */ });
+                throw error;
+            }
+
             // Erro transitório já foi retentado por withRetry. Se chegou aqui, ou é
             // permanente, ou o backoff não foi suficiente — em ambos os casos conta
             // como uma tentativa e o cron volta a processar depois do cooldown.

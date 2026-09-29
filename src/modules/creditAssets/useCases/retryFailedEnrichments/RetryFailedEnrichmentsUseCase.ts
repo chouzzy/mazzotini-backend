@@ -15,11 +15,22 @@ const COOLDOWN_HOURS = 6;
 /** Teto por execução — evita queimar a quota diária inteira numa varredura só. */
 const MAX_ASSETS_PER_RUN = 100;
 
+/**
+ * Falhas seguidas que fazem a varredura abortar.
+ *
+ * Se vários ativos falham em sequência, o problema não é deles — é da API do
+ * Legal One (quota estourada) ou do nosso código. Continuar só incrementaria
+ * `enrichmentAttempts` da fila inteira até todos baterem o teto e saírem do
+ * reprocessamento automático, transformando um problema temporário em permanente.
+ */
+const MAX_CONSECUTIVE_FAILURES = 5;
+
 export interface RetryEnrichmentResult {
     candidates: number;
     recovered: number;
     stillFailing: number;
     exhausted: number;
+    abortedEarly: boolean;
 }
 
 /**
@@ -36,6 +47,7 @@ class RetryFailedEnrichmentsUseCase {
             recovered: 0,
             stillFailing: 0,
             exhausted: 0,
+            abortedEarly: false,
         };
 
         const cooldownCutoff = new Date(Date.now() - COOLDOWN_HOURS * 60 * 60 * 1000);
@@ -74,6 +86,7 @@ class RetryFailedEnrichmentsUseCase {
         console.log(`[RetryEnrich] Reprocessando ${candidates.length} ativo(s) travado(s)...`);
 
         const enrichUseCase = new EnrichAssetFromLegalOneUseCase();
+        let consecutiveFailures = 0;
 
         for (const asset of candidates) {
             try {
@@ -87,26 +100,41 @@ class RetryFailedEnrichmentsUseCase {
 
                 if (after?.status === 'Ativo') {
                     result.recovered++;
+                    consecutiveFailures = 0;
                     console.log(`[RetryEnrich] ✅ ${asset.processNumber} recuperado.`);
-                } else if ((after?.enrichmentAttempts ?? 0) >= MAX_ENRICHMENT_ATTEMPTS) {
-                    result.exhausted++;
                 } else {
-                    result.stillFailing++;
+                    consecutiveFailures++;
+                    if ((after?.enrichmentAttempts ?? 0) >= MAX_ENRICHMENT_ATTEMPTS) {
+                        result.exhausted++;
+                    } else {
+                        result.stillFailing++;
+                    }
                 }
             } catch (err: any) {
-                // O próprio UseCase já trata e persiste o erro; aqui só evitamos
-                // que uma exceção inesperada interrompa a varredura inteira.
+                // Defeito de código é propagado pelo UseCase sem tocar no status.
+                // Abortar na hora evita percorrer a fila inteira com o mesmo bug.
+                consecutiveFailures++;
                 result.stillFailing++;
-                console.error(`[RetryEnrich] Erro inesperado em ${asset.processNumber}:`, err.message);
+                console.error(`[RetryEnrich] Erro em ${asset.processNumber}:`, err.message);
+            }
+
+            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                result.abortedEarly = true;
+                console.error(
+                    `[RetryEnrich] ⛔ ${consecutiveFailures} falhas seguidas — varredura abortada. ` +
+                    `O problema é sistêmico (quota do Legal One ou bug), não dos ativos. ` +
+                    `Interrompendo para não esgotar as tentativas da fila inteira.`
+                );
+                break;
             }
 
             await sleep(DELAY_BETWEEN_ASSETS_MS);
         }
 
         console.log(
-            `[RetryEnrich] Concluído — Candidatos: ${result.candidates} | ` +
-            `Recuperados: ${result.recovered} | Ainda falhando: ${result.stillFailing} | ` +
-            `Esgotados: ${result.exhausted}`
+            `[RetryEnrich] ${result.abortedEarly ? 'ABORTADO' : 'Concluído'} — ` +
+            `Candidatos: ${result.candidates} | Recuperados: ${result.recovered} | ` +
+            `Ainda falhando: ${result.stillFailing} | Esgotados: ${result.exhausted}`
         );
 
         return result;
