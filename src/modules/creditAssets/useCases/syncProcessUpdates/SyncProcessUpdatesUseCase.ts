@@ -2,6 +2,7 @@
 import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { parseDocumentMeta } from '../../../../utils/documentNameParser';
+import { extractAllValues } from '../../../../utils/updateDescriptionParser';
 
 
 
@@ -9,35 +10,9 @@ import { parseDocumentMeta } from '../../../../utils/documentNameParser';
 const TAG_RELATORIO = "#RelatórioMAA";
 const TAG_DOCUMENTO = "#DocumentoMAA";
 
-/**
- * Tenta extrair todos os valores monetários de uma string de texto.
- */
-const extractAllValues = (text: string | null | undefined) => {
-    if (!text) return { valorDaCausa: null, valorDaCompra: null, valorAtualizado: null };
-
-    const parse = (match: RegExpMatchArray | null, truncate = false) => {
-        if (match && match[1]) {
-            const numericString = match[1].replace(/\./g, '').replace(',', '.');
-            const value = parseFloat(numericString);
-            return truncate ? Math.trunc(value) : value;
-        }
-        return null;
-    };
-
-    const valorDaCausa = text.match(/Valor da Causa:\s*R\$\s*([\d.,]+)/i);
-    const valorDaCompra = text.match(/Valor da Compra:\s*R\$\s*([\d.,]+)/i);
-    const valorAtualizado = text.match(/Valor Atualizado:\s*R\$\s*([\d.,]+)/i);
-
-    return {
-        valorDaCausa: parse(valorDaCausa),
-        valorDaCompra: parse(valorDaCompra, true),
-        valorAtualizado: parse(valorAtualizado),
-    };
-};
-
-/**
- * Extrai apenas o texto descritivo do andamento, ignorando a tag e os campos de valor.
- */
+// extractAllValues foi movida para src/utils/updateDescriptionParser.ts para que
+// o enriquecimento e este sync leiam o andamento pelo mesmo código — a versão
+// divergente entre os dois caminhos foi o que deixou o enriquecimento quebrado.
 
 class SyncProcessUpdatesUseCase {
     async execute(): Promise<void> {

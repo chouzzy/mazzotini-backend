@@ -3,6 +3,7 @@ import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { getSystemSettings } from '../../../admin/useCases/systemSettings/SystemSettingsService';
 import { notifyAllAdmins } from '../../../../services/notificationService';
+import { parseAndCleanDescription } from '../../../../utils/updateDescriptionParser';
 
 
 const TAG_ANDAMENTO = "#RelatórioMAA";
@@ -56,8 +57,9 @@ async function withRetry<T>(fn: () => Promise<T>, label: string, maxRetries = 3)
     throw new Error(`Máximo de retentativas excedido para: ${label}`);
 }
 
-// Assumindo que esta função já existe no topo do seu ficheiro original
-declare function parseAndCleanDescription(description: string): { value: number | null, cleanedText: string };
+// Antes era `declare function parseAndCleanDescription(...)` — só o tipo, sem
+// implementação. Compilava e estourava ReferenceError em runtime para todo ativo
+// que tivesse andamento marcado. Ver src/utils/updateDescriptionParser.ts.
 
 class EnrichAssetFromLegalOneUseCase {
 
