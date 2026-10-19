@@ -85,16 +85,17 @@ class ListAllAssetsUseCase {
 
         const where: Prisma.CreditAssetWhereInput = {};
 
-        if (primaryRole === ROLES.INVESTOR) {
-            where.investors = { some: { userId: user.id } };
-        } else if (primaryRole === ROLES.ASSOCIATE) {
+        const isInternalViewer = primaryRole === ROLES.ADMIN || primaryRole === ROLES.OPERATOR;
+
+        if (primaryRole === ROLES.ASSOCIATE) {
             where.OR = [
                 { associateId: user.id },
                 { investors: { some: { userId: user.id } } },
             ];
+        } else if (!isInternalViewer) {
+            // Qualquer papel que não seja interno (INVESTOR ou desconhecido) só vê os próprios ativos.
+            where.investors = { some: { userId: user.id } };
         }
-
-        const isInternalViewer = primaryRole === ROLES.ADMIN || primaryRole === ROLES.OPERATOR;
 
         if (!isInternalViewer) {
             // Cliente não vê ativo sem dado sincronizado. Aplicado aqui, no backend,

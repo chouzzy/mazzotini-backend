@@ -68,6 +68,15 @@ describe('ListAllAssetsUseCase', () => {
         expect(where.AND).toEqual([searchClause]);
     });
 
+    it('papel desconhecido em roles[0] não fica sem filtro: só vê os próprios ativos', async () => {
+        // checkRole aceita o token porque INVESTOR está na lista; o use case olha só roles[0]
+        await useCase.execute({ auth0UserId: 'auth0|outro', roles: ['OUTRO_PAPEL', 'INVESTOR'] });
+
+        const where = whereSent();
+        expect(where.investors).toEqual({ some: { userId: 'user-1' } });
+        expect(where.status).toEqual({ notIn: ['FAILED_ENRICHMENT', 'PENDING_ENRICHMENT'] });
+    });
+
     it('admin buscando: vê todos os ativos que casam com o termo', async () => {
         await useCase.execute({ auth0UserId: 'auth0|admin', roles: ['ADMIN'], search: 'silva' });
 
