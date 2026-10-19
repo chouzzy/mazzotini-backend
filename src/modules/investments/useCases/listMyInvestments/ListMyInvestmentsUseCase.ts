@@ -1,4 +1,5 @@
 import { prisma } from '../../../../prisma';
+import { Investment } from '@prisma/client';
 // src/modules/investments/useCases/listMyInvestments/ListMyInvestmentsUseCase.ts
 
 

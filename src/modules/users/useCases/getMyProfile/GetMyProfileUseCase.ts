@@ -1,4 +1,5 @@
 import { prisma } from '../../../../prisma';
+import { User } from '@prisma/client';
 // /src/modules/users/useCases/getMyProfile/GetMyProfileUseCase.ts
 
 

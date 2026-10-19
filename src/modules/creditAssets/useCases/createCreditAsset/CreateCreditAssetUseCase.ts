@@ -1,4 +1,5 @@
 import { prisma } from '../../../../prisma';
+import { User, CreditAsset } from '@prisma/client';
 import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/EnrichAssetFromLegalOneUseCase";
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { syncParticipantsAsUsers } from "../../../../utils/participantHelper";

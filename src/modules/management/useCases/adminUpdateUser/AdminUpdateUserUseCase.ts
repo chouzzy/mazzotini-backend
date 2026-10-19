@@ -1,5 +1,6 @@
 
 import { prisma } from '../../../../prisma';
+import { User } from '@prisma/client';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 
 
