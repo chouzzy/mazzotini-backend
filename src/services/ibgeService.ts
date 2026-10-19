@@ -33,6 +33,25 @@ function formatDateBCB(year: number, month: number): string {
     return `01/${String(month).padStart(2, '0')}/${year}`;
 }
 
+// O SGS do BCB às vezes responde 5xx ou demora demais. Como o cron roda uma vez por mês,
+// um índice que falha fica um mês sem atualizar: vale tentar de novo antes de desistir.
+const RETRY_DELAYS_MS = [2000, 5000, 15000];
+
+async function getBCB(url: string, timeout: number): Promise<{ data: string; valor: string }[]> {
+    for (let attempt = 0; ; attempt++) {
+        try {
+            const response = await axios.get<{ data: string; valor: string }[]>(url, { timeout });
+            return response.data;
+        } catch (err: any) {
+            const status = err?.response?.status;
+            // Erro 4xx (ex.: 404 de período ainda sem dado publicado) não melhora repetindo
+            const transient = !status || status >= 500;
+            if (!transient || attempt >= RETRY_DELAYS_MS.length) throw err;
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+        }
+    }
+}
+
 /**
  * Busca variação mensal de um índice via API do Banco Central.
  */
@@ -55,8 +74,7 @@ export async function fetchIndexSeries(
 
     const url = `${BCB_BASE}.${code}/dados?formato=json&dataInicial=${startDate}&dataFinal=${endDate}`;
 
-    const response = await axios.get<{ data: string; valor: string }[]>(url, { timeout: 20000 });
-    const data = response.data;
+    const data = await getBCB(url, 20000);
 
     if (!Array.isArray(data) || data.length === 0) {
         throw new Error(`Sem dados do BCB para ${indexName}`);
@@ -98,8 +116,7 @@ export async function fetchSelicSeries(
     const endDate = `${String(lastDay).padStart(2, '0')}/${String(eMonth).padStart(2, '0')}/${eYear}`;
 
     const url = `${BCB_BASE}.11/dados?formato=json&dataInicial=${formatDateBCB(startYear, startMonth)}&dataFinal=${endDate}`;
-    const response = await axios.get<{ data: string; valor: string }[]>(url, { timeout: 60000 });
-    const data = response.data;
+    const data = await getBCB(url, 60000);
 
     if (!Array.isArray(data) || data.length === 0) throw new Error('Sem dados SELIC diários do BCB (série 11)');
 
@@ -142,8 +159,7 @@ export async function fetchCDIDiariaSeries(
     const endDate = `${String(lastDay).padStart(2, '0')}/${String(eMonth).padStart(2, '0')}/${eYear}`;
 
     const url = `${BCB_BASE}.12/dados?formato=json&dataInicial=${formatDateBCB(startYear, startMonth)}&dataFinal=${endDate}`;
-    const response = await axios.get<{ data: string; valor: string }[]>(url, { timeout: 60000 });
-    const data = response.data;
+    const data = await getBCB(url, 60000);
 
     if (!Array.isArray(data) || data.length === 0) throw new Error('Sem dados CDI diários do BCB (série 12)');
 

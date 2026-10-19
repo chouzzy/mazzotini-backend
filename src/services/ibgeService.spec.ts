@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { fetchTJSPSeries } from './ibgeService';
+import { fetchIndexSeries, fetchTJSPSeries } from './ibgeService';
 
 jest.mock('axios');
 const mockedGet = axios.get as jest.Mock;
@@ -60,5 +60,41 @@ describe('fetchTJSPSeries', () => {
         ]);
         expect(mockedGet).toHaveBeenCalledTimes(1);
         expect(mockedGet.mock.calls[0][0]).toContain('bcdata.sgs.188/dados?formato=json&dataInicial=01/01/2023&dataFinal=01/02/2023');
+    });
+});
+
+describe('consulta ao BCB', () => {
+    beforeEach(() => mockedGet.mockReset());
+    afterEach(() => jest.useRealTimers());
+
+    it('tenta de novo quando o BCB responde 502', async () => {
+        jest.useFakeTimers();
+        mockedGet
+            .mockRejectedValueOnce({ response: { status: 502 } })
+            .mockResolvedValueOnce(bcb([[9, 2026, '0.82']]));
+
+        const result = fetchIndexSeries('IPCA', 2026, 9, 2026, 9);
+        await jest.advanceTimersByTimeAsync(2000);
+
+        await expect(result).resolves.toEqual([{ year: 2026, month: 9, monthlyRate: 0.82 }]);
+        expect(mockedGet).toHaveBeenCalledTimes(2);
+    });
+
+    it('não repete o 404 de período ainda sem dado publicado', async () => {
+        mockedGet.mockRejectedValue({ response: { status: 404 } });
+
+        await expect(fetchIndexSeries('IPCA', 2026, 11, 2026, 11)).rejects.toEqual({ response: { status: 404 } });
+        expect(mockedGet).toHaveBeenCalledTimes(1);
+    });
+
+    it('desiste depois de 4 tentativas', async () => {
+        jest.useFakeTimers();
+        mockedGet.mockRejectedValue({ response: { status: 503 } });
+
+        const assertion = expect(fetchIndexSeries('IPCA', 2026, 9, 2026, 9)).rejects.toEqual({ response: { status: 503 } });
+        await jest.advanceTimersByTimeAsync(2000 + 5000 + 15000);
+
+        await assertion;
+        expect(mockedGet).toHaveBeenCalledTimes(4);
     });
 });
