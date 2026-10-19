@@ -107,6 +107,10 @@ userRoutes.post('/api/users', checkActionSecret, createUserController.handle);
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/UserProfile'
+ *       403:
+ *         description: |
+ *           `code: EMAIL_NOT_VERIFIED`. O e-mail do Auth0 pertence a um cadastro
+ *           existente, mas ainda não foi verificado.
  */
 userRoutes.post('/api/users/sync', checkJwt, syncAuth0UserController.handle);
 
