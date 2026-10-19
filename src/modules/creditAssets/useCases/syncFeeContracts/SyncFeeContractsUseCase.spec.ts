@@ -63,6 +63,16 @@ describe('SyncFeeContractsUseCase', () => {
         });
     });
 
+    it('hashtag desconhecida é pulada sem consultar o banco nem o Legal One', async () => {
+        getPrivateDocuments.mockResolvedValue([legalOneDoc(2, '#DocumentoMAA')]);
+
+        const result = await new SyncFeeContractsUseCase().execute();
+
+        expect(result.documentsSkipped).toBe(1);
+        expect(prisma.document.findFirst).not.toHaveBeenCalled();
+        expect(getContactIdentification).not.toHaveBeenCalled();
+    });
+
     it('duas chamadas ao mesmo tempo compartilham a mesma execução', async () => {
         let release: (docs: unknown[]) => void = () => {};
         getPrivateDocuments.mockReturnValue(new Promise(resolve => { release = resolve; }));

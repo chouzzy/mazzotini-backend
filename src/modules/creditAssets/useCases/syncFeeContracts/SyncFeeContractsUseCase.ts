@@ -65,14 +65,15 @@ export class SyncFeeContractsUseCase {
     }
 
     private async processDocument(doc: any): Promise<boolean> {
+        // Hashtag não reconhecida: pula antes de consultar o banco
+        const category = mapDocumentTypeToCategory(doc.type);
+        if (!category) return false;
+
         // Idempotência
         if (doc.id) {
             const existing = await prisma.document.findFirst({ where: { legalOneDocumentId: doc.id } });
             if (existing) return false;
         }
-
-        const category = mapDocumentTypeToCategory(doc.type);
-        if (!category) return false;
 
         const rels: any[] = doc.relationships || [];
 
