@@ -31,15 +31,15 @@ class AdminUpdateUserUseCase {
             formattedBirthDate = new Date(birthDate);
         }
 
-        // 3. Atualiza no Prisma
+        // 3. Atualiza no Prisma. Campo ausente fica como está; `null` enviado de propósito
+        //    limpa o campo. Antes, a indicação e o associado indicado voltavam ao valor
+        //    anterior quando vinham vazios, então trocar de associado cadastrado para nome
+        //    manual (ou o contrário) mantinha os dois gravados.
         const updatedUser = await prisma.user.update({
             where: { id: userId },
             data: {
                 ...updateData,
                 birthDate: formattedBirthDate,
-                // Admin pode forçar status se quiser, mas por padrão mantemos a lógica do form
-                indication: updateData.indication || user.indication,
-                referredById: updateData.referredById || user.referredById
             }
         });
 
