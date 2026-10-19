@@ -7,9 +7,13 @@
  *   - 4 pontos de dedução: DO_VALOR_CORRIGIDO | APOS_HONORARIOS | APOS_MULTA | APOS_TUDO
  *   - Juros Moratórios: Taxa Legal piecewise (art.406/CC) ou Personalizado
  *   - Juros Remuneratórios: taxa adicional (compensatoryRate)
+ *   - Índice NAO_ATUALIZAR ("Não atualizar (fixo)"): sem correção monetária
  */
 
 import { prisma } from '../prisma';
+
+/** "Não atualizar (fixo)": o principal não é corrigido; juros, multa e honorários seguem normais. */
+export const NAO_ATUALIZAR = 'NAO_ATUALIZAR';
 
 export type DeductionPoint = 'DO_VALOR_CORRIGIDO' | 'APOS_HONORARIOS' | 'APOS_MULTA' | 'APOS_TUDO';
 
@@ -234,7 +238,10 @@ export async function calculateJudicialDebt(
     const globalStart   = parseYM(allSorted[0].baseDate);
     const fetchRange    = monthRange(globalStart.year, globalStart.month, referenceYear, referenceMonth);
 
-    const indexRecords = await prisma.indexSeries.findMany({
+    // "Não atualizar (fixo)" não tem série: o fator é 1 e não há detalhamento mês a mês
+    const isFixed = params.correctionIndex === NAO_ATUALIZAR;
+
+    const indexRecords = isFixed ? [] : await prisma.indexSeries.findMany({
         where: { indexName: params.correctionIndex, OR: fetchRange.map(({ year, month }) => ({ year, month })) },
     });
 
@@ -245,6 +252,9 @@ export async function calculateJudicialDebt(
             accumulatedValue: rec.accumulatedValue ?? null,
         });
     }
+
+    const factorFor = (sy: number, sm: number): { factor: number; breakdown: MonthBreakdown[] } =>
+        isFixed ? { factor: 1, breakdown: [] } : computeFactor(sy, sm, referenceYear, referenceMonth, rateMap);
 
     // 2. Processa parcelas de DÉBITO
     const installmentResults: InstallmentResult[] = [];
@@ -260,8 +270,7 @@ export async function calculateJudicialDebt(
     for (let i = 0; i < debitoInstallments.length; i++) {
         const inst = debitoInstallments[i];
         const { year: sy, month: sm } = parseYM(inst.baseDate);
-        const corrMonths = monthRange(sy, sm + 1, referenceYear, referenceMonth);
-        const { factor, breakdown } = computeFactor(sy, sm, referenceYear, referenceMonth, rateMap);
+        const { factor, breakdown } = factorFor(sy, sm);
         const correctedValue = inst.baseValue * factor;
 
         const moratoryStart = params.moratoryStartDate ? parseYM(params.moratoryStartDate) : { year: sy, month: sm };
@@ -320,7 +329,7 @@ export async function calculateJudicialDebt(
     const abatimentoResults: AbatimentoResult[] = [];
     for (const abat of abatimentoInstallments) {
         const { year: sy, month: sm } = parseYM(abat.baseDate);
-        const { factor } = computeFactor(sy, sm, referenceYear, referenceMonth, rateMap);
+        const { factor } = factorFor(sy, sm);
         const correctedDeduction = abat.baseValue * factor;
         abatimentoResults.push({
             description:      abat.description || 'Abatimento',
