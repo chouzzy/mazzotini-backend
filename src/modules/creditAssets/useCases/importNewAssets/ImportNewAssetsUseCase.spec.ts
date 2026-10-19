@@ -29,6 +29,18 @@ import { legalOneApiService } from '../../../../services/legalOneApiService';
 import { CreateCreditAssetUseCase } from '../createCreditAsset/CreateCreditAssetUseCase';
 import { LookupAssetFromLegalOneUseCase } from '../../../users/useCases/lookupAssetFromLegalOne/LookupAssetFromLegalOneUseCase';
 
+/** Roda a importação sem esperar os 3 s reais que ela dá entre um processo e outro. */
+async function runImport(useCase: ImportNewAssetsUseCase) {
+    jest.useFakeTimers();
+    try {
+        const running = useCase.execute();
+        await jest.runAllTimersAsync();
+        await running;
+    } finally {
+        jest.useRealTimers();
+    }
+}
+
 describe('ImportNewAssetsUseCase', () => {
     let importUseCase: ImportNewAssetsUseCase;
     let mockLookupInstance: any;
@@ -36,6 +48,7 @@ describe('ImportNewAssetsUseCase', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        (mockPrisma.creditAsset.findFirst as jest.Mock).mockResolvedValue(null);
 
         // Configura os mocks dos UseCases internos
         mockLookupInstance = { execute: jest.fn() };
@@ -69,7 +82,7 @@ describe('ImportNewAssetsUseCase', () => {
         });
 
         // ACT
-        await importUseCase.execute();
+        await runImport(importUseCase);
 
         // ASSERT
         expect(legalOneApiService.listLawsuits).toHaveBeenCalled();
@@ -97,9 +110,26 @@ describe('ImportNewAssetsUseCase', () => {
         (mockPrisma.creditAsset.findUnique as jest.Mock).mockResolvedValue({ id: 'asset-1' });
 
         // ACT
-        await importUseCase.execute();
+        await runImport(importUseCase);
 
         // ASSERT
+        expect(mockLookupInstance.execute).not.toHaveBeenCalled();
+        expect(mockCreateInstance.execute).not.toHaveBeenCalled();
+    });
+
+    it('deve pular processo cujo número já existe no banco com outro ID do Legal One', async () => {
+        // ARRANGE
+        (legalOneApiService.listLawsuits as jest.Mock).mockResolvedValue([
+            { id: 1003, identifierNumber: 'PROCESSO-003', __legalOneType: 'Lawsuit' }
+        ]);
+        (mockPrisma.creditAsset.findUnique as jest.Mock).mockResolvedValue(null);
+        (mockPrisma.creditAsset.findFirst as jest.Mock).mockResolvedValue({ id: 'asset-2' });
+
+        // ACT
+        await runImport(importUseCase);
+
+        // ASSERT
+        expect(mockPrisma.creditAsset.findFirst).toHaveBeenCalledWith({ where: { processNumber: 'PROCESSO-003' } });
         expect(mockLookupInstance.execute).not.toHaveBeenCalled();
         expect(mockCreateInstance.execute).not.toHaveBeenCalled();
     });
@@ -123,7 +153,7 @@ describe('ImportNewAssetsUseCase', () => {
         });
 
         // ACT
-        await importUseCase.execute();
+        await runImport(importUseCase);
 
         // ASSERT
         expect(mockCreateInstance.execute).toHaveBeenCalledTimes(1);
