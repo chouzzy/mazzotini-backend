@@ -5,7 +5,7 @@ import { RetryFailedEnrichmentsUseCase } from './modules/creditAssets/useCases/r
 import { SyncFeeContractsUseCase } from './modules/creditAssets/useCases/syncFeeContracts/SyncFeeContractsUseCase';
 import { RunCalculationUseCase } from './modules/calculator/useCases/runCalculation/RunCalculationUseCase';
 import { prisma } from './prisma';
-import { fetchIndexSeries, fetchTJSPSeries } from './services/ibgeService';
+import { updateIndexSeries } from './services/indexUpdateService';
 
 const syncUseCase = new SyncProcessUpdatesUseCase();
 const importUseCase = new ImportNewAssetsUseCase();
@@ -54,7 +54,7 @@ export const startScheduledJobs = () => {
         timezone: "America/Sao_Paulo"
     });
 
-    // Todo dia 5 de cada mês às 04h: atualiza índices do IBGE e recalcula processos.
+    // Todo dia 5 de cada mês às 04h: atualiza os índices (BCB) e recalcula processos.
     cron.schedule('0 4 5 * *', async () => {
         console.log('--- Executando job agendado: Atualizar Índices e Recalcular Processos ---');
         const now = new Date();
@@ -62,29 +62,8 @@ export const startScheduledJobs = () => {
         const month = now.getMonth() + 1;
 
         try {
-            // 1. Atualiza índices do mês corrente via IBGE
-            const indexesToUpdate = [
-                { name: 'IPCA_E', fetcher: () => fetchIndexSeries('IPCA_E', year, month, year, month) },
-                { name: 'INPC',   fetcher: () => fetchIndexSeries('INPC',   year, month, year, month) },
-                { name: 'IPCA',   fetcher: () => fetchIndexSeries('IPCA',   year, month, year, month) },
-                { name: 'TJSP_LEI14905', fetcher: () => fetchTJSPSeries(year, month, year, month) },
-            ];
-
-            for (const idx of indexesToUpdate) {
-                try {
-                    const points = await idx.fetcher();
-                    for (const p of points) {
-                        await prisma.indexSeries.upsert({
-                            where:  { indexName_year_month: { indexName: idx.name, year: p.year, month: p.month } },
-                            create: { indexName: idx.name, year: p.year, month: p.month, monthlyRate: p.monthlyRate },
-                            update: { monthlyRate: p.monthlyRate },
-                        });
-                    }
-                    console.log(`  Índice ${idx.name} atualizado: ${points.length} meses`);
-                } catch (e: any) {
-                    console.error(`  Erro ao atualizar ${idx.name}:`, e.message);
-                }
-            }
+            // 1. Busca os meses publicados desde o último gravado de cada índice
+            await updateIndexSeries(now);
 
             // 2. Recalcula todos os processos com parâmetros configurados, pelo mesmo
             // caminho do botão "Calcular": mesmos parâmetros, mesmo log, mesmo valor.

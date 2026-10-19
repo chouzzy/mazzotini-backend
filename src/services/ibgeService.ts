@@ -167,7 +167,7 @@ export async function fetchCDIDiariaSeries(
     return points.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
 }
 
-function shiftMonth(year: number, month: number, delta: number): { year: number; month: number } {
+export function shiftMonth(year: number, month: number, delta: number): { year: number; month: number } {
     const total = year * 12 + (month - 1) + delta;
     return { year: Math.floor(total / 12), month: (total % 12) + 1 };
 }
