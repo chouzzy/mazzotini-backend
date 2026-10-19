@@ -13,7 +13,7 @@
  *   IGP_M         — IGP-M (série BCB 189)
  *   CDI_MENSAL    — CDI acumulado mensal (série BCB 4391)
  *   CDI_DIARIA    — copiado do CDI_MENSAL (série 12 diária indisponível via JSON BCB)
- *   TJSP_LEI14905 — índice híbrido: INPC até 08/2024, IPCA de 09/2024
+ *   TJSP_LEI14905 — tabela do TJSP: INPC do mês anterior até 08/2024, IPCA-15 do mês anterior desde 09/2024
  *   SELIC         — Meta SELIC diária acumulada (set/2024+, para Taxa Legal P3)
  */
 
@@ -60,7 +60,7 @@ async function main() {
         { name: 'IPCA',       label: 'IPCA',                                                     fetcher: () => fetchIndexSeries('IPCA',       START_YEAR, START_MONTH) },
         { name: 'IGP_M',      label: 'IGP-M (série BCB 189)',                                    fetcher: () => fetchIndexSeries('IGP_M',      START_YEAR, START_MONTH) },
         { name: 'CDI_MENSAL', label: 'CDI Acumulado Mensal (série BCB 4391)',                    fetcher: () => fetchIndexSeries('CDI_MENSAL', START_YEAR, START_MONTH) },
-        { name: 'TJSP_LEI14905', label: 'TJSP Lei 14905 (INPC até 08/2024 + IPCA de 09/2024)',  fetcher: () => fetchTJSPSeries(START_YEAR, START_MONTH) },
+        { name: 'TJSP_LEI14905', label: 'TJSP Lei 14905 (INPC até 08/2024 + IPCA-15 desde 09/2024)', fetcher: () => fetchTJSPSeries(START_YEAR, START_MONTH) },
         // SELIC: série 11 diária — só precisamos de set/2024+ (P3 da Taxa Legal)
         { name: 'SELIC', label: 'Meta SELIC diária acumulada (jan/2024+)',                       fetcher: () => fetchSelicSeries(2024, 1) },
     ];
