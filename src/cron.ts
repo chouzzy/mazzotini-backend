@@ -38,22 +38,6 @@ export const startScheduledJobs = () => {
         timezone: "America/Sao_Paulo"
     });
 
-    // Todos os dias às 2h: importa os documentos financeiros anexados aos contratos no
-    // Legal One (cessão, honorários, orientações, comprovantes e notas fiscais),
-    // identificados pela hashtag do tipo. Antes só rodava pelo botão em Configurações.
-    // Documentos já importados são pulados sem chamar o Legal One.
-    cron.schedule('0 2 * * *', async () => {
-        console.log('--- Executando job agendado: Sincronizar Documentos Financeiros ---');
-        try {
-            const result = await syncFeeContractsUseCase.execute();
-            console.log(`--- Documentos financeiros: ${result.documentsImported} importados, ${result.documentsSkipped} ignorados, ${result.errors.length} com erro.`);
-        } catch (error) {
-            console.error('--- FALHA no job de documentos financeiros:', error);
-        }
-    }, {
-        timezone: "America/Sao_Paulo"
-    });
-
     // Todos os dias às 3h: reprocessa ativos travados em FAILED/PENDING_ENRICHMENT.
     // Roda depois do sync das 1h para a quota do Legal One já ter se recuperado.
     // Sem este job, um único 429 deixava o processo parado para sempre — o sync
@@ -164,5 +148,22 @@ export const startScheduledJobs = () => {
         }
     }, { timezone: 'America/Sao_Paulo' });
 
+    // Todos os dias às 5h: importa os documentos financeiros anexados aos contratos no
+    // Legal One (cessão, honorários, orientações, comprovantes e notas fiscais),
+    // identificados pela hashtag do tipo. Antes só rodava pelo botão em Configurações.
+    // Roda depois dos jobs da madrugada que usam o Legal One (sync da 1h e retentativa
+    // das 3h), para não disputar a cota. Documentos já importados ou com hashtag não
+    // reconhecida são pulados sem chamar o Legal One; os novos consultam o contato.
+    cron.schedule('0 5 * * *', async () => {
+        console.log('--- Executando job agendado: Sincronizar Documentos Financeiros ---');
+        try {
+            const result = await syncFeeContractsUseCase.execute();
+            console.log(`--- Documentos financeiros: ${result.documentsImported} importados, ${result.documentsSkipped} ignorados, ${result.errors.length} com erro.`);
+        } catch (error) {
+            console.error('--- FALHA no job de documentos financeiros:', error);
+        }
+    }, {
+        timezone: "America/Sao_Paulo"
+    });
 };
 
