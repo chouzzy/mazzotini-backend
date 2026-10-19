@@ -69,3 +69,48 @@ describe('calculateJudicialDebt', () => {
         expect(result.correctedValue).toBe(1030.2);
     });
 });
+
+describe('fator de correção com a tabela oficial (acumulado)', () => {
+    const tjsp = { ...params, correctionIndex: 'TJSP_LEI14905' };
+    // Taxa mensal gravada errada (9%) nos meses da tabela, como depois de um seed antigo
+    const official = [
+        { year: 2026, month: 1, monthlyRate: 9, accumulatedValue: 100 },
+        { year: 2026, month: 2, monthlyRate: 9, accumulatedValue: 101 },
+        { year: 2026, month: 3, monthlyRate: 9, accumulatedValue: 103.02 },
+    ];
+
+    beforeEach(() => jest.clearAllMocks());
+
+    it('usa a razão entre os acumulados e ignora a taxa mensal gravada', async () => {
+        prisma.indexSeries.findMany.mockResolvedValue(official);
+
+        const inst = (await calculateJudicialDebt(tjsp, 2026, 3)).installmentResults[0];
+
+        expect(inst.correctionFactor).toBeCloseTo(1.0302, 8);
+        expect(inst.monthBreakdown.map(m => m.monthlyRate)).toEqual([expect.closeTo(1, 8), expect.closeTo(2, 8)]);
+    });
+
+    it('sem acumulado na referência, usa a tabela até o último mês e a taxa mensal depois', async () => {
+        prisma.indexSeries.findMany.mockResolvedValue([
+            ...official.slice(0, 2),
+            { year: 2026, month: 3, monthlyRate: 2, accumulatedValue: null },
+        ]);
+
+        // Abril não tem linha: conta 0%
+        const inst = (await calculateJudicialDebt(tjsp, 2026, 4)).installmentResults[0];
+
+        expect(inst.correctionFactor).toBeCloseTo(1.01 * 1.02, 8);
+    });
+
+    it('um mês sem acumulado no meio não muda o fator até o próximo mês da tabela', async () => {
+        prisma.indexSeries.findMany.mockResolvedValue([
+            official[0],
+            { year: 2026, month: 2, monthlyRate: 5, accumulatedValue: null },
+            official[2],
+        ]);
+
+        const inst = (await calculateJudicialDebt(tjsp, 2026, 3)).installmentResults[0];
+
+        expect(inst.correctionFactor).toBeCloseTo(1.0302, 8);
+    });
+});

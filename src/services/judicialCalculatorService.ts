@@ -179,38 +179,40 @@ async function computeTaxaLegalMoratory(
 }
 
 // ── helper: fator de correção para uma data base ──────────────────────────────
-
+//
+// Percorre os meses de (base + 1) até a referência. Num mês com o acumulado da tabela
+// oficial (drcalc, estendido pelo cron), o fator vem da razão até o último acumulado
+// anterior; nos outros, da taxa mensal (mês sem dado = 0%). Com a tabela completa, o
+// fator é acumulado(ref) / acumulado(base). Sem acumulado na referência (antes do cron
+// do mês), vale a tabela até o último mês que a tem e a taxa mensal depois dele. A taxa
+// mensal gravada nos meses da tabela não interfere: a do detalhamento vem do acumulado.
 function computeFactor(
     sy: number, sm: number,
     refYear: number, refMonth: number,
     rateMap: Map<string, { monthlyRate: number; accumulatedValue: number | null }>,
 ): { factor: number; breakdown: MonthBreakdown[] } {
     const corrMonths = monthRange(sy, sm + 1, refYear, refMonth);
-    const baseKey    = `${sy}-${String(sm).padStart(2,'0')}`;
-    const refKey     = `${refYear}-${String(refMonth).padStart(2,'0')}`;
-    const baseRec    = rateMap.get(baseKey);
-    const refRec     = rateMap.get(refKey);
-    let factor = 1;
+    let lastAcc         = rateMap.get(`${sy}-${String(sm).padStart(2,'0')}`)?.accumulatedValue ?? null;
+    let factorAtLastAcc = 1;
+    let factor          = 1;
     const breakdown: MonthBreakdown[] = [];
 
-    if (baseRec?.accumulatedValue && refRec?.accumulatedValue) {
-        factor = refRec.accumulatedValue / baseRec.accumulatedValue;
-        let runAcc = baseRec.accumulatedValue;
-        for (const { year, month } of corrMonths) {
-            const key         = `${year}-${String(month).padStart(2,'0')}`;
-            const rec         = rateMap.get(key);
-            const monthlyRate = rec?.monthlyRate ?? 0;
-            const thisAcc     = rec?.accumulatedValue ?? runAcc * (1 + monthlyRate / 100);
-            runAcc = thisAcc;
-            breakdown.push({ year, month, monthlyRate, accumulated: thisAcc / baseRec.accumulatedValue });
+    for (const { year, month } of corrMonths) {
+        const rec = rateMap.get(`${year}-${String(month).padStart(2,'0')}`);
+        let monthlyRate: number;
+        if (rec?.accumulatedValue && lastAcc) {
+            const next  = factorAtLastAcc * (rec.accumulatedValue / lastAcc);
+            monthlyRate = (next / factor - 1) * 100;
+            factor      = next;
+        } else {
+            monthlyRate = rec?.monthlyRate ?? 0;
+            factor     *= 1 + monthlyRate / 100;
         }
-    } else {
-        for (const { year, month } of corrMonths) {
-            const key  = `${year}-${String(month).padStart(2,'0')}`;
-            const rate = rateMap.get(key)?.monthlyRate ?? 0;
-            factor *= (1 + rate / 100);
-            breakdown.push({ year, month, monthlyRate: rate, accumulated: factor });
+        if (rec?.accumulatedValue) {
+            lastAcc         = rec.accumulatedValue;
+            factorAtLastAcc = factor;
         }
+        breakdown.push({ year, month, monthlyRate, accumulated: factor });
     }
     return { factor, breakdown };
 }
