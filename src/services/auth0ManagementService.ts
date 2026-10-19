@@ -21,6 +21,7 @@
  * - `createUserAndGenerateInvite()` — cria conta e retorna link "Crie sua senha"
  * - `resendVerificationEmail(id)`   — reenvio de e-mail de verificação via Auth0 Jobs
  * - `getUsersByRole(roleName)`      — lista usuários que têm uma role específica
+ * - `getUserIdentity(id)`           — e-mail da conta e se ele foi verificado
  * - `deleteUser(id)`                — exclusão permanente do usuário no Auth0
  *
  * ## Nota sobre roles no Auth0 Free Plan
@@ -194,6 +195,21 @@ class Auth0ManagementService {
             { email: newEmail, email_verified: false, verify_email: false }
         );
         console.log(`[Auth0 Mgmt] E-mail atualizado com sucesso.`);
+    }
+
+    /**
+     * Busca no Auth0 o e-mail da conta e se ele já foi verificado.
+     * É a fonte confiável para vincular um login a um cadastro existente: o corpo
+     * de uma requisição pode ser forjado pelo cliente, o registro do Auth0 não.
+     */
+    async getUserIdentity(auth0UserId: string): Promise<{ email: string | null; emailVerified: boolean; name: string | null; picture: string | null }> {
+        const { data } = await managementClient.users.get({ id: auth0UserId });
+        return {
+            email: data.email || null,
+            emailVerified: data.email_verified === true,
+            name: data.name || null,
+            picture: data.picture || null,
+        };
     }
 
     async markEmailVerified(auth0UserId: string): Promise<void> {
