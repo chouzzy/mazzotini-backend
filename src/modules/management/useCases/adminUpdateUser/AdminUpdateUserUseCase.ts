@@ -10,8 +10,17 @@ interface IAdminUpdateUserDTO {
     [key: string]: any;
 }
 
+interface IAdminUpdateUserOptions {
+    /**
+     * Fecha as solicitações de alteração pendentes do usuário. Usado na edição direta do
+     * admin: depois dela, aprovar uma solicitação antiga sobrescreveria os dados novos com
+     * os velhos. A aprovação de uma solicitação não usa esta opção.
+     */
+    supersedePendingRequests?: boolean;
+}
+
 class AdminUpdateUserUseCase {
-    async execute(userId: string, data: IAdminUpdateUserDTO): Promise<User> {
+    async execute(userId: string, data: IAdminUpdateUserDTO, options: IAdminUpdateUserOptions = {}): Promise<User> {
         console.log(`[ADMIN UPDATE] Atualizando perfil do usuário ID: ${userId}`);
 
         // 1. Verifica se usuário existe
@@ -31,16 +40,29 @@ class AdminUpdateUserUseCase {
             formattedBirthDate = new Date(birthDate);
         }
 
-        // 3. Atualiza no Prisma
-        const updatedUser = await prisma.user.update({
-            where: { id: userId },
-            data: {
-                ...updateData,
-                birthDate: formattedBirthDate,
-                // Admin pode forçar status se quiser, mas por padrão mantemos a lógica do form
-                indication: updateData.indication || user.indication,
-                referredById: updateData.referredById || user.referredById
+        // 3. Atualiza no Prisma. Campo ausente fica como está; `null` enviado de propósito
+        //    limpa o campo. Antes, a indicação e o associado indicado voltavam ao valor
+        //    anterior quando vinham vazios, então trocar de associado cadastrado para nome
+        //    manual (ou o contrário) mantinha os dois gravados.
+        //    A edição e o fechamento das solicitações pendentes vão juntos: se um falhar,
+        //    nenhum vale, e o admin não recebe erro sobre uma edição que já foi gravada.
+        const updatedUser = await prisma.$transaction(async (tx) => {
+            const updated = await tx.user.update({
+                where: { id: userId },
+                data: {
+                    ...updateData,
+                    birthDate: formattedBirthDate,
+                }
+            });
+
+            if (options.supersedePendingRequests) {
+                await tx.userProfileChangeRequest.updateMany({
+                    where: { userId, status: 'PENDING' },
+                    data: { status: 'REJECTED', rejectionReason: 'Substituída por uma edição direta do administrador.' },
+                });
             }
+
+            return updated;
         });
 
         // 4. Sincroniza com Legal One (Se o usuário já estiver vinculado)

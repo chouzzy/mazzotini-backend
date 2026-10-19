@@ -36,7 +36,7 @@ class AdminUpdateUserController {
         commercialCity: yup.string().nullable().optional(),
         commercialState: yup.string().nullable().optional(),
         
-        correspondenceAddress: yup.string().optional(),
+        correspondenceAddress: yup.string().nullable().optional(),
         nationality: yup.string().nullable().optional(),
         maritalStatus: yup.string().nullable().optional(),
         
@@ -49,9 +49,13 @@ class AdminUpdateUserController {
         const bodyData = request.body;
 
         try {
-            // Limpeza de campos vazios
+            // Campo vazio ('' ou null) limpa o valor. O formulário de edição mostra o cadastro
+            // inteiro, então o que chega vazio é o que o admin quer gravar: apagar um telefone,
+            // desmarcar o endereço comercial, trocar a indicação. Antes os vazios eram
+            // descartados e a alteração "voltava" ao recarregar. Campo ausente fica intacto;
+            // campo obrigatório vazio é recusado pela validação.
             const cleanBody = Object.fromEntries(
-                Object.entries(bodyData).filter(([_, v]) => v != null && v !== '')
+                Object.entries(bodyData).map(([key, v]) => [key, v === '' ? null : v])
             );
 
             // Validação
@@ -66,8 +70,9 @@ class AdminUpdateUserController {
                 birthDate: validatedData.birthDate ? new Date(validatedData.birthDate) : undefined,
             };
 
+            // A edição direta vale na hora e descarta as solicitações de alteração pendentes
             const useCase = new AdminUpdateUserUseCase();
-            const updatedUser = await useCase.execute(id, dataToUpdate);
+            const updatedUser = await useCase.execute(id, dataToUpdate, { supersedePendingRequests: true });
 
             return response.status(200).json(updatedUser);
 

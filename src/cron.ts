@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { SyncProcessUpdatesUseCase } from './modules/creditAssets/useCases/syncProcessUpdates/SyncProcessUpdatesUseCase';
 import { ImportNewAssetsUseCase } from './modules/creditAssets/useCases/importNewAssets/ImportNewAssetsUseCase';
 import { RetryFailedEnrichmentsUseCase } from './modules/creditAssets/useCases/retryFailedEnrichments/RetryFailedEnrichmentsUseCase';
+import { SyncFeeContractsUseCase } from './modules/creditAssets/useCases/syncFeeContracts/SyncFeeContractsUseCase';
 import { prisma } from './prisma';
 import { fetchIndexSeries, fetchTJSPSeries } from './services/ibgeService';
 import { calculateJudicialDebt, CalculationParams, Installment } from './services/judicialCalculatorService';
@@ -9,6 +10,7 @@ import { calculateJudicialDebt, CalculationParams, Installment } from './service
 const syncUseCase = new SyncProcessUpdatesUseCase();
 const importUseCase = new ImportNewAssetsUseCase();
 const retryEnrichmentUseCase = new RetryFailedEnrichmentsUseCase();
+const syncFeeContractsUseCase = new SyncFeeContractsUseCase();
 
 /**
  * Inicia todos os jobs agendados da aplicação.
@@ -146,5 +148,22 @@ export const startScheduledJobs = () => {
         }
     }, { timezone: 'America/Sao_Paulo' });
 
+    // Todos os dias às 5h: importa os documentos financeiros anexados aos contratos no
+    // Legal One (cessão, honorários, orientações, comprovantes e notas fiscais),
+    // identificados pela hashtag do tipo. Antes só rodava pelo botão em Configurações.
+    // Roda depois dos jobs da madrugada que usam o Legal One (sync da 1h e retentativa
+    // das 3h), para não disputar a cota. Documentos já importados ou com hashtag não
+    // reconhecida são pulados sem chamar o Legal One; os novos consultam o contato.
+    cron.schedule('0 5 * * *', async () => {
+        console.log('--- Executando job agendado: Sincronizar Documentos Financeiros ---');
+        try {
+            const result = await syncFeeContractsUseCase.execute();
+            console.log(`--- Documentos financeiros: ${result.documentsImported} importados, ${result.documentsSkipped} ignorados, ${result.errors.length} com erro.`);
+        } catch (error) {
+            console.error('--- FALHA no job de documentos financeiros:', error);
+        }
+    }, {
+        timezone: "America/Sao_Paulo"
+    });
 };
 

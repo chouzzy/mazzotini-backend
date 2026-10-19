@@ -1,25 +1,6 @@
 import { prisma } from '../../../../prisma';
 import { legalOneApiService } from '../../../../services/legalOneApiService';
-
-const TYPE_TO_CATEGORY: Record<string, string> = {
-    'cessao':                'CESSAO',
-    'cessão':                'CESSAO',
-    'ho':                    'HONORARIOS',
-    'honorarios':            'HONORARIOS',
-    'honorários':            'HONORARIOS',
-    'orientacao financeira': 'ORIENTACAO_FINANCEIRA',
-    'orientação financeira': 'ORIENTACAO_FINANCEIRA',
-    'orientacao fiscal':     'ORIENTACAO_FISCAL',
-    'orientação fiscal':     'ORIENTACAO_FISCAL',
-    'nota fiscal':           'NOTA_FISCAL',
-    'comprovante':           'COMPROVANTE',
-};
-
-function mapTypeToCategory(type: string | null | undefined): string | null {
-    if (!type) return null;
-    const key = type.replace(/^#/, '').toLowerCase().trim();
-    return TYPE_TO_CATEGORY[key] ?? null;
-}
+import { mapDocumentTypeToCategory } from '../../../../utils/documentTypeCategory';
 
 function extractFolderNumber(folder: string): string | null {
     const match = folder.match(/(\d{7})/);
@@ -41,7 +22,23 @@ export interface SyncFeeContractsResult {
 }
 
 export class SyncFeeContractsUseCase {
-    async execute(): Promise<SyncFeeContractsResult> {
+    /**
+     * Sincronização em andamento (cron diário ou botão em Configurações). Uma segunda
+     * chamada espera a mesma execução: duas rodando juntas passariam pela checagem de
+     * idempotência ao mesmo tempo e criariam o documento duas vezes.
+     */
+    private static running: Promise<SyncFeeContractsResult> | null = null;
+
+    execute(): Promise<SyncFeeContractsResult> {
+        if (!SyncFeeContractsUseCase.running) {
+            SyncFeeContractsUseCase.running = this.run().finally(() => {
+                SyncFeeContractsUseCase.running = null;
+            });
+        }
+        return SyncFeeContractsUseCase.running;
+    }
+
+    private async run(): Promise<SyncFeeContractsResult> {
         const result: SyncFeeContractsResult = {
             documentsImported: 0,
             documentsSkipped: 0,
@@ -52,9 +49,13 @@ export class SyncFeeContractsUseCase {
         const docs = await legalOneApiService.getPrivateDocuments();
         console.log(`[SyncFeeContracts] ${docs.length} documentos privados encontrados`);
 
+        // CPF/CNPJ de cada contato, consultado uma vez por execução: vários documentos
+        // costumam ser do mesmo cliente, e cada consulta gasta cota do Legal One.
+        const contactIdentifications = new Map<number, string | null>();
+
         for (const doc of docs) {
             try {
-                const imported = await this.processDocument(doc);
+                const imported = await this.processDocument(doc, contactIdentifications);
                 if (imported) result.documentsImported++;
                 else result.documentsSkipped++;
             } catch (err: any) {
@@ -67,15 +68,16 @@ export class SyncFeeContractsUseCase {
         return result;
     }
 
-    private async processDocument(doc: any): Promise<boolean> {
+    private async processDocument(doc: any, contactIdentifications: Map<number, string | null>): Promise<boolean> {
+        // Hashtag não reconhecida: pula antes de consultar o banco
+        const category = mapDocumentTypeToCategory(doc.type);
+        if (!category) return false;
+
         // Idempotência
         if (doc.id) {
             const existing = await prisma.document.findFirst({ where: { legalOneDocumentId: doc.id } });
             if (existing) return false;
         }
-
-        const category = mapTypeToCategory(doc.type);
-        if (!category) return false;
 
         const rels: any[] = doc.relationships || [];
 
@@ -89,7 +91,11 @@ export class SyncFeeContractsUseCase {
         const contactId: number | null = contactRel?.linkItem?.id ?? null;
         if (!contactId) return false;
 
-        const rawDoc = await legalOneApiService.getContactIdentification(contactId);
+        let rawDoc = contactIdentifications.get(contactId);
+        if (rawDoc === undefined) {
+            rawDoc = await legalOneApiService.getContactIdentification(contactId);
+            contactIdentifications.set(contactId, rawDoc);
+        }
         if (!rawDoc) return false;
 
         const masked = maskDocument(rawDoc);
