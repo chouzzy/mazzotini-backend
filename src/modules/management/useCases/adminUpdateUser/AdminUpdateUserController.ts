@@ -2,10 +2,6 @@ import { Request, Response } from 'express';
 import { AdminUpdateUserUseCase } from './AdminUpdateUserUseCase';
 import * as yup from 'yup';
 
-// O formulário manda `null` de propósito nestes campos para limpar o que não está em uso
-// (ao trocar entre associado cadastrado e nome manual), então eles não são descartados.
-const REFERRAL_FIELDS = ['referredById', 'indication'];
-
 class AdminUpdateUserController {
     // Reutilizamos o mesmo schema de validação do perfil do usuário para garantir consistência
     private validationSchema = yup.object().shape({
@@ -40,7 +36,7 @@ class AdminUpdateUserController {
         commercialCity: yup.string().nullable().optional(),
         commercialState: yup.string().nullable().optional(),
         
-        correspondenceAddress: yup.string().optional(),
+        correspondenceAddress: yup.string().nullable().optional(),
         nationality: yup.string().nullable().optional(),
         maritalStatus: yup.string().nullable().optional(),
         
@@ -53,11 +49,13 @@ class AdminUpdateUserController {
         const bodyData = request.body;
 
         try {
-            // Limpeza de campos vazios (exceto indicação, em que vazio vira `null` e limpa)
+            // Campo vazio ('' ou null) limpa o valor. O formulário de edição mostra o cadastro
+            // inteiro, então o que chega vazio é o que o admin quer gravar: apagar um telefone,
+            // desmarcar o endereço comercial, trocar a indicação. Antes os vazios eram
+            // descartados e a alteração "voltava" ao recarregar. Campo ausente fica intacto;
+            // campo obrigatório vazio é recusado pela validação.
             const cleanBody = Object.fromEntries(
-                Object.entries(bodyData)
-                    .filter(([key, v]) => REFERRAL_FIELDS.includes(key) || (v != null && v !== ''))
-                    .map(([key, v]) => [key, REFERRAL_FIELDS.includes(key) && !v ? null : v])
+                Object.entries(bodyData).map(([key, v]) => [key, v === '' ? null : v])
             );
 
             // Validação

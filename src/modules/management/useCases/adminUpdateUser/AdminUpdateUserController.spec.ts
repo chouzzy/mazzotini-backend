@@ -52,10 +52,29 @@ describe('AdminUpdateUserController', () => {
         expect(mockExecute).toHaveBeenCalledWith('user-1', expect.any(Object), { supersedePendingRequests: true });
     });
 
-    it('continua descartando os outros campos vazios', async () => {
+    it('campo vazio limpa o valor (ex.: telefone apagado no formulário)', async () => {
         const { data } = await run({ ...baseBody, rg: '', phone: null });
 
+        expect(data).toMatchObject({ rg: null, phone: null });
+    });
+
+    it('desmarcar o endereço comercial limpa os campos dele', async () => {
+        const { data } = await run({ ...baseBody, commercialCep: null, commercialStreet: null, commercialCity: null });
+
+        expect(data).toMatchObject({ commercialCep: null, commercialStreet: null, commercialCity: null });
+    });
+
+    it('campo que não veio no formulário fica como está', async () => {
+        const { data } = await run({ ...baseBody });
+
         expect(data).not.toHaveProperty('rg');
-        expect(data).not.toHaveProperty('phone');
+        expect(data).not.toHaveProperty('commercialCep');
+    });
+
+    it('campo obrigatório vazio é recusado, sem gravar nada', async () => {
+        const { res } = await run({ ...baseBody, name: '' });
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(mockExecute).not.toHaveBeenCalled();
     });
 });
