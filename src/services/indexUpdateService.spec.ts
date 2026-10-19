@@ -25,10 +25,21 @@ const NOV_5 = new Date(2026, 10, 5, 4, 0);
 let lastStored: Record<string, { year: number; month: number }>;
 let lastOfficialTJSP: { year: number; month: number; accumulatedValue: number } | null;
 
-/** Registros gravados (o `create` de cada upsert) de um índice. */
+/** Upserts gravados de um índice. */
 const saved = (indexName: string) => prisma.indexSeries.upsert.mock.calls
     .map((call: any) => call[0])
     .filter((args: any) => args.where.indexName_year_month.indexName === indexName);
+
+const savedMonths = (indexName: string) => saved(indexName).map((a: any) => `${a.create.month}/${a.create.year}`);
+
+/** Resposta fictícia do BCB: todos os meses do intervalo pedido, com a mesma taxa. */
+const series = (rate: number) => (sy: number, sm: number, ey: number, em: number) => {
+    const points = [];
+    for (let y = sy, m = sm; y < ey || (y === ey && m <= em); m === 12 ? (y++, m = 1) : m++) {
+        points.push({ year: y, month: m, monthlyRate: rate });
+    }
+    return Promise.resolve(points);
+};
 
 describe('updateIndexSeries', () => {
     beforeEach(() => {
@@ -61,20 +72,17 @@ describe('updateIndexSeries', () => {
         expect(fetchIndexSeries).toHaveBeenCalledWith('IGP_M', 2000, 1, 2026, 11);
     });
 
-    it('o CDI entra só até o mês anterior, e o CDI diário recebe os mesmos meses do mensal', async () => {
-        lastStored = { CDI_MENSAL: { year: 2026, month: 9 } };
-        (fetchIndexSeries as jest.Mock).mockImplementation((name: string) => Promise.resolve(name === 'CDI_MENSAL'
-            ? [{ year: 2026, month: 9, monthlyRate: 1.1 }, { year: 2026, month: 10, monthlyRate: 1.2 }]
-            : []));
+    it('o CDI entra só até o mês anterior, e o CDI diário segue o próprio último mês', async () => {
+        lastStored = { CDI_MENSAL: { year: 2026, month: 9 }, CDI_DIARIA: { year: 2026, month: 7 } };
+        (fetchIndexSeries as jest.Mock).mockImplementation((name: string, sy: number, sm: number, ey: number, em: number) =>
+            name === 'CDI_MENSAL' ? series(1.1)(sy, sm, ey, em) : Promise.resolve([]));
 
         await updateIndexSeries(NOV_5);
 
         // Em novembro, o mês corrente do CDI ainda é parcial
-        expect(fetchIndexSeries).toHaveBeenCalledWith('CDI_MENSAL', 2026, 9, 2026, 10);
-        expect(saved('CDI_DIARIA').map((a: any) => a.create)).toEqual([
-            { indexName: 'CDI_DIARIA', year: 2026, month: 9, monthlyRate: 1.1 },
-            { indexName: 'CDI_DIARIA', year: 2026, month: 10, monthlyRate: 1.2 },
-        ]);
+        expect(savedMonths('CDI_MENSAL')).toEqual(['9/2026', '10/2026']);
+        // O CDI diário estava atrasado: recebe a mesma série a partir do próprio último mês
+        expect(savedMonths('CDI_DIARIA')).toEqual(['7/2026', '8/2026', '9/2026', '10/2026']);
     });
 
     it('a SELIC entra só até o mês anterior e completa o último mês gravado', async () => {
@@ -85,8 +93,8 @@ describe('updateIndexSeries', () => {
         expect(fetchSelicSeries).toHaveBeenCalledWith(2026, 10, 2026, 10);
     });
 
-    it('não busca a SELIC quando o mês anterior já foi gravado', async () => {
-        lastStored = { SELIC: { year: 2026, month: 11 } };
+    it('não busca a SELIC quando o último mês gravado é o mês corrente', async () => {
+        lastStored = { SELIC: { year: 2026, month: 11 } }; // parcial, gravado pelo seed
 
         await updateIndexSeries(NOV_5);
 
@@ -107,6 +115,7 @@ describe('updateIndexSeries', () => {
         expect(june.create).toEqual({ indexName: 'TJSP_LEI14905', year: 2026, month: 6, monthlyRate: 1, accumulatedValue: 101 });
         expect(june.update).toEqual({ monthlyRate: 1, accumulatedValue: 101 });
         expect(july.create.accumulatedValue).toBeCloseTo(103.02, 10);
+        expect(console.log).toHaveBeenCalledWith('  Índice TJSP_LEI14905: 2 meses gravados (06/2026 a 07/2026)');
     });
 
     it('para de estender o TJSP num mês faltando', async () => {
@@ -118,7 +127,7 @@ describe('updateIndexSeries', () => {
 
         await updateIndexSeries(NOV_5);
 
-        expect(saved('TJSP_LEI14905').map((a: any) => a.create.month)).toEqual([6]);
+        expect(savedMonths('TJSP_LEI14905')).toEqual(['6/2026']);
     });
 
     it('não busca o TJSP quando a tabela já chega ao mês atual', async () => {
@@ -129,26 +138,40 @@ describe('updateIndexSeries', () => {
         expect(fetchTJSPSeries).not.toHaveBeenCalled();
     });
 
-    it('sem a tabela oficial do TJSP no banco, grava só as taxas', async () => {
+    it('sem a tabela oficial do TJSP, regrava as taxas desde o início, sem emenda com a regra antiga', async () => {
         lastStored = { TJSP_LEI14905: { year: 2026, month: 3 } };
         (fetchTJSPSeries as jest.Mock).mockResolvedValue([{ year: 2026, month: 4, monthlyRate: 0.44 }]);
 
         await updateIndexSeries(NOV_5);
 
-        expect(fetchTJSPSeries).toHaveBeenCalledWith(2026, 3, 2026, 11);
+        expect(fetchTJSPSeries).toHaveBeenCalledWith(2000, 1, 2026, 11);
         expect(saved('TJSP_LEI14905').map((a: any) => a.create)).toEqual([
             { indexName: 'TJSP_LEI14905', year: 2026, month: 4, monthlyRate: 0.44 },
         ]);
     });
 
+    it('na virada do ano, SELIC e CDI vão até dezembro e o TJSP chega a janeiro', async () => {
+        lastStored = { SELIC: { year: 2026, month: 11 }, CDI_MENSAL: { year: 2026, month: 11 } };
+        lastOfficialTJSP = { year: 2026, month: 12, accumulatedValue: 100 };
+
+        await updateIndexSeries(new Date(2027, 0, 5, 4, 0));
+
+        expect(fetchSelicSeries).toHaveBeenCalledWith(2026, 11, 2026, 12);
+        expect(fetchIndexSeries).toHaveBeenCalledWith('CDI_MENSAL', 2026, 11, 2026, 12);
+        expect(fetchTJSPSeries).toHaveBeenCalledWith(2027, 1, 2027, 1);
+    });
+
     it('um índice com erro não impede os outros', async () => {
-        (fetchIndexSeries as jest.Mock).mockImplementation((name: string) => name === 'IPCA_E'
-            ? Promise.reject(new Error('BCB indisponível'))
-            : Promise.resolve([{ year: 2026, month: 9, monthlyRate: 0.8 }]));
+        (fetchIndexSeries as jest.Mock).mockImplementation((name: string) => {
+            if (name === 'IPCA_E') return Promise.reject(new Error('BCB indisponível'));
+            if (name === 'INPC') return Promise.reject('resposta sem Error');
+            return Promise.resolve([{ year: 2026, month: 9, monthlyRate: 0.8 }]);
+        });
 
         const results = await updateIndexSeries(NOV_5);
 
         expect(results.find(r => r.indexName === 'IPCA_E')).toEqual({ indexName: 'IPCA_E', months: 0, error: 'BCB indisponível' });
+        expect(results.find(r => r.indexName === 'INPC')).toEqual({ indexName: 'INPC', months: 0, error: 'resposta sem Error' });
         expect(results.find(r => r.indexName === 'IPCA')).toEqual({ indexName: 'IPCA', months: 1 });
         expect(fetchSelicSeries).toHaveBeenCalled();
         expect(fetchTJSPSeries).toHaveBeenCalled();
