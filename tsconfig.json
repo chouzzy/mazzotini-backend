@@ -16,13 +16,7 @@
     "strict": true,
     "strictNullChecks": true,
     "noImplicitAny": true,
-    "noEmitOnError": true,
-    "baseUrl": ".",
-    "paths": {
-      "@/*": [
-        "src/*"
-      ]
-    }
+    "noEmitOnError": true
   },
   "include": [
     "src/**/*"
