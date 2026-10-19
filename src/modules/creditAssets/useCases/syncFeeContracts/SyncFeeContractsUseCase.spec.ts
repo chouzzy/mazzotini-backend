@@ -73,6 +73,18 @@ describe('SyncFeeContractsUseCase', () => {
         expect(getContactIdentification).not.toHaveBeenCalled();
     });
 
+    it('consulta o CPF de cada contato uma vez só por execução', async () => {
+        getPrivateDocuments.mockResolvedValue([
+            legalOneDoc(3, '#Comprovantes', 10),
+            legalOneDoc(4, '#Orientação Fiscal', 10),
+        ]);
+
+        const result = await new SyncFeeContractsUseCase().execute();
+
+        expect(result.documentsImported).toBe(2);
+        expect(getContactIdentification).toHaveBeenCalledTimes(1);
+    });
+
     it('duas chamadas ao mesmo tempo compartilham a mesma execução', async () => {
         let release: (docs: unknown[]) => void = () => {};
         getPrivateDocuments.mockReturnValue(new Promise(resolve => { release = resolve; }));

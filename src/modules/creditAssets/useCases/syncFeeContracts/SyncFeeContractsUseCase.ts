@@ -49,9 +49,13 @@ export class SyncFeeContractsUseCase {
         const docs = await legalOneApiService.getPrivateDocuments();
         console.log(`[SyncFeeContracts] ${docs.length} documentos privados encontrados`);
 
+        // CPF/CNPJ de cada contato, consultado uma vez por execução: vários documentos
+        // costumam ser do mesmo cliente, e cada consulta gasta cota do Legal One.
+        const contactIdentifications = new Map<number, string | null>();
+
         for (const doc of docs) {
             try {
-                const imported = await this.processDocument(doc);
+                const imported = await this.processDocument(doc, contactIdentifications);
                 if (imported) result.documentsImported++;
                 else result.documentsSkipped++;
             } catch (err: any) {
@@ -64,7 +68,7 @@ export class SyncFeeContractsUseCase {
         return result;
     }
 
-    private async processDocument(doc: any): Promise<boolean> {
+    private async processDocument(doc: any, contactIdentifications: Map<number, string | null>): Promise<boolean> {
         // Hashtag não reconhecida: pula antes de consultar o banco
         const category = mapDocumentTypeToCategory(doc.type);
         if (!category) return false;
@@ -87,7 +91,11 @@ export class SyncFeeContractsUseCase {
         const contactId: number | null = contactRel?.linkItem?.id ?? null;
         if (!contactId) return false;
 
-        const rawDoc = await legalOneApiService.getContactIdentification(contactId);
+        let rawDoc = contactIdentifications.get(contactId);
+        if (rawDoc === undefined) {
+            rawDoc = await legalOneApiService.getContactIdentification(contactId);
+            contactIdentifications.set(contactId, rawDoc);
+        }
         if (!rawDoc) return false;
 
         const masked = maskDocument(rawDoc);
