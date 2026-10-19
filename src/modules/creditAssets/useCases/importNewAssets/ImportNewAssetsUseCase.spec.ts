@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 const mockPrisma = {
     creditAsset: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(), // busca por processNumber; sem retorno = processo novo
     },
     $disconnect: jest.fn(),
 };
@@ -50,8 +51,8 @@ describe('ImportNewAssetsUseCase', () => {
     it('deve importar processos novos com sucesso', async () => {
         // ARRANGE
         (legalOneApiService.listLawsuits as jest.Mock).mockResolvedValue([
-            { id: 1001, identifierNumber: 'PROCESSO-001' },
-            { id: 1002, identifierNumber: 'PROCESSO-002' }
+            { id: 1001, identifierNumber: 'PROCESSO-001', __legalOneType: 'Lawsuit' },
+            { id: 1002, identifierNumber: 'PROCESSO-002', __legalOneType: 'Lawsuit' }
         ]);
 
         // Configura o mock do Prisma para retornar null (não existe)
@@ -89,7 +90,7 @@ describe('ImportNewAssetsUseCase', () => {
     it('deve pular processos que já existem no banco (Idempotência)', async () => {
         // ARRANGE
         (legalOneApiService.listLawsuits as jest.Mock).mockResolvedValue([
-            { identifierNumber: 'PROCESSO-EXISTENTE' }
+            { identifierNumber: 'PROCESSO-EXISTENTE', __legalOneType: 'Lawsuit' }
         ]);
 
         // Prisma diz que JÁ EXISTE
@@ -106,8 +107,8 @@ describe('ImportNewAssetsUseCase', () => {
     it('deve continuar a importação mesmo se um processo falhar', async () => {
         // ARRANGE
         (legalOneApiService.listLawsuits as jest.Mock).mockResolvedValue([
-            { identifierNumber: 'PROCESSO-FALHA' },
-            { identifierNumber: 'PROCESSO-SUCESSO' }
+            { identifierNumber: 'PROCESSO-FALHA', __legalOneType: 'Lawsuit' },
+            { identifierNumber: 'PROCESSO-SUCESSO', __legalOneType: 'Lawsuit' }
         ]);
 
         (mockPrisma.creditAsset.findUnique as jest.Mock).mockResolvedValue(null);
