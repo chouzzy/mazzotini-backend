@@ -65,10 +65,10 @@ const deleteStagingDocumentController = new DeleteStagingDocumentController();
  *     security: []
  *     parameters:
  *       - in: header
- *         name: x-auth0-action-secret
+ *         name: x-auth0-secret
  *         required: true
  *         schema: { type: string }
- *         description: Segredo compartilhado com a Action (AUTH0_ACTION_SECRET no servidor).
+ *         description: Segredo da Action do Auth0 (AUTH0_HOOK_SECRET, igual na Action e no servidor).
  *     requestBody:
  *       required: true
  *       content:

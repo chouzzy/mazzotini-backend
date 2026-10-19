@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
 import { checkActionSecret } from './checkActionSecret';
 
+// Mesmo header que a Action "Sincronizar Usuário com Backend Mazzotini" envia
 const buildRequest = (secret?: string) => ({
     method: 'POST',
     path: '/api/users',
-    header: (name: string) => (name === 'x-auth0-action-secret' ? secret : undefined),
+    header: (name: string) => (name === 'x-auth0-secret' ? secret : undefined),
 }) as unknown as Request;
 
 const buildResponse = () => {
@@ -14,32 +15,33 @@ const buildResponse = () => {
 };
 
 describe('checkActionSecret', () => {
-    const originalSecret = process.env.AUTH0_ACTION_SECRET;
+    const originalSecret = process.env.AUTH0_HOOK_SECRET;
 
     beforeEach(() => {
         jest.spyOn(console, 'warn').mockImplementation(() => {});
+        jest.spyOn(console, 'error').mockImplementation(() => {});
     });
 
     afterEach(() => {
         // Atribuir `undefined` a process.env grava a string "undefined"; por isso o delete.
-        if (originalSecret === undefined) delete process.env.AUTH0_ACTION_SECRET;
-        else process.env.AUTH0_ACTION_SECRET = originalSecret;
+        if (originalSecret === undefined) delete process.env.AUTH0_HOOK_SECRET;
+        else process.env.AUTH0_HOOK_SECRET = originalSecret;
         jest.restoreAllMocks();
     });
 
-    it('deixa passar (modo de transição) enquanto AUTH0_ACTION_SECRET não estiver definido', () => {
-        delete process.env.AUTH0_ACTION_SECRET;
+    it('recusa com 401 quando AUTH0_HOOK_SECRET não está configurado no servidor', () => {
+        delete process.env.AUTH0_HOOK_SECRET;
         const res = buildResponse();
         const next = jest.fn();
 
-        checkActionSecret(buildRequest(), res, next);
+        checkActionSecret(buildRequest('qualquer-coisa'), res, next);
 
-        expect(next).toHaveBeenCalled();
-        expect(res.status).not.toHaveBeenCalled();
+        expect(res.status).toHaveBeenCalledWith(401);
+        expect(next).not.toHaveBeenCalled();
     });
 
     it('recusa com 401 quando o header não vem', () => {
-        process.env.AUTH0_ACTION_SECRET = 'segredo-da-action';
+        process.env.AUTH0_HOOK_SECRET = 'segredo-da-action';
         const res = buildResponse();
         const next = jest.fn();
 
@@ -50,7 +52,7 @@ describe('checkActionSecret', () => {
     });
 
     it('recusa com 401 quando o segredo é diferente', () => {
-        process.env.AUTH0_ACTION_SECRET = 'segredo-da-action';
+        process.env.AUTH0_HOOK_SECRET = 'segredo-da-action';
         const res = buildResponse();
         const next = jest.fn();
 
@@ -61,7 +63,7 @@ describe('checkActionSecret', () => {
     });
 
     it('deixa passar quando o segredo confere', () => {
-        process.env.AUTH0_ACTION_SECRET = 'segredo-da-action';
+        process.env.AUTH0_HOOK_SECRET = 'segredo-da-action';
         const res = buildResponse();
         const next = jest.fn();
 
