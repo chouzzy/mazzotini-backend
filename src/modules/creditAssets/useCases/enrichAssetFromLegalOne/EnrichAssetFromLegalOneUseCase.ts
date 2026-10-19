@@ -3,10 +3,10 @@ import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { getSystemSettings } from '../../../admin/useCases/systemSettings/SystemSettingsService';
 import { notifyAllAdmins } from '../../../../services/notificationService';
-import { parseAndCleanDescription } from '../../../../utils/updateDescriptionParser';
+import { parseAndCleanDescription, TAG_RELATORIO } from '../../../../utils/updateDescriptionParser';
 
 
-const TAG_ANDAMENTO = "#RelatórioMAA";
+const TAG_ANDAMENTO = TAG_RELATORIO;
 
 /**
  * Máximo de tentativas automáticas antes de um ativo ser considerado
@@ -220,7 +220,7 @@ class EnrichAssetFromLegalOneUseCase {
                             // =================================================================
                             //  ALTERAÇÃO: FONTE ATUALIZADA
                             // =================================================================
-                            source: `Legal One - Manual - #RelatórioMAA`,
+                            source: `Legal One - Manual - ${TAG_ANDAMENTO}`, // VISIBLE_UPDATES_FILTER procura a tag aqui
                         }
                     });
                 }

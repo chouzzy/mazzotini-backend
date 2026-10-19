@@ -48,11 +48,10 @@ import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { EnrichAssetFromLegalOneUseCase } from "../enrichAssetFromLegalOne/EnrichAssetFromLegalOneUseCase";
 import { getSystemSettings } from '../../../admin/useCases/systemSettings/SystemSettingsService';
 import { parseDocumentMeta } from '../../../../utils/documentNameParser';
+import { TAG_RELATORIO, TAG_RELATORIO_SEM_ACENTO } from '../../../../utils/updateDescriptionParser';
 
 
 
-const TAG_RELATORIO = "#RelatórioMAA";
-const TAG_RELATORIO_SEM_ACENTO = "#RelatorioMAA";
 const TAG_DOCUMENTO = "#DocumentoMAA";
 
 const extractAllValues = (text: string | null | undefined) => {
