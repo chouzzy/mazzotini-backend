@@ -1,4 +1,5 @@
 import { prisma } from '../../../../prisma';
+import { VISIBLE_UPDATES_FILTER } from '../../../../utils/updateDescriptionParser';
 
 class GetAssociateClientProcessesUseCase {
     async execute(auth0UserId: string, clientId: string) {
@@ -36,12 +37,7 @@ class GetAssociateClientProcessesUseCase {
                         acquisitionValue: true,
                         status: true,
                         updates: {
-                            where: {
-                                OR: [
-                                    { description: { contains: '#RelatórioMAA' } },
-                                    { description: { contains: '#RelatorioMAA' } },
-                                ],
-                            },
+                            where: VISIBLE_UPDATES_FILTER,
                             orderBy: { date: 'desc' },
                             take: 1,
                         },
