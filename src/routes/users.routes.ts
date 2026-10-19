@@ -10,6 +10,7 @@
 
 import { Router } from 'express';
 import { checkJwt } from '../middleware/auth';
+import { checkActionSecret } from '../middleware/checkActionSecret';
 import multer from 'multer';
 
 import { CreateUserController } from '../modules/users/useCases/createUser/CreateUserController';
@@ -62,6 +63,12 @@ const deleteStagingDocumentController = new DeleteStagingDocumentController();
  *       Cria o usuário no banco com status PENDING_ONBOARDING.
  *     tags: [Usuários]
  *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: x-auth0-action-secret
+ *         required: true
+ *         schema: { type: string }
+ *         description: Segredo compartilhado com a Action (AUTH0_ACTION_SECRET no servidor).
  *     requestBody:
  *       required: true
  *       content:
@@ -74,10 +81,12 @@ const deleteStagingDocumentController = new DeleteStagingDocumentController();
  *               name:        { type: string }
  *               picture:     { type: string, format: uri }
  *     responses:
- *       200:
- *         description: Usuário sincronizado
+ *       201:
+ *         description: Usuário criado (ou já existente). Devolve apenas `{ id }`.
+ *       401:
+ *         description: Segredo ausente ou inválido
  */
-userRoutes.post('/api/users', createUserController.handle);
+userRoutes.post('/api/users', checkActionSecret, createUserController.handle);
 
 /**
  * @swagger
