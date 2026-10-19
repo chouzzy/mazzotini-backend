@@ -22,7 +22,23 @@ export interface SyncFeeContractsResult {
 }
 
 export class SyncFeeContractsUseCase {
-    async execute(): Promise<SyncFeeContractsResult> {
+    /**
+     * Sincronização em andamento (cron diário ou botão em Configurações). Uma segunda
+     * chamada espera a mesma execução: duas rodando juntas passariam pela checagem de
+     * idempotência ao mesmo tempo e criariam o documento duas vezes.
+     */
+    private static running: Promise<SyncFeeContractsResult> | null = null;
+
+    execute(): Promise<SyncFeeContractsResult> {
+        if (!SyncFeeContractsUseCase.running) {
+            SyncFeeContractsUseCase.running = this.run().finally(() => {
+                SyncFeeContractsUseCase.running = null;
+            });
+        }
+        return SyncFeeContractsUseCase.running;
+    }
+
+    private async run(): Promise<SyncFeeContractsResult> {
         const result: SyncFeeContractsResult = {
             documentsImported: 0,
             documentsSkipped: 0,
