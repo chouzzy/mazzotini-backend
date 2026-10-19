@@ -170,13 +170,12 @@ export class LegalOneDocuments extends LegalOneAuth {
 
         while (nextUrl) {
             const currentUrl: string = nextUrl;
-            const res = await axios.get<PageResponse>(currentUrl, {
-                headers,
-                params: isFirst ? {
-                    '$filter': "startswith(type,'#') and relationships/any(r: r/link eq 'Contract')",
-                    '$expand': 'relationships',
-                } : undefined,
-            });
+            const params = isFirst ? {
+                '$filter': "startswith(type,'#') and relationships/any(r: r/link eq 'Contract')",
+                '$expand': 'relationships',
+            } : undefined;
+            // Repete a página em caso de 429; antes, um 429 derrubava a sincronização inteira.
+            const res = await this.requestWithRetry(() => axios.get<PageResponse>(currentUrl, { headers, params }));
             isFirst = false;
             all = all.concat(res.data.value || []);
             nextUrl = res.data['@odata.nextLink'] || null;
