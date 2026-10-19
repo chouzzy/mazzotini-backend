@@ -1,11 +1,39 @@
+import type { ProcessCalculationParams } from '@prisma/client';
 import { prisma } from '../../../../prisma';
-import { calculateJudicialDebt, CalculationParams, Installment } from '../../../../services/judicialCalculatorService';
+import { calculateJudicialDebt, CalculationParams, CalculationResult, Installment } from '../../../../services/judicialCalculatorService';
 
 interface IRequest {
     legalOneId: number;
     auth0UserId: string;
     referenceYear?:  number;
     referenceMonth?: number;
+}
+
+/**
+ * Monta os parâmetros do motor a partir do registro salvo.
+ * O botão "Calcular" e o recálculo automático do dia 5 usam esta mesma montagem,
+ * para os dois chegarem ao mesmo valor.
+ */
+export function toCalculationParams(params: ProcessCalculationParams): CalculationParams {
+    return {
+        correctionIndex:       params.correctionIndex,
+        moratoryMode:          params.moratoryMode         ?? 'TAXA_LEGAL',
+        moratoryRate:          params.moratoryRate,
+        moratoryRateUnit:      params.moratoryRateUnit     ?? 'AM',
+        moratoryType:          params.moratoryType,
+        moratoryStartDate:     params.moratoryStartDate?.toISOString() ?? null,
+        compensatoryRate:      params.compensatoryRate,
+        compensatoryRateUnit:  params.compensatoryRateUnit ?? 'AM',
+        compensatoryType:      params.compensatoryType,
+        compensatoryStartDate: params.compensatoryStartDate ? new Date(params.compensatoryStartDate).toISOString() : null,
+        multaPercentage:       params.multaPercentage      ?? 0,
+        feesMode:              params.feesMode             ?? 'PERCENTUAL',
+        feesPercentage:        params.feesPercentage,
+        feesFixedValue:        params.feesFixedValue       ?? 0,
+        penaltyPercentage:     params.penaltyPercentage,
+        feesOnPenalty:         params.feesOnPenalty,
+        installments:          params.installments as unknown as Installment[],
+    };
 }
 
 class RunCalculationUseCase {
@@ -20,55 +48,27 @@ class RunCalculationUseCase {
         const refY  = referenceYear  ?? now.getFullYear();
         const refM  = referenceMonth ?? (now.getMonth() + 1);
 
-        const p = params as any;
-        const calcParams: CalculationParams = {
-            correctionIndex:       params.correctionIndex,
-            moratoryMode:          p.moratoryMode         ?? 'TAXA_LEGAL',
-            moratoryRate:          params.moratoryRate,
-            moratoryRateUnit:      p.moratoryRateUnit     ?? 'AM',
-            moratoryType:          params.moratoryType,
-            moratoryStartDate:     params.moratoryStartDate?.toISOString() ?? null,
-            compensatoryRate:      params.compensatoryRate,
-            compensatoryRateUnit:  p.compensatoryRateUnit ?? 'AM',
-            compensatoryType:      params.compensatoryType,
-            compensatoryStartDate: p.compensatoryStartDate ? new Date(p.compensatoryStartDate).toISOString() : null,
-            multaPercentage:       p.multaPercentage      ?? 0,
-            feesMode:              p.feesMode             ?? 'PERCENTUAL',
-            feesPercentage:        params.feesPercentage,
-            feesFixedValue:        p.feesFixedValue       ?? 0,
-            penaltyPercentage:     params.penaltyPercentage,
-            feesOnPenalty:         params.feesOnPenalty,
-            installments:          params.installments as unknown as Installment[],
-        };
+        return this.calculateAndSave(params, auth0UserId, refY, refM);
+    }
 
+    /**
+     * Calcula, grava o log e atualiza o valor atual do processo.
+     * `calculatedBy` é o usuário que clicou em "Calcular" ou `'cron'` no recálculo do dia 5.
+     */
+    async calculateAndSave(
+        params: ProcessCalculationParams,
+        calculatedBy: string,
+        refY: number,
+        refM: number,
+    ): Promise<CalculationResult> {
+        const calcParams = toCalculationParams(params);
         const result = await calculateJudicialDebt(calcParams, refY, refM);
 
-        // Snapshot de todos os parâmetros usados (para reabertura futura)
-        const paramsSnapshot = {
-            correctionIndex:       calcParams.correctionIndex,
-            moratoryMode:          calcParams.moratoryMode,
-            moratoryRate:          calcParams.moratoryRate,
-            moratoryRateUnit:      calcParams.moratoryRateUnit,
-            moratoryType:          calcParams.moratoryType,
-            moratoryStartDate:     calcParams.moratoryStartDate,
-            compensatoryRate:      calcParams.compensatoryRate,
-            compensatoryRateUnit:  calcParams.compensatoryRateUnit,
-            compensatoryType:      calcParams.compensatoryType,
-            compensatoryStartDate: calcParams.compensatoryStartDate,
-            multaPercentage:       calcParams.multaPercentage,
-            feesMode:              calcParams.feesMode,
-            feesPercentage:        calcParams.feesPercentage,
-            feesFixedValue:        calcParams.feesFixedValue,
-            penaltyPercentage:     calcParams.penaltyPercentage,
-            feesOnPenalty:         calcParams.feesOnPenalty,
-            installments:          calcParams.installments,
-        };
-
-        // Salva log de cálculo
+        // Salva log de cálculo, com o snapshot de todos os parâmetros usados (para reabertura futura)
         await prisma.calculationLog.create({
             data: {
-                assetId:              asset.id,
-                calculatedBy:         auth0UserId,
+                assetId:              params.assetId,
+                calculatedBy,
                 referenceMonth:       refM,
                 referenceYear:        refY,
                 baseTotal:            result.baseTotal,
@@ -79,13 +79,13 @@ class RunCalculationUseCase {
                 penaltyValue:         result.penaltyValue,
                 totalValue:           result.totalValue,
                 breakdown:            result.installmentResults as any,
-                paramsSnapshot:       paramsSnapshot as any,
+                paramsSnapshot:       calcParams as any,
             },
         });
 
         // Atualiza o valor atual do processo e timestamp do último cálculo
         await prisma.processCalculationParams.update({
-            where: { assetId: asset.id },
+            where: { assetId: params.assetId },
             data: {
                 lastCalculatedValue: result.totalValue,
                 lastCalculatedAt:    new Date(),
@@ -93,7 +93,7 @@ class RunCalculationUseCase {
         });
 
         await prisma.creditAsset.update({
-            where: { id: asset.id },
+            where: { id: params.assetId },
             data:  { currentValue: result.totalValue },
         });
 

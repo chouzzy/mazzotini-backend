@@ -3,14 +3,15 @@ import { SyncProcessUpdatesUseCase } from './modules/creditAssets/useCases/syncP
 import { ImportNewAssetsUseCase } from './modules/creditAssets/useCases/importNewAssets/ImportNewAssetsUseCase';
 import { RetryFailedEnrichmentsUseCase } from './modules/creditAssets/useCases/retryFailedEnrichments/RetryFailedEnrichmentsUseCase';
 import { SyncFeeContractsUseCase } from './modules/creditAssets/useCases/syncFeeContracts/SyncFeeContractsUseCase';
+import { RunCalculationUseCase } from './modules/calculator/useCases/runCalculation/RunCalculationUseCase';
 import { prisma } from './prisma';
 import { fetchIndexSeries, fetchTJSPSeries } from './services/ibgeService';
-import { calculateJudicialDebt, CalculationParams, Installment } from './services/judicialCalculatorService';
 
 const syncUseCase = new SyncProcessUpdatesUseCase();
 const importUseCase = new ImportNewAssetsUseCase();
 const retryEnrichmentUseCase = new RetryFailedEnrichmentsUseCase();
 const syncFeeContractsUseCase = new SyncFeeContractsUseCase();
+const runCalculationUseCase = new RunCalculationUseCase();
 
 /**
  * Inicia todos os jobs agendados da aplicação.
@@ -85,56 +86,14 @@ export const startScheduledJobs = () => {
                 }
             }
 
-            // 2. Recalcula todos os processos com parâmetros configurados
+            // 2. Recalcula todos os processos com parâmetros configurados, pelo mesmo
+            // caminho do botão "Calcular": mesmos parâmetros, mesmo log, mesmo valor.
             const allParams = await prisma.processCalculationParams.findMany();
             let ok = 0, fail = 0;
 
             for (const params of allParams) {
                 try {
-                    const result = await calculateJudicialDebt(
-                        {
-                            correctionIndex:    params.correctionIndex,
-                            moratoryRate:       params.moratoryRate,
-                            moratoryType:       params.moratoryType,
-                            moratoryStartDate:  params.moratoryStartDate?.toISOString() ?? null,
-                            compensatoryRate:   params.compensatoryRate,
-                            compensatoryType:   params.compensatoryType,
-                            feesPercentage:     params.feesPercentage,
-                            penaltyPercentage:  params.penaltyPercentage,
-                            feesOnPenalty:      params.feesOnPenalty,
-                            installments:       params.installments as unknown as Installment[],
-                        } as CalculationParams,
-                        year,
-                        month,
-                    );
-
-                    await prisma.calculationLog.create({
-                        data: {
-                            assetId:              params.assetId,
-                            calculatedBy:         'cron',
-                            referenceMonth:       month,
-                            referenceYear:        year,
-                            baseTotal:            result.baseTotal,
-                            correctedValue:       result.correctedValue,
-                            moratoryInterest:     result.moratoryInterest,
-                            compensatoryInterest: result.compensatoryInterest,
-                            feesValue:            result.feesValue,
-                            penaltyValue:         result.penaltyValue,
-                            totalValue:           result.totalValue,
-                            breakdown:            result.installmentResults as any,
-                        },
-                    });
-
-                    await prisma.processCalculationParams.update({
-                        where: { id: params.id },
-                        data:  { lastCalculatedValue: result.totalValue, lastCalculatedAt: new Date() },
-                    });
-
-                    await prisma.creditAsset.update({
-                        where: { id: params.assetId },
-                        data:  { currentValue: result.totalValue },
-                    });
-
+                    await runCalculationUseCase.calculateAndSave(params, 'cron', year, month);
                     ok++;
                 } catch (e: any) {
                     console.error(`  Erro ao recalcular processo ${params.assetId}:`, e.message);
