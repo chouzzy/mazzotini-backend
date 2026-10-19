@@ -1,25 +1,6 @@
 import { prisma } from '../../../../prisma';
 import { legalOneApiService } from '../../../../services/legalOneApiService';
-
-const TYPE_TO_CATEGORY: Record<string, string> = {
-    'cessao':                'CESSAO',
-    'cessão':                'CESSAO',
-    'ho':                    'HONORARIOS',
-    'honorarios':            'HONORARIOS',
-    'honorários':            'HONORARIOS',
-    'orientacao financeira': 'ORIENTACAO_FINANCEIRA',
-    'orientação financeira': 'ORIENTACAO_FINANCEIRA',
-    'orientacao fiscal':     'ORIENTACAO_FISCAL',
-    'orientação fiscal':     'ORIENTACAO_FISCAL',
-    'nota fiscal':           'NOTA_FISCAL',
-    'comprovante':           'COMPROVANTE',
-};
-
-function mapTypeToCategory(type: string | null | undefined): string | null {
-    if (!type) return null;
-    const key = type.replace(/^#/, '').toLowerCase().trim();
-    return TYPE_TO_CATEGORY[key] ?? null;
-}
+import { mapDocumentTypeToCategory } from '../../../../utils/documentTypeCategory';
 
 function extractFolderNumber(folder: string): string | null {
     const match = folder.match(/(\d{7})/);
@@ -74,7 +55,7 @@ export class SyncFeeContractsUseCase {
             if (existing) return false;
         }
 
-        const category = mapTypeToCategory(doc.type);
+        const category = mapDocumentTypeToCategory(doc.type);
         if (!category) return false;
 
         const rels: any[] = doc.relationships || [];
