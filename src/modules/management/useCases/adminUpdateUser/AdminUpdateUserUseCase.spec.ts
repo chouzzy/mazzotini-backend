@@ -55,4 +55,19 @@ describe('AdminUpdateUserUseCase', () => {
         expect(updateData()).not.toHaveProperty('referredById');
         expect(updateData()).not.toHaveProperty('indication');
     });
+
+    it('edição direta descarta as solicitações de alteração pendentes do usuário', async () => {
+        await new AdminUpdateUserUseCase().execute('user-1', { name: 'Nome Novo' }, { supersedePendingRequests: true });
+
+        expect(prisma.userProfileChangeRequest.updateMany).toHaveBeenCalledWith({
+            where: { userId: 'user-1', status: 'PENDING' },
+            data: expect.objectContaining({ status: 'REJECTED' }),
+        });
+    });
+
+    it('aprovação de solicitação (sem a opção) não mexe nas outras solicitações', async () => {
+        await new AdminUpdateUserUseCase().execute('user-1', { name: 'Nome Novo' });
+
+        expect(prisma.userProfileChangeRequest.updateMany).not.toHaveBeenCalled();
+    });
 });

@@ -10,8 +10,17 @@ interface IAdminUpdateUserDTO {
     [key: string]: any;
 }
 
+interface IAdminUpdateUserOptions {
+    /**
+     * Fecha as solicitações de alteração pendentes do usuário. Usado na edição direta do
+     * admin: depois dela, aprovar uma solicitação antiga sobrescreveria os dados novos com
+     * os velhos. A aprovação de uma solicitação não usa esta opção.
+     */
+    supersedePendingRequests?: boolean;
+}
+
 class AdminUpdateUserUseCase {
-    async execute(userId: string, data: IAdminUpdateUserDTO): Promise<User> {
+    async execute(userId: string, data: IAdminUpdateUserDTO, options: IAdminUpdateUserOptions = {}): Promise<User> {
         console.log(`[ADMIN UPDATE] Atualizando perfil do usuário ID: ${userId}`);
 
         // 1. Verifica se usuário existe
@@ -42,6 +51,13 @@ class AdminUpdateUserUseCase {
                 birthDate: formattedBirthDate,
             }
         });
+
+        if (options.supersedePendingRequests) {
+            await prisma.userProfileChangeRequest.updateMany({
+                where: { userId, status: 'PENDING' },
+                data: { status: 'REJECTED', rejectionReason: 'Substituída por uma edição direta do administrador.' },
+            });
+        }
 
         // 4. Sincroniza com Legal One (Se o usuário já estiver vinculado)
         if (updatedUser.legalOneContactId) {

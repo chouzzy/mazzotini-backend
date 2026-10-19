@@ -46,6 +46,12 @@ describe('AdminUpdateUserController', () => {
         expect(data).toMatchObject({ referredById: 'associado-2', indication: null });
     });
 
+    it('pede para descartar as solicitações pendentes, porque a edição vale na hora', async () => {
+        await run({ ...baseBody });
+
+        expect(mockExecute).toHaveBeenCalledWith('user-1', expect.any(Object), { supersedePendingRequests: true });
+    });
+
     it('continua descartando os outros campos vazios', async () => {
         const { data } = await run({ ...baseBody, rg: '', phone: null });
 

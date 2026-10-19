@@ -72,8 +72,9 @@ class AdminUpdateUserController {
                 birthDate: validatedData.birthDate ? new Date(validatedData.birthDate) : undefined,
             };
 
+            // A edição direta vale na hora e descarta as solicitações de alteração pendentes
             const useCase = new AdminUpdateUserUseCase();
-            const updatedUser = await useCase.execute(id, dataToUpdate);
+            const updatedUser = await useCase.execute(id, dataToUpdate, { supersedePendingRequests: true });
 
             return response.status(200).json(updatedUser);
 
