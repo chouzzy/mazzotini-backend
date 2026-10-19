@@ -18,7 +18,27 @@
  * divergência entre eles foi o que produziu este bug.
  */
 
+import type { Prisma } from '@prisma/client';
+
 export const TAG_RELATORIO = '#RelatórioMAA';
+/** Variante sem acento, aceita pelo sync manual. */
+export const TAG_RELATORIO_SEM_ACENTO = '#RelatorioMAA';
+
+/**
+ * Filtro dos andamentos exibidos na timeline (os relatórios #RelatórioMAA).
+ *
+ * Os syncs gravam o texto bruto, com a tag na descrição. O enrichment grava o
+ * texto já limpo, sem a tag, e registra a origem em `source`
+ * ("Legal One - Manual - #RelatórioMAA"). Filtrar só pela descrição escondia
+ * tudo o que o enrichment importava; por isso a tag também é procurada em `source`.
+ */
+export const VISIBLE_UPDATES_FILTER: Prisma.AssetUpdateWhereInput = {
+    OR: [
+        { description: { contains: TAG_RELATORIO } },
+        { description: { contains: TAG_RELATORIO_SEM_ACENTO } },
+        { source: { contains: TAG_RELATORIO } },
+    ],
+};
 
 export interface ExtractedValues {
     valorDaCausa: number | null;

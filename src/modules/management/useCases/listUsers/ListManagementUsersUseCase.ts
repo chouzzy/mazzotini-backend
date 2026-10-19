@@ -1,4 +1,5 @@
 import { prisma } from '../../../../prisma';
+import { Prisma, UserStatus, Role } from '@prisma/client';
 
 
 

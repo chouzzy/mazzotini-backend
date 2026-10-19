@@ -60,8 +60,9 @@ class CreateUserController {
                 cpfOrCnpj,
             });
             
-            // 5. Retorna o utilizador recém-criado com o status 201 (Created).
-            return response.status(201).json(newUser);
+            // 5. Retorna só o id. Esta rota é chamada fora do navegador e, quando o
+            //    e-mail já existia, devolvia o cadastro inteiro (CPF, RG, endereço).
+            return response.status(201).json({ id: newUser.id });
 
         } catch (err: any) {
             // 6. Lida com erros da lógica de negócio (ex: e-mail duplicado).

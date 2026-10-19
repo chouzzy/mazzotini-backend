@@ -1,5 +1,6 @@
 import { prisma } from '../../../../prisma';
 import { UNSYNCED_STATUSES } from '../listAllAssets/ListAllAssetsUseCase';
+import { VISIBLE_UPDATES_FILTER } from '../../../../utils/updateDescriptionParser';
 
 class GetAssetByProcessNumberUseCase {
     async execute(legalOneId: number, auth0UserId: string, roles: string[]) {
@@ -15,12 +16,7 @@ class GetAssetByProcessNumberUseCase {
                 },
                 associate: { select: { id: true, name: true, email: true } },
                 updates: {
-                    where: {
-                        OR: [
-                            { description: { contains: '#RelatórioMAA' } },
-                            { description: { contains: '#RelatorioMAA' } },
-                        ]
-                    },
+                    where: VISIBLE_UPDATES_FILTER,
                     orderBy: { date: "desc" }
                 },
                 documents: { orderBy: { createdAt: 'desc' } },

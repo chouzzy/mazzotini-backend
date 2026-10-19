@@ -1,5 +1,6 @@
 import { prisma } from '../../../../prisma';
 import { UNSYNCED_STATUSES } from '../../../creditAssets/useCases/listAllAssets/ListAllAssetsUseCase';
+import { VISIBLE_UPDATES_FILTER } from '../../../../utils/updateDescriptionParser';
 
 export interface AssociateProcessRow {
     investmentId: string;
@@ -53,12 +54,7 @@ class GetAssociateAllProcessesUseCase {
                         currentValue: true,
                         status: true,
                         updates: {
-                            where: {
-                                OR: [
-                                    { description: { contains: '#RelatórioMAA' } },
-                                    { description: { contains: '#RelatorioMAA' } },
-                                ],
-                            },
+                            where: VISIBLE_UPDATES_FILTER,
                             orderBy: { date: 'desc' },
                             take: 1,
                             select: { date: true, description: true },

@@ -2,6 +2,7 @@
 
 
 import { prisma } from '../../../../prisma';
+import { Role } from '@prisma/client';
 import { auth0ManagementService } from "../../../../services/auth0ManagementService";
 
 

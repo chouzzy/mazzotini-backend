@@ -2,12 +2,11 @@
 import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
 import { parseDocumentMeta } from '../../../../utils/documentNameParser';
-import { extractAllValues } from '../../../../utils/updateDescriptionParser';
+import { extractAllValues, TAG_RELATORIO } from '../../../../utils/updateDescriptionParser';
 
 
 
 // Tags
-const TAG_RELATORIO = "#RelatórioMAA";
 const TAG_DOCUMENTO = "#DocumentoMAA";
 
 // extractAllValues foi movida para src/utils/updateDescriptionParser.ts para que

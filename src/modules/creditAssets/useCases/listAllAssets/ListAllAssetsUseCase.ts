@@ -85,16 +85,17 @@ class ListAllAssetsUseCase {
 
         const where: Prisma.CreditAssetWhereInput = {};
 
-        if (primaryRole === ROLES.INVESTOR) {
-            where.investors = { some: { userId: user.id } };
-        } else if (primaryRole === ROLES.ASSOCIATE) {
+        const isInternalViewer = primaryRole === ROLES.ADMIN || primaryRole === ROLES.OPERATOR;
+
+        if (primaryRole === ROLES.ASSOCIATE) {
             where.OR = [
                 { associateId: user.id },
                 { investors: { some: { userId: user.id } } },
             ];
+        } else if (!isInternalViewer) {
+            // Qualquer papel que não seja interno (INVESTOR ou desconhecido) só vê os próprios ativos.
+            where.investors = { some: { userId: user.id } };
         }
-
-        const isInternalViewer = primaryRole === ROLES.ADMIN || primaryRole === ROLES.OPERATOR;
 
         if (!isInternalViewer) {
             // Cliente não vê ativo sem dado sincronizado. Aplicado aqui, no backend,
@@ -129,14 +130,20 @@ class ListAllAssetsUseCase {
 
         if (search) {
             const searchFilter = { contains: search, mode: 'insensitive' as Prisma.QueryMode };
-            const existingOr = Array.isArray(where.OR)
-                ? (where.OR as Prisma.CreditAssetWhereInput[])
+            const existingAnd = Array.isArray(where.AND)
+                ? (where.AND as Prisma.CreditAssetWhereInput[])
                 : [];
-            where.OR = [
-                ...existingOr,
-                { processNumber: searchFilter },
-                { originalCreditor: searchFilter },
-                { nickname: searchFilter },
+            // A busca vai num AND próprio. Somada ao OR de acesso do associado, ela
+            // devolvia qualquer ativo que casasse com o termo, de qualquer cliente.
+            where.AND = [
+                ...existingAnd,
+                {
+                    OR: [
+                        { processNumber: searchFilter },
+                        { originalCreditor: searchFilter },
+                        { nickname: searchFilter },
+                    ]
+                },
             ];
         }
 
