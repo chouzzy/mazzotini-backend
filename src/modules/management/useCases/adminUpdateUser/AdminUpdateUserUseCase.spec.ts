@@ -2,10 +2,11 @@ import { AdminUpdateUserUseCase } from './AdminUpdateUserUseCase';
 import { PrismaClient } from '@prisma/client';
 
 jest.mock('@prisma/client', () => {
-    const mPrisma = {
+    const mPrisma: any = {
         user: { findUnique: jest.fn(), update: jest.fn() },
         userProfileChangeRequest: { updateMany: jest.fn() },
     };
+    mPrisma.$transaction = jest.fn((fn: (tx: any) => unknown) => fn(mPrisma));
     return { PrismaClient: jest.fn(() => mPrisma) };
 });
 

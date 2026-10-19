@@ -44,20 +44,26 @@ class AdminUpdateUserUseCase {
         //    limpa o campo. Antes, a indicação e o associado indicado voltavam ao valor
         //    anterior quando vinham vazios, então trocar de associado cadastrado para nome
         //    manual (ou o contrário) mantinha os dois gravados.
-        const updatedUser = await prisma.user.update({
-            where: { id: userId },
-            data: {
-                ...updateData,
-                birthDate: formattedBirthDate,
-            }
-        });
-
-        if (options.supersedePendingRequests) {
-            await prisma.userProfileChangeRequest.updateMany({
-                where: { userId, status: 'PENDING' },
-                data: { status: 'REJECTED', rejectionReason: 'Substituída por uma edição direta do administrador.' },
+        //    A edição e o fechamento das solicitações pendentes vão juntos: se um falhar,
+        //    nenhum vale, e o admin não recebe erro sobre uma edição que já foi gravada.
+        const updatedUser = await prisma.$transaction(async (tx) => {
+            const updated = await tx.user.update({
+                where: { id: userId },
+                data: {
+                    ...updateData,
+                    birthDate: formattedBirthDate,
+                }
             });
-        }
+
+            if (options.supersedePendingRequests) {
+                await tx.userProfileChangeRequest.updateMany({
+                    where: { userId, status: 'PENDING' },
+                    data: { status: 'REJECTED', rejectionReason: 'Substituída por uma edição direta do administrador.' },
+                });
+            }
+
+            return updated;
+        });
 
         // 4. Sincroniza com Legal One (Se o usuário já estiver vinculado)
         if (updatedUser.legalOneContactId) {
