@@ -6,7 +6,7 @@
  *   INPC    : 188    (variação mensal, %)
  *   IPCA    : 433    (variação mensal, %)
  *   IPCA-15 : 7478   (variação mensal, %) — base da tabela do TJSP desde set/2024
- *   SELIC   : 11     (meta SELIC, % a.a.) — convertida para mensal no fetchSelicSeries
+ *   SELIC   : 11     (taxa diária, % a.d.) — acumulada por mês no fetchSelicSeries
  */
 
 import axios from 'axios';
@@ -20,7 +20,8 @@ const SERIES_CODES: Record<string, number> = {
     IPCA_15:    7478,   // IPCA-15 variação mensal % (usado na tabela do TJSP)
     IGP_M:      189,    // IGP-M variação mensal %
     CDI_MENSAL: 4391,   // CDI acumulado no mês %
-    // SELIC e CDI_DIARIA: série 11 / 12 (taxa diária "over", % a.d.) — acumulação mensal feita em fetchSelicSeries/fetchCDIDiariaSereis
+    // SELIC (série 11) e CDI over (série 12) são diárias, acumuladas por mês em fetchSelicSeries e
+    // fetchCDIDiariaSeries. O CDI_DIARIA da calculadora usa hoje a série 4391, como o CDI_MENSAL.
 };
 
 export interface IBGEDataPoint {
@@ -33,22 +34,26 @@ function formatDateBCB(year: number, month: number): string {
     return `01/${String(month).padStart(2, '0')}/${year}`;
 }
 
-// O SGS do BCB às vezes responde 5xx ou demora demais. Como o cron roda uma vez por mês,
-// um índice que falha fica um mês sem atualizar: vale tentar de novo antes de desistir.
+// O SGS do BCB às vezes responde 5xx ou 429, devolve uma página no lugar da lista de dados
+// ou demora demais. Como o cron roda uma vez por mês, um índice que falha fica um mês sem
+// atualizar: vale tentar de novo antes de desistir.
 const RETRY_DELAYS_MS = [2000, 5000, 15000];
 
 async function getBCB(url: string, timeout: number): Promise<{ data: string; valor: string }[]> {
     for (let attempt = 0; ; attempt++) {
+        let failure: unknown;
         try {
             const response = await axios.get<{ data: string; valor: string }[]>(url, { timeout });
-            return response.data;
+            if (Array.isArray(response.data)) return response.data;
+            failure = new Error('Resposta inesperada do BCB: o corpo não é a lista de dados.');
         } catch (err: any) {
             const status = err?.response?.status;
-            // Erro 4xx (ex.: 404 de período ainda sem dado publicado) não melhora repetindo
-            const transient = !status || status >= 500;
-            if (!transient || attempt >= RETRY_DELAYS_MS.length) throw err;
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+            // Erro 4xx (ex.: 404 de período ainda sem dado publicado) não melhora repetindo; o 429 sim
+            if (status && status < 500 && status !== 429) throw err;
+            failure = err;
         }
+        if (attempt >= RETRY_DELAYS_MS.length) throw failure;
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
     }
 }
 

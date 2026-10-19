@@ -97,4 +97,32 @@ describe('consulta ao BCB', () => {
         await assertion;
         expect(mockedGet).toHaveBeenCalledTimes(4);
     });
+
+    it.each([
+        ['429 (limite de requisições)', { response: { status: 429 } }],
+        ['erro de rede, sem resposta',  { code: 'ECONNRESET' }],
+    ])('tenta de novo em %s', async (_, error) => {
+        jest.useFakeTimers();
+        mockedGet
+            .mockRejectedValueOnce(error)
+            .mockResolvedValueOnce(bcb([[9, 2026, '0.82']]));
+
+        const result = fetchIndexSeries('IPCA', 2026, 9, 2026, 9);
+        await jest.advanceTimersByTimeAsync(2000);
+
+        await expect(result).resolves.toEqual([{ year: 2026, month: 9, monthlyRate: 0.82 }]);
+        expect(mockedGet).toHaveBeenCalledTimes(2);
+    });
+
+    it('tenta de novo quando o BCB devolve uma página no lugar da lista de dados', async () => {
+        jest.useFakeTimers();
+        mockedGet
+            .mockResolvedValueOnce({ data: '<html>Serviço indisponível</html>' })
+            .mockResolvedValueOnce(bcb([[9, 2026, '0.82']]));
+
+        const result = fetchIndexSeries('IPCA', 2026, 9, 2026, 9);
+        await jest.advanceTimersByTimeAsync(2000);
+
+        await expect(result).resolves.toEqual([{ year: 2026, month: 9, monthlyRate: 0.82 }]);
+    });
 });
