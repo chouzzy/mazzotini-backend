@@ -32,4 +32,44 @@ export class LegalOneAuth {
         const token = await this.getAccessToken();
         return { Authorization: `Bearer ${token}` };
     }
+
+    /**
+     * Helper para lidar com Rate Limit (429) usando Exponential Backoff.
+     * Fica na classe base para todos os serviços do Legal One poderem usar.
+     */
+    protected async requestWithRetry<T>(requestFn: () => Promise<T>, maxRetries = 5): Promise<T> {
+        let attempt = 0;
+        let baseDelay = 2000; // Começa a esperar 2 segundos
+
+        while (attempt < maxRetries) {
+            try {
+                // Tenta executar a requisição Axios
+                return await requestFn();
+            } catch (error: any) {
+                // Se o erro for 429 (Too Many Requests)
+                if (error.response && error.response.status === 429) {
+                    attempt++;
+                    console.warn(`[RATE LIMIT] ⚠️ 429 Too Many Requests. Tentativa ${attempt}/${maxRetries}...`);
+
+                    if (attempt >= maxRetries) {
+                        console.error(`[RATE LIMIT] ❌ Limite de tentativas excedido.`);
+                        throw error;
+                    }
+
+                    // Verifica se a API informou quanto tempo devemos esperar (header Retry-After)
+                    const retryAfter = error.response.headers['retry-after'];
+
+                    // Se tiver header, usa ele. Se não, dobra o tempo de espera (2s, 4s, 8s, 16s...)
+                    const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : baseDelay * Math.pow(2, attempt - 1);
+
+                    console.log(`[RATE LIMIT] ⏳ Aguardando ${waitTime / 1000} segundos antes de tentar de novo...`);
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                } else {
+                    // Se for um erro 404, 500, etc., lança o erro normalmente para não mascarar outros problemas
+                    throw error;
+                }
+            }
+        }
+        throw new Error("Unreachable");
+    }
 }
