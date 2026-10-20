@@ -1,5 +1,6 @@
 /**
- * Atualização mensal dos índices da calculadora (IndexSeries), chamada pelo cron do dia 5.
+ * Atualização dos índices da calculadora (IndexSeries), chamada todo dia pelo cron das 6h e pelo
+ * recálculo do dia 5.
  *
  * - IPCA_E, INPC, IPCA e IGP_M: do último mês gravado (inclusive) até o mês atual. O BCB só
  *   devolve os meses publicados: o IPCA de um mês sai por volta do dia 10 do mês seguinte.
@@ -8,8 +9,9 @@
  * - TJSP_LEI14905: estende a tabela oficial (acumulado) a partir do último mês que a tem.
  * - TJPR_MEDIA_INPC_IGPDI e TJMG_CORREGEDORIA: do último mês gravado até o mês atual. A taxa
  *   do mês M usa os índices de M-1, então o mês entra quando eles saem.
- * - TAXA_LEGAL: do último mês gravado até o mês atual. A taxa do mês M usa a SELIC e o IPCA-15
- *   de M-1, que já saíram no dia 5.
+ * - TAXA_LEGAL: a série inteira, desde 08/2024, a cada execução (são poucos meses): acompanha uma
+ *   revisão do BCB e completa um mês que tenha faltado. A taxa do mês M usa a SELIC e o IPCA-15
+ *   de M-1, que saem no começo do mês.
  *
  * Um mês que ainda não saiu entra na próxima execução, e um índice com erro não impede os outros.
  */
@@ -50,7 +52,27 @@ const TAXA_LEGAL_START: YearMonth    = { year: 2024, month: 8 };
 const isAfter = (a: YearMonth, b: YearMonth) => a.year * 12 + a.month > b.year * 12 + b.month;
 const formatMonth = (p: YearMonth) => `${String(p.month).padStart(2, '0')}/${p.year}`;
 
-export async function updateIndexSeries(now = new Date()): Promise<IndexUpdateResult[]> {
+/** Só a primeira instância do PM2 em cluster atualiza os índices (sem cluster, é a única). */
+export const isFirstInstance = () => (process.env.NODE_APP_INSTANCE ?? '0') === '0';
+
+/**
+ * Atualização em andamento. Chamadas ao mesmo tempo compartilham a mesma, e a carga das séries
+ * vazias não roda enquanto ela grava as mesmas séries.
+ */
+let updating: Promise<IndexUpdateResult[]> | null = null;
+
+export function updateIndexSeries(now = new Date()): Promise<IndexUpdateResult[]> {
+    if (!updating) {
+        updating = (async () => {
+            // Uma carga das séries vazias em andamento termina antes
+            await loadingEmptySeries?.catch(() => undefined);
+            return updateAllSeries(now);
+        })().finally(() => { updating = null; });
+    }
+    return updating;
+}
+
+async function updateAllSeries(now: Date): Promise<IndexUpdateResult[]> {
     const current: YearMonth   = { year: now.getFullYear(), month: now.getMonth() + 1 };
     const lastMonth: YearMonth = shiftMonth(current.year, current.month, -1);
     const results: IndexUpdateResult[] = [];
@@ -78,8 +100,11 @@ export async function updateIndexSeries(now = new Date()): Promise<IndexUpdateRe
             (s, e) => fetchTable(s.year, s.month, e.year, e.month))));
     }
 
-    results.push(await run(TAXA_LEGAL, () => refresh(TAXA_LEGAL, TAXA_LEGAL_START, current,
-        (s, e) => fetchTaxaLegalSeries(s.year, s.month, e.year, e.month))));
+    results.push(await run(TAXA_LEGAL, async () => {
+        const points = await fetchTaxaLegalSeries(TAXA_LEGAL_START.year, TAXA_LEGAL_START.month, current.year, current.month);
+        await upsertMonthlyRates(TAXA_LEGAL, points);
+        return points;
+    }));
 
     return results;
 }
@@ -90,14 +115,16 @@ export async function updateIndexSeries(now = new Date()): Promise<IndexUpdateRe
  * não têm nenhum mês gravado; as outras seguem pelo cron do dia 5. Roda no início do servidor e
  * a cada hora, então um BCB fora do ar no deploy se resolve sozinho.
  *
- * A série inteira entra numa gravação só, para nenhum cálculo ver a série pela metade. Com o
- * PM2 em cluster, só a primeira instância carrega, e chamadas ao mesmo tempo (o início do
- * servidor e o cron de hora em hora) compartilham a mesma carga, sem gravar a série duas vezes.
+ * Cada série entra de uma vez (um createMany), e não mês a mês: um cálculo que rode durante a
+ * carga quase sempre vê a série vazia ou inteira. Não é uma transação, então sobra uma janela de
+ * milissegundos. Com o PM2 em cluster, só a primeira instância carrega; chamadas ao mesmo tempo (o
+ * início do servidor e o cron de hora em hora) compartilham a mesma carga, e a carga não roda
+ * enquanto a atualização completa, que também grava essas séries, estiver em andamento.
  */
 let loadingEmptySeries: Promise<IndexUpdateResult[]> | null = null;
 
 export function ensureIndexSeriesLoaded(now = new Date()): Promise<IndexUpdateResult[]> {
-    if ((process.env.NODE_APP_INSTANCE ?? '0') !== '0') return Promise.resolve([]);
+    if (!isFirstInstance() || updating) return Promise.resolve([]);
     if (!loadingEmptySeries) {
         loadingEmptySeries = loadEmptySeries(now).finally(() => { loadingEmptySeries = null; });
     }

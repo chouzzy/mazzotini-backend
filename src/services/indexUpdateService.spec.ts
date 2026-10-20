@@ -195,19 +195,46 @@ describe('updateIndexSeries', () => {
         expect(fetchTJSPSeries).toHaveBeenCalled();
     });
 
-    it('a taxa legal vai do último mês gravado até o mês atual, e sem nenhum mês começa em 08/2024', async () => {
+    it('a taxa legal vem inteira a cada execução, desde 08/2024', async () => {
         lastStored = { TAXA_LEGAL: { year: 2026, month: 10 } };
-        (fetchTaxaLegalSeries as jest.Mock).mockResolvedValue([{ year: 2026, month: 10, monthlyRate: 0.38 }, { year: 2026, month: 11, monthlyRate: 0.41 }]);
+        (fetchTaxaLegalSeries as jest.Mock).mockResolvedValue([{ year: 2024, month: 8, monthlyRate: 0.6 }, { year: 2026, month: 11, monthlyRate: 0.41 }]);
 
         await updateIndexSeries(NOV_5);
 
-        expect(fetchTaxaLegalSeries).toHaveBeenCalledWith(2026, 10, 2026, 11);
-        expect(savedMonths('TAXA_LEGAL')).toEqual(['10/2026', '11/2026']);
-
-        jest.clearAllMocks();
-        lastStored = {};
-        await updateIndexSeries(NOV_5);
+        // Assim acompanha uma revisão do BCB e completa um mês que tenha faltado
         expect(fetchTaxaLegalSeries).toHaveBeenCalledWith(2024, 8, 2026, 11);
+        expect(savedMonths('TAXA_LEGAL')).toEqual(['8/2024', '11/2026']);
+    });
+
+    it('duas atualizações ao mesmo tempo compartilham a mesma execução', async () => {
+        const [a, b] = await Promise.all([updateIndexSeries(NOV_5), updateIndexSeries(NOV_5)]);
+
+        expect(a).toBe(b);
+        expect(fetchTaxaLegalSeries).toHaveBeenCalledTimes(1);
+    });
+
+    it('a carga das séries vazias não roda durante a atualização, que grava as mesmas séries', async () => {
+        const update = updateIndexSeries(NOV_5);
+
+        expect(await ensureIndexSeriesLoaded(NOV_5)).toEqual([]);
+        await update;
+        expect(prisma.indexSeries.createMany).not.toHaveBeenCalled();
+    });
+
+    it('a atualização espera a carga das séries vazias que estiver em andamento', async () => {
+        let finishLoad!: () => void;
+        (fetchTaxaLegalSeries as jest.Mock).mockImplementationOnce(() =>
+            new Promise(resolve => { finishLoad = () => resolve([{ year: 2024, month: 8, monthlyRate: 0.6 }]); }));
+
+        const load   = ensureIndexSeriesLoaded(NOV_5);   // a taxa legal está vazia: espera o BCB
+        const update = updateIndexSeries(NOV_5);
+        await new Promise(resolve => setImmediate(resolve));
+        expect(fetchIndexSeries).not.toHaveBeenCalled();
+
+        finishLoad();
+        await Promise.all([load, update]);
+        expect(prisma.indexSeries.createMany).toHaveBeenCalledTimes(1);
+        expect(fetchIndexSeries).toHaveBeenCalled();
     });
 });
 

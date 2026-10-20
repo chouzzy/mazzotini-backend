@@ -5,7 +5,7 @@ import { RetryFailedEnrichmentsUseCase } from './modules/creditAssets/useCases/r
 import { SyncFeeContractsUseCase } from './modules/creditAssets/useCases/syncFeeContracts/SyncFeeContractsUseCase';
 import { RunCalculationUseCase } from './modules/calculator/useCases/runCalculation/RunCalculationUseCase';
 import { prisma } from './prisma';
-import { describeIndexLoad, ensureIndexSeriesLoaded, updateIndexSeries } from './services/indexUpdateService';
+import { describeIndexLoad, ensureIndexSeriesLoaded, isFirstInstance, updateIndexSeries } from './services/indexUpdateService';
 import { describeAsset, notifyRecalculationFailures, RecalculationFailure } from './services/recalculationReport';
 
 const syncUseCase = new SyncProcessUpdatesUseCase();
@@ -128,5 +128,19 @@ export const startScheduledJobs = () => {
     }, {
         timezone: "America/Sao_Paulo"
     });
+
+    // Todos os dias às 6h: grava os índices publicados desde a última execução, sem recalcular.
+    // Assim o cálculo manual usa um índice assim que o BCB o publica, como no Dr. Calc, em vez de
+    // esperar o dia 5 (o IPCA de um mês sai por volta do dia 10 do seguinte). Usa só o BCB, não o
+    // Legal One. Com o PM2 em cluster, só a primeira instância atualiza.
+    cron.schedule('0 6 * * *', async () => {
+        if (!isFirstInstance()) return;
+        console.log('--- Executando job agendado: Atualizar Índices ---');
+        try {
+            await updateIndexSeries();
+        } catch (e: any) {
+            console.error('--- FALHA no job de atualização de índices:', e.message);
+        }
+    }, { timezone: 'America/Sao_Paulo' });
 };
 
