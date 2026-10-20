@@ -1,12 +1,28 @@
 import { PrismaClient } from '@prisma/client';
-import { calculateJudicialDebt, CalculationParams, combineResults, NAO_ATUALIZAR } from './judicialCalculatorService';
+import { calculateJudicialDebt, CalculationParams, combineResults, NAO_ATUALIZAR, TAXA_LEGAL } from './judicialCalculatorService';
 
 jest.mock('@prisma/client', () => {
-    const mPrisma: any = { indexSeries: { findMany: jest.fn() } };
+    const mPrisma: any = { indexSeries: { findMany: jest.fn(), findFirst: jest.fn() } };
     return { PrismaClient: jest.fn(() => mPrisma) };
 });
 
 const prisma = new PrismaClient() as any;
+
+type Row = { year: number; month: number; monthlyRate: number; accumulatedValue: number | null };
+const row = (year: number, month: number, monthlyRate: number, accumulatedValue: number | null = null): Row =>
+    ({ year, month, monthlyRate, accumulatedValue });
+
+/** Banco simulado: as linhas gravadas de cada índice. findFirst devolve o primeiro e o último mês. */
+function mockSeries(series: Record<string, Row[]>) {
+    const rowsOf = (indexName: string) => series[indexName] ?? [];
+    prisma.indexSeries.findMany.mockImplementation(({ where }: any) => Promise.resolve(
+        rowsOf(where.indexName).filter(r => where.OR.some((w: any) => w.year === r.year && w.month === r.month))));
+    prisma.indexSeries.findFirst.mockImplementation(({ where, orderBy }: any) => {
+        const rows = [...rowsOf(where.indexName)].sort((a, b) => (a.year * 12 + a.month) - (b.year * 12 + b.month));
+        const pick = orderBy[0].year === 'asc' ? rows[0] : rows[rows.length - 1];
+        return Promise.resolve(pick ? { year: pick.year, month: pick.month } : null);
+    });
+}
 
 /** Débito fictício de R$ 1.000 (jan/2026), juros de 1% a.m. simples, multa de 2% e honorários de 10%. */
 const params: CalculationParams = {
@@ -29,9 +45,22 @@ const params: CalculationParams = {
     installments:          [{ baseValue: 1000, baseDate: '2026-01-15T00:00:00.000Z', description: 'Parcela exemplo' }],
 };
 
-describe('calculateJudicialDebt', () => {
-    beforeEach(() => jest.clearAllMocks());
+/** Parcela fictícia de R$ 1.000 sem juros, multa nem honorários, para isolar cada regra. */
+const plain = (baseDate: string, extra: Partial<CalculationParams> = {}): CalculationParams => ({
+    ...params,
+    moratoryRate:    0,
+    multaPercentage: 0,
+    feesPercentage:  0,
+    installments:    [{ baseValue: 1000, baseDate: `${baseDate}T00:00:00.000Z`, description: 'Parcela exemplo' }],
+    ...extra,
+});
 
+beforeEach(() => {
+    jest.clearAllMocks();
+    mockSeries({});
+});
+
+describe('calculateJudicialDebt', () => {
     it('"Não atualizar (fixo)" não corrige o principal e mantém juros, multa e honorários', async () => {
         const result = await calculateJudicialDebt(params, 2026, 7);
 
@@ -56,17 +85,16 @@ describe('calculateJudicialDebt', () => {
         expect(result.totalValue).toBe(1088);
     });
 
-    it('com um índice, corrige o principal pela série gravada', async () => {
-        prisma.indexSeries.findMany.mockResolvedValue([
-            { year: 2026, month: 2, monthlyRate: 1, accumulatedValue: null },
-            { year: 2026, month: 3, monthlyRate: 2, accumulatedValue: null },
-        ]);
+    it('com um índice de preço, corrige do mês da parcela ao mês anterior ao de referência', async () => {
+        mockSeries({ IPCA: [row(2026, 1, 1), row(2026, 2, 2), row(2026, 3, 5)] });
 
         const result = await calculateJudicialDebt({ ...params, correctionIndex: 'IPCA' }, 2026, 3);
 
         expect(prisma.indexSeries.findMany.mock.calls[0][0].where.indexName).toBe('IPCA');
         expect(result.installmentResults[0].correctionFactor).toBeCloseTo(1.0302, 8);
+        expect(result.installmentResults[0].monthBreakdown.map(m => `${m.month}/${m.year}`)).toEqual(['1/2026', '2/2026']);
         expect(result.correctedValue).toBe(1030.2);
+        expect(result.warnings).toBeUndefined();
     });
 });
 
@@ -74,15 +102,13 @@ describe('fator de correção com a tabela oficial (acumulado)', () => {
     const tjsp = { ...params, correctionIndex: 'TJSP_LEI14905' };
     // Taxa mensal gravada errada (9%) nos meses da tabela, como depois de um seed antigo
     const official = [
-        { year: 2026, month: 1, monthlyRate: 9, accumulatedValue: 100 },
-        { year: 2026, month: 2, monthlyRate: 9, accumulatedValue: 101 },
-        { year: 2026, month: 3, monthlyRate: 9, accumulatedValue: 103.02 },
+        row(2026, 1, 9, 100),
+        row(2026, 2, 9, 101),
+        row(2026, 3, 9, 103.02),
     ];
 
-    beforeEach(() => jest.clearAllMocks());
-
     it('usa a razão entre os acumulados e ignora a taxa mensal gravada', async () => {
-        prisma.indexSeries.findMany.mockResolvedValue(official);
+        mockSeries({ TJSP_LEI14905: official });
 
         const inst = (await calculateJudicialDebt(tjsp, 2026, 3)).installmentResults[0];
 
@@ -91,33 +117,196 @@ describe('fator de correção com a tabela oficial (acumulado)', () => {
     });
 
     it('sem acumulado na referência, usa a tabela até o último mês e a taxa mensal depois', async () => {
-        prisma.indexSeries.findMany.mockResolvedValue([
-            ...official.slice(0, 2),
-            { year: 2026, month: 3, monthlyRate: 2, accumulatedValue: null },
-        ]);
+        mockSeries({ TJSP_LEI14905: [...official.slice(0, 2), row(2026, 3, 2)] });
 
-        // Abril não tem linha: conta 0%
-        const inst = (await calculateJudicialDebt(tjsp, 2026, 4)).installmentResults[0];
+        // Abril ainda não tem linha: conta 0% e vira um aviso
+        const result = await calculateJudicialDebt(tjsp, 2026, 4);
 
-        expect(inst.correctionFactor).toBeCloseTo(1.01 * 1.02, 8);
+        expect(result.installmentResults[0].correctionFactor).toBeCloseTo(1.01 * 1.02, 8);
+        expect(result.warnings).toEqual(['TJSP de 04/2026 ainda sem valor no banco: o mês entrou como 0%.']);
     });
 
     it('um mês sem acumulado no meio não muda o fator até o próximo mês da tabela', async () => {
-        prisma.indexSeries.findMany.mockResolvedValue([
-            official[0],
-            { year: 2026, month: 2, monthlyRate: 5, accumulatedValue: null },
-            official[2],
-        ]);
+        mockSeries({ TJSP_LEI14905: [official[0], row(2026, 2, 5), official[2]] });
 
         const inst = (await calculateJudicialDebt(tjsp, 2026, 3)).installmentResults[0];
 
         expect(inst.correctionFactor).toBeCloseTo(1.0302, 8);
     });
+
+    it('parcela de dezembro: a tabela começa em janeiro do ano seguinte', async () => {
+        mockSeries({ TJSP_LEI14905: [row(2025, 12, 0, 100), row(2026, 1, 0, 102)] });
+
+        const inst = (await calculateJudicialDebt({ ...tjsp, installments: [{ baseValue: 1000, baseDate: '2025-12-10T00:00:00.000Z' }] }, 2026, 1)).installmentResults[0];
+
+        expect(inst.correctionFactor).toBeCloseTo(1.02, 8);
+        expect(inst.monthBreakdown.map(m => `${m.month}/${m.year}`)).toEqual(['1/2026']);
+    });
+});
+
+// Os valores esperados abaixo saíram do "Cálculo de débitos judiciais" do Dr. Calc (drcalc.net), a
+// referência do escritório, com as mesmas parcelas fictícias. Os índices são os publicados (IBGE, BCB).
+describe('convenções do Dr. Calc', () => {
+    describe('correção monetária', () => {
+        it('IPCA: R$ 1.000 de 15/01/2023 até 03/2023 dá R$ 1.013,74 (inflação de janeiro e fevereiro)', async () => {
+            mockSeries({ IPCA: [row(2022, 12, 0.62), row(2023, 1, 0.53), row(2023, 2, 0.84), row(2023, 3, 0.71)] });
+
+            const result = await calculateJudicialDebt(plain('2023-01-15', { correctionIndex: 'IPCA' }), 2023, 3);
+
+            expect(result.totalValue).toBe(1013.74);
+        });
+
+        it('INPC: a mesma parcela dá R$ 1.012,34', async () => {
+            mockSeries({ INPC: [row(2022, 12, 0.69), row(2023, 1, 0.46), row(2023, 2, 0.77), row(2023, 3, 0.64)] });
+
+            const result = await calculateJudicialDebt(plain('2023-01-15', { correctionIndex: 'INPC' }), 2023, 3);
+
+            expect(result.totalValue).toBe(1012.34);
+        });
+
+        it('TJPR: a linha do mês já traz a média do mês anterior, e o resultado é o mesmo (R$ 1.006,66)', async () => {
+            mockSeries({ TJPR_MEDIA_INPC_IGPDI: [row(2023, 1, 0.5), row(2023, 2, 0.26), row(2023, 3, 0.405)] });
+
+            const result = await calculateJudicialDebt(plain('2023-01-15', { correctionIndex: 'TJPR_MEDIA_INPC_IGPDI' }), 2023, 3);
+
+            expect(result.totalValue).toBe(1006.66);
+        });
+
+        it('parcela no próprio mês de referência não é corrigida', async () => {
+            mockSeries({ IPCA: [row(2023, 3, 0.71)] });
+
+            const result = await calculateJudicialDebt(plain('2023-03-10', { correctionIndex: 'IPCA' }), 2023, 3);
+
+            expect(result.totalValue).toBe(1000);
+        });
+    });
+
+    describe('taxa legal nos juros de mora', () => {
+        const legal = (baseDate: string) => plain(baseDate, { moratoryMode: 'TAXA_LEGAL' });
+
+        it('12% a.a. pelos dias de cada mês: de 15/01/2023 até 03/2023 são R$ 19,40', async () => {
+            const result = await calculateJudicialDebt(legal('2023-01-15'), 2023, 3);
+
+            expect(result.moratoryInterest).toBe(19.4);
+            expect(result.installmentResults[0].moratoryMonths).toBe(2);
+            expect(prisma.indexSeries.findMany).not.toHaveBeenCalled();
+        });
+
+        it('troca de 6% para 12% a.a. em 12/02/2003: de 15/01/2003 até 04/2003 são R$ 22,68', async () => {
+            const result = await calculateJudicialDebt(legal('2003-01-15'), 2003, 4);
+
+            expect(result.moratoryInterest).toBe(22.68);
+        });
+
+        it('desde 30/08/2024, soma a taxa legal oficial de cada mês: de 15/01/2025 até 06/2025 são R$ 24,37', async () => {
+            mockSeries({ [TAXA_LEGAL]: [row(2025, 1, 0.5894), row(2025, 2, 0.9022), row(2025, 3, 0), row(2025, 4, 0.322), row(2025, 5, 0.6232), row(2025, 6, 0.776)] });
+
+            const result = await calculateJudicialDebt(legal('2025-01-15'), 2025, 6);
+
+            expect(result.moratoryInterest).toBe(24.37);
+            expect(result.installmentResults[0].moratoryMonths).toBe(5);
+        });
+
+        it('atravessando a Lei 14.905: de 15/01/2024 até 03/2025 são R$ 114,25', async () => {
+            mockSeries({ [TAXA_LEGAL]: [
+                row(2024, 8, 0.605306), row(2024, 9, 0.6762), row(2024, 10, 0.7042), row(2024, 11, 0.3859),
+                row(2024, 12, 0.1719), row(2025, 1, 0.5894), row(2025, 2, 0.9022),
+            ] });
+
+            const result = await calculateJudicialDebt(legal('2024-01-15'), 2025, 3);
+
+            expect(result.moratoryInterest).toBe(114.25);
+        });
+
+        it('com data de início dos juros, conta dela para todas as parcelas', async () => {
+            const result = await calculateJudicialDebt({
+                ...legal('2023-01-15'),
+                moratoryStartDate: '2022-12-01T00:00:00.000Z',
+                installments: [
+                    { baseValue: 1000, baseDate: '2023-01-15T00:00:00.000Z' },
+                    { baseValue: 1000, baseDate: '2023-02-15T00:00:00.000Z' },
+                ],
+            }, 2023, 3);
+
+            // dez, jan e fev: (31 + 31 + 28) dias a 12% a.a., para cada parcela
+            expect(result.moratoryInterest).toBe(59.18);
+        });
+
+        it('recusa quando falta a taxa legal de um mês no meio da série', async () => {
+            mockSeries({ [TAXA_LEGAL]: [row(2025, 1, 0.5894), row(2025, 3, 0)] });
+
+            await expect(calculateJudicialDebt(legal('2025-01-15'), 2025, 4))
+                .rejects.toThrow('Falta taxa legal de 02/2025 no banco. Rode a atualização dos índices.');
+        });
+
+        it('recusa quando a taxa legal ainda não foi carregada', async () => {
+            await expect(calculateJudicialDebt(legal('2025-01-15'), 2025, 4))
+                .rejects.toThrow('Não há dados de taxa legal no banco. Rode a atualização dos índices.');
+        });
+
+        it('mês depois do último publicado entra como 0% e vira um aviso', async () => {
+            mockSeries({ [TAXA_LEGAL]: [row(2025, 1, 0.5894), row(2025, 2, 0.9022)] });
+
+            const result = await calculateJudicialDebt(legal('2025-01-15'), 2025, 4);
+
+            expect(result.moratoryInterest).toBe(14.92);
+            expect(result.warnings).toEqual(['Taxa legal de 03/2025 ainda sem valor no banco: o mês entrou como 0%.']);
+        });
+    });
+
+    describe('Art. 523', () => {
+        it('os honorários do 523 são sempre 10%: com honorários de 15%, o total é R$ 1.380,00', async () => {
+            const result = await calculateJudicialDebt(
+                plain('2023-01-15', { feesPercentage: 15, penaltyPercentage: 10, feesOnPenalty: true }), 2023, 3);
+
+            expect(result.totalValue).toBe(1380);
+        });
+
+        it('com honorário fixo, a multa e os honorários do 523 incidem sobre o débito com ele: R$ 1.440,00', async () => {
+            const result = await calculateJudicialDebt(
+                plain('2023-01-15', { feesMode: 'FIXO', feesFixedValue: 200, penaltyPercentage: 10, feesOnPenalty: true }), 2023, 3);
+
+            expect(result.totalValue).toBe(1440);
+        });
+    });
+
+    describe('mês sem índice', () => {
+        it('recusa um mês faltando no meio da série', async () => {
+            mockSeries({ IPCA: [row(2023, 1, 0.53), row(2023, 3, 0.71)] });
+
+            await expect(calculateJudicialDebt(plain('2023-01-15', { correctionIndex: 'IPCA' }), 2023, 4))
+                .rejects.toThrow('Falta IPCA de 02/2023 no banco. Rode a atualização dos índices.');
+        });
+
+        it('recusa uma data anterior ao início da série', async () => {
+            mockSeries({ IPCA: [row(2000, 1, 0.62), row(2000, 2, 0.13)] });
+
+            await expect(calculateJudicialDebt(plain('1999-12-15', { correctionIndex: 'IPCA' }), 2000, 3))
+                .rejects.toThrow('Não há IPCA para 12/1999: a série começa em 01/2000.');
+        });
+
+        it('recusa um índice sem nenhum dado no banco', async () => {
+            await expect(calculateJudicialDebt(plain('2023-01-15', { correctionIndex: 'TJPR_MEDIA_INPC_IGPDI' }), 2023, 3))
+                .rejects.toThrow('Não há dados de TJPR no banco. Rode a atualização dos índices.');
+        });
+
+        it('índice ainda não publicado entra como 0% e vira um aviso: R$ 1.004,97, como no Dr. Calc', async () => {
+            mockSeries({ IPCA: [row(2026, 8, -0.32), row(2026, 9, 0.82)] });
+
+            const result = await calculateJudicialDebt(plain('2026-08-15', { correctionIndex: 'IPCA' }), 2026, 11);
+
+            expect(result.totalValue).toBe(1004.97);
+            expect(result.warnings).toEqual(['IPCA de 10/2026 ainda sem valor no banco: o mês entrou como 0%.']);
+        });
+
+        it('"Não atualizar (fixo)" recusa datas anteriores ao Real', async () => {
+            await expect(calculateJudicialDebt(plain('1990-01-15'), 2023, 3)).rejects.toThrow(
+                '"Não atualizar (fixo)" vale para datas a partir de 01/07/1994. Mude a data da parcela de 15/01/1990 ou escolha outro índice.');
+        });
+    });
 });
 
 describe('combineResults (vários cálculos no mesmo processo)', () => {
-    beforeEach(() => jest.clearAllMocks());
-
     // Dois contratos fictícios, sem correção, para os valores ficarem fáceis de conferir
     const contrato1 = () => calculateJudicialDebt(params, 2026, 7);   // total 1.188 (ver o primeiro teste)
     const contrato2 = () => calculateJudicialDebt({
@@ -150,6 +339,7 @@ describe('combineResults (vários cálculos no mesmo processo)', () => {
             { label: 'Contrato 1', baseTotal: 1000, correctedValue: 1000, totalValue: 1188 },
             { label: 'Contrato 2', baseTotal: 500,  correctedValue: 500,  totalValue: 520 },
         ]);
+        expect(combined.warnings).toBeUndefined();
     });
 
     it('junta os abatimentos de cada cálculo', async () => {
@@ -169,5 +359,17 @@ describe('combineResults (vários cálculos no mesmo processo)', () => {
         expect(combined.abatimentoResults.map(a => a.description)).toEqual(['Contrato 1 · Depósito']);
         expect(combined.abatimentoTotal).toBe(100);
         expect(combined.totalValue).toBe(1088 + 520);
+    });
+
+    it('junta os avisos de cada cálculo, com o nome dele', async () => {
+        mockSeries({ IPCA: [row(2026, 8, -0.32), row(2026, 9, 0.82)] });
+        const comAviso = await calculateJudicialDebt(plain('2026-08-15', { correctionIndex: 'IPCA' }), 2026, 11);
+
+        const combined = combineResults([
+            { label: 'Contrato 1', result: await contrato1() },
+            { label: 'Contrato 2', result: comAviso },
+        ]);
+
+        expect(combined.warnings).toEqual(['Contrato 2: IPCA de 10/2026 ainda sem valor no banco: o mês entrou como 0%.']);
     });
 });

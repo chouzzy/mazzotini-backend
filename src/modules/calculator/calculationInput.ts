@@ -148,7 +148,7 @@ export function validateCalculation(raw: any, calcLabel: string | null): ValidCa
         values[field] = value;
     }
     const feesOnPenalty = raw.feesOnPenalty ?? CALCULATION_DEFAULTS.feesOnPenalty;
-    if (typeof feesOnPenalty !== 'boolean') throw fail(calcLabel, 'honorários sobre a multa do Art. 523: valor inválido.');
+    if (typeof feesOnPenalty !== 'boolean') throw fail(calcLabel, 'honorários do Art. 523: valor inválido.');
 
     return {
         ...(values as Omit<ValidCalculation, 'correctionIndex' | 'moratoryStartDate' | 'compensatoryStartDate' | 'feesOnPenalty' | 'installments'>),

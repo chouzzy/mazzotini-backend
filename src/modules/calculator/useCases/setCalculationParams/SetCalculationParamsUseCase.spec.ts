@@ -102,7 +102,7 @@ describe('SetCalculationParamsUseCase', () => {
         ['mês 13 numa parcela', { installments: [{ baseValue: 700, baseDate: '2025-13-01' }] }, 'Contrato B: parcela 1: data inválida (2025-13-01).'],
         ['data em outro formato', { compensatoryStartDate: '15/11/2025' }, 'Contrato B: início dos juros remuneratórios: data inválida (15/11/2025).'],
         ['número em texto', { feesMode: 'FIXO', feesFixedValue: '1000' }, 'Contrato B: honorários (R$): valor inválido.'],
-        ['booleano em texto', { feesOnPenalty: 'false' }, 'Contrato B: honorários sobre a multa do Art. 523: valor inválido.'],
+        ['booleano em texto', { feesOnPenalty: 'false' }, 'Contrato B: honorários do Art. 523: valor inválido.'],
         ['opção desconhecida', { moratoryRateUnit: 'AS' }, 'Contrato B: unidade dos juros moratórios: valor inválido (AS).'],
         ['valor de parcela em texto', { installments: [{ baseValue: '700', baseDate: '2025-11-15' }] }, 'Contrato B: parcela 1: valor inválido.'],
         ['sem parcela de débito', { installments: [{ baseValue: 100, baseDate: '2025-11-15', type: 'ABATIMENTO' }] }, 'Contrato B: informe ao menos uma parcela de débito.'],
