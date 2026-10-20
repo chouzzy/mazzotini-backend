@@ -6,7 +6,7 @@ class SetCalculationParamsController {
         try {
             const legalOneId = parseInt(req.params.legalOneId, 10);
             const useCase = new SetCalculationParamsUseCase();
-            const result = await useCase.execute({ legalOneId, ...req.body });
+            const result = await useCase.execute({ ...req.body, legalOneId });
             return res.status(200).json(result);
         } catch (error: any) {
             return res.status(400).json({ error: error.message });
