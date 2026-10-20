@@ -16,11 +16,14 @@
  *   TJSP_LEI14905 — tabela do TJSP: INPC do mês anterior até 08/2024, IPCA-15 do mês anterior desde 09/2024
  *   TJPR_MEDIA_INPC_IGPDI — TJPR: média do INPC e do IGP-DI do mês anterior (Decreto 1.544/1995)
  *   TJMG_CORREGEDORIA     — TJMG: tabela da Corregedoria, pelo INPC do mês anterior
- *   SELIC         — Meta SELIC diária acumulada (set/2024+, para Taxa Legal P3)
+ *   SELIC         — Meta SELIC diária acumulada (jan/2024+)
+ *   TAXA_LEGAL    — taxa legal da Lei 14.905 (Res. CMN 5.171: SELIC e IPCA-15 do mês anterior), ago/2024+
  */
 
 import { PrismaClient } from '@prisma/client';
-import { fetchIndexSeries, fetchTJSPSeries, fetchTJPRSeries, fetchTJMGSeries, fetchSelicSeries, IBGEDataPoint } from '../services/ibgeService';
+import {
+    fetchIndexSeries, fetchTJSPSeries, fetchTJPRSeries, fetchTJMGSeries, fetchSelicSeries, fetchTaxaLegalSeries, IBGEDataPoint,
+} from '../services/ibgeService';
 
 const prisma = new PrismaClient();
 const START_YEAR  = 2000;
@@ -67,6 +70,8 @@ async function main() {
         { name: 'TJMG_CORREGEDORIA',     label: 'TJMG (Corregedoria, INPC do mês anterior)', fetcher: () => fetchTJMGSeries(START_YEAR, START_MONTH) },
         // SELIC: série 11 diária — só precisamos de set/2024+ (P3 da Taxa Legal)
         { name: 'SELIC', label: 'Meta SELIC diária acumulada (jan/2024+)',                       fetcher: () => fetchSelicSeries(2024, 1) },
+        // Taxa legal dos juros de mora desde 30/08/2024
+        { name: 'TAXA_LEGAL', label: 'Taxa legal (SELIC e IPCA-15 do mês anterior, ago/2024+)', fetcher: () => fetchTaxaLegalSeries(2024, 8) },
     ];
 
     for (const idx of indices) {

@@ -8,13 +8,16 @@
  * - TJSP_LEI14905: estende a tabela oficial (acumulado) a partir do último mês que a tem.
  * - TJPR_MEDIA_INPC_IGPDI e TJMG_CORREGEDORIA: do último mês gravado até o mês atual. A taxa
  *   do mês M usa os índices de M-1, então o mês entra quando eles saem.
+ * - TAXA_LEGAL: do último mês gravado até o mês atual. A taxa do mês M usa a SELIC e o IPCA-15
+ *   de M-1, que já saíram no dia 5.
  *
  * Um mês que ainda não saiu entra na próxima execução, e um índice com erro não impede os outros.
  */
 
 import { prisma } from '../prisma';
 import {
-    fetchIndexSeries, fetchSelicSeries, fetchTJMGSeries, fetchTJPRSeries, fetchTJSPSeries, IBGEDataPoint, shiftMonth,
+    fetchIndexSeries, fetchSelicSeries, fetchTaxaLegalSeries, fetchTJMGSeries, fetchTJPRSeries, fetchTJSPSeries,
+    IBGEDataPoint, shiftMonth,
 } from './ibgeService';
 
 type YearMonth = { year: number; month: number };
@@ -36,9 +39,13 @@ const COURT_TABLES: { indexName: string; fetchTable: typeof fetchTJPRSeries }[] 
     { indexName: 'TJMG_CORREGEDORIA',     fetchTable: fetchTJMGSeries },
 ];
 
+// Taxa legal da Lei 14.905/2024, a partir de 30/08/2024 (o mês de agosto entra pelos dois últimos dias)
+const TAXA_LEGAL = 'TAXA_LEGAL';
+
 // Início usado quando o índice ainda não tem nenhum mês gravado (o mesmo do seed)
 const DEFAULT_START: YearMonth       = { year: 2000, month: 1 };
 const SELIC_DEFAULT_START: YearMonth = { year: 2024, month: 1 };
+const TAXA_LEGAL_START: YearMonth    = { year: 2024, month: 8 };
 
 const isAfter = (a: YearMonth, b: YearMonth) => a.year * 12 + a.month > b.year * 12 + b.month;
 const formatMonth = (p: YearMonth) => `${String(p.month).padStart(2, '0')}/${p.year}`;
@@ -71,6 +78,30 @@ export async function updateIndexSeries(now = new Date()): Promise<IndexUpdateRe
             (s, e) => fetchTable(s.year, s.month, e.year, e.month))));
     }
 
+    results.push(await run(TAXA_LEGAL, () => refresh(TAXA_LEGAL, TAXA_LEGAL_START, current,
+        (s, e) => fetchTaxaLegalSeries(s.year, s.month, e.year, e.month))));
+
+    return results;
+}
+
+/**
+ * Carrega, uma vez, as séries que o cálculo exige e que podem estar vazias depois de um deploy:
+ * a taxa legal (série nova) e as tabelas do TJPR e do TJMG (quando o seed não rodou). Só busca
+ * as que não têm nenhum mês gravado; as outras seguem pelo cron do dia 5.
+ */
+export async function ensureIndexSeriesLoaded(now = new Date()): Promise<IndexUpdateResult[]> {
+    const current: YearMonth = { year: now.getFullYear(), month: now.getMonth() + 1 };
+    const series = [
+        { indexName: TAXA_LEGAL, start: TAXA_LEGAL_START, fetchSeries: fetchTaxaLegalSeries },
+        ...COURT_TABLES.map(t => ({ indexName: t.indexName, start: DEFAULT_START, fetchSeries: t.fetchTable })),
+    ];
+    const results: IndexUpdateResult[] = [];
+
+    for (const { indexName, start, fetchSeries } of series) {
+        if (await lastStoredMonth(indexName)) continue;
+        results.push(await run(indexName, () => refresh(indexName, start, current,
+            (s, e) => fetchSeries(s.year, s.month, e.year, e.month))));
+    }
     return results;
 }
 
