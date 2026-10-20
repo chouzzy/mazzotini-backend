@@ -91,11 +91,20 @@ export async function updateIndexSeries(now = new Date()): Promise<IndexUpdateRe
  * a cada hora, então um BCB fora do ar no deploy se resolve sozinho.
  *
  * A série inteira entra numa gravação só, para nenhum cálculo ver a série pela metade. Com o
- * PM2 em cluster, só a primeira instância carrega.
+ * PM2 em cluster, só a primeira instância carrega, e chamadas ao mesmo tempo (o início do
+ * servidor e o cron de hora em hora) compartilham a mesma carga, sem gravar a série duas vezes.
  */
-export async function ensureIndexSeriesLoaded(now = new Date()): Promise<IndexUpdateResult[]> {
-    if ((process.env.NODE_APP_INSTANCE ?? '0') !== '0') return [];
+let loadingEmptySeries: Promise<IndexUpdateResult[]> | null = null;
 
+export function ensureIndexSeriesLoaded(now = new Date()): Promise<IndexUpdateResult[]> {
+    if ((process.env.NODE_APP_INSTANCE ?? '0') !== '0') return Promise.resolve([]);
+    if (!loadingEmptySeries) {
+        loadingEmptySeries = loadEmptySeries(now).finally(() => { loadingEmptySeries = null; });
+    }
+    return loadingEmptySeries;
+}
+
+async function loadEmptySeries(now: Date): Promise<IndexUpdateResult[]> {
     const current: YearMonth = { year: now.getFullYear(), month: now.getMonth() + 1 };
     const series = [
         { indexName: TAXA_LEGAL, start: TAXA_LEGAL_START, fetchSeries: fetchTaxaLegalSeries },

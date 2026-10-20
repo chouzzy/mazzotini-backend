@@ -39,6 +39,23 @@ const ART_523_FEES_PERCENTAGE = 10;
 /** "Não atualizar (fixo)" vale a partir do Real (01/07/1994), como no Dr. Calc. */
 const FIXED_INDEX_START = Date.UTC(1994, 6, 1);
 
+/** O índice é um dos que o cálculo aceita? O salvamento dos parâmetros usa a mesma regra. */
+export const isCorrectionIndex = (indexName: string) => CORRECTION_INDEXES.has(indexName);
+
+export const unknownIndexError = (indexName: string) =>
+    `índice de correção desconhecido (${indexName}). Escolha um índice da lista.`;
+
+/**
+ * Com "Não atualizar (fixo)", a mensagem de erro de uma parcela anterior ao Real (o valor estaria
+ * em outra moeda e o Dr. Calc também recusa), ou null. O salvamento dos parâmetros usa a mesma regra.
+ */
+export function fixedIndexDateError(installments: { baseDate: string }[]): string | null {
+    const early = installments.find(i => new Date(i.baseDate).getTime() < FIXED_INDEX_START);
+    return early
+        ? `"Não atualizar (fixo)" vale para datas a partir de 01/07/1994. Mude a data da parcela de ${formatDate(early.baseDate)} ou escolha outro índice.`
+        : null;
+}
+
 /** Nome dos índices nas mensagens. */
 const INDEX_LABELS: Record<string, string> = {
     TJSP_LEI14905:         'TJSP',
@@ -354,8 +371,9 @@ export async function calculateJudicialDebt(
     if (debitoInstallments.length === 0) throw new Error('Informe ao menos uma parcela de débito.');
 
     // Índice que a tela antiga gravava ("Outro", "IPCA15"): antes virava fator 1 sem aviso
-    if (!CORRECTION_INDEXES.has(params.correctionIndex)) {
-        throw new Error(`Índice de correção desconhecido (${params.correctionIndex}). Escolha um índice da lista.`);
+    if (!isCorrectionIndex(params.correctionIndex)) {
+        const message = unknownIndexError(params.correctionIndex);
+        throw new Error(message.charAt(0).toUpperCase() + message.slice(1));
     }
 
     // 1. Busca índices do banco
@@ -371,12 +389,8 @@ export async function calculateJudicialDebt(
     const warnings   = new Set<string>();
 
     // Antes do Real, o valor estaria em outra moeda: o Dr. Calc recusa, e aqui também
-    if (isFixed) {
-        const early = allSorted.find(i => new Date(i.baseDate).getTime() < FIXED_INDEX_START);
-        if (early) {
-            throw new Error(`"Não atualizar (fixo)" vale para datas a partir de 01/07/1994. Mude a data da parcela de ${formatDate(early.baseDate)} ou escolha outro índice.`);
-        }
-    }
+    const fixedDateError = isFixed ? fixedIndexDateError(allSorted) : null;
+    if (fixedDateError) throw new Error(fixedDateError);
 
     const indexRecords = isFixed ? [] : await prisma.indexSeries.findMany({
         where: { indexName: params.correctionIndex, OR: fetchRange.map(({ year, month }) => ({ year, month })) },

@@ -6,35 +6,13 @@ import { SyncFeeContractsUseCase } from './modules/creditAssets/useCases/syncFee
 import { RunCalculationUseCase } from './modules/calculator/useCases/runCalculation/RunCalculationUseCase';
 import { prisma } from './prisma';
 import { describeIndexLoad, ensureIndexSeriesLoaded, updateIndexSeries } from './services/indexUpdateService';
-import { notifyAllAdmins } from './services/notificationService';
+import { notifyRecalculationFailures, RecalculationFailure } from './services/recalculationReport';
 
 const syncUseCase = new SyncProcessUpdatesUseCase();
 const importUseCase = new ImportNewAssetsUseCase();
 const retryEnrichmentUseCase = new RetryFailedEnrichmentsUseCase();
 const syncFeeContractsUseCase = new SyncFeeContractsUseCase();
 const runCalculationUseCase = new RunCalculationUseCase();
-
-/** Avisa os admins dos processos que o recálculo mensal recusou e que ficaram com o valor anterior. */
-async function notifyRecalculationFailures(failures: { assetId: string; error: string }[]) {
-    const assets = await prisma.creditAsset.findMany({
-        where:  { id: { in: failures.map(f => f.assetId) } },
-        select: { id: true, legalOneId: true, processNumber: true },
-    });
-    const name = (assetId: string) => {
-        const asset = assets.find(a => a.id === assetId);
-        return asset ? `${asset.processNumber} (Legal One ${asset.legalOneId})` : assetId;
-    };
-    const shown = failures.slice(0, 10).map(f => `${name(f.assetId)}: ${f.error}`);
-    const rest  = failures.length - shown.length;
-
-    await notifyAllAdmins({
-        title:            `Recálculo mensal: ${failures.length} ${failures.length === 1 ? 'processo ficou' : 'processos ficaram'} com o valor anterior`,
-        message:          `O cálculo foi recusado e o valor atualizado não mudou. ${shown.join(' | ')}${rest > 0 ? ` | e mais ${rest}.` : ''}`,
-        type:             'warning',
-        notificationType: 'CALCULATION',
-        link:             '/processos',
-    });
-}
 
 /**
  * Inicia todos os jobs agendados da aplicação.
@@ -103,7 +81,7 @@ export const startScheduledJobs = () => {
             // caminho do botão "Calcular": mesmos parâmetros, mesmo log, mesmo valor.
             const allParams = await prisma.processCalculationParams.findMany();
             let ok = 0, withWarnings = 0;
-            const failures: { assetId: string; error: string }[] = [];
+            const failures: RecalculationFailure[] = [];
 
             for (const params of allParams) {
                 try {
@@ -119,7 +97,7 @@ export const startScheduledJobs = () => {
             console.log(`  Recálculo concluído: ${ok} sucesso, ${failures.length} falhas, ${withWarnings} com mês sem índice no banco (contado como 0%)`);
 
             // Um processo recusado mantém o valor anterior: os admins precisam saber quais são
-            if (failures.length > 0) await notifyRecalculationFailures(failures);
+            await notifyRecalculationFailures(failures);
         } catch (e: any) {
             console.error('  Erro crítico no job de índices/recálculo:', e.message);
         }

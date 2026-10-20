@@ -8,6 +8,7 @@
  *   IPCA-15 : 7478   (variação mensal, %) — base da tabela do TJSP desde set/2024
  *   IGP-DI  : 190    (variação mensal, %) — com o INPC, forma a média do TJPR
  *   SELIC   : 11     (taxa diária, % a.d.) — acumulada por mês no fetchSelicSeries
+ *   Taxa legal : 29543 (% a.m., desde 08/2024) — juros de mora pela Lei 14.905 (Res. CMN 5.171)
  */
 
 import axios from 'axios';

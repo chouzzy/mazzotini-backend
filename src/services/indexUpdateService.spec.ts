@@ -241,6 +241,16 @@ describe('ensureIndexSeriesLoaded', () => {
         expect(prisma.indexSeries.upsert).not.toHaveBeenCalled();
     });
 
+    it('duas chamadas ao mesmo tempo compartilham a mesma carga, sem gravar a série duas vezes', async () => {
+        lastStored = { TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 }, TJMG_CORREGEDORIA: { year: 2026, month: 11 } };
+
+        const [a, b] = await Promise.all([ensureIndexSeriesLoaded(NOV_5), ensureIndexSeriesLoaded(NOV_5)]);
+
+        expect(a).toBe(b);
+        expect(fetchTaxaLegalSeries).toHaveBeenCalledTimes(1);
+        expect(prisma.indexSeries.createMany).toHaveBeenCalledTimes(1);
+    });
+
     it('com o PM2 em cluster, só a primeira instância carrega', async () => {
         process.env.NODE_APP_INSTANCE = '1';
         try {

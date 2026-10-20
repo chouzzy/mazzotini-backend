@@ -130,6 +130,16 @@ describe('RunCalculationUseCase', () => {
         expect(prisma.creditAsset.update).toHaveBeenCalledWith({ where: { id: 'asset-1' }, data: { currentValue: 2770 } });
     });
 
+    it('calculate só calcula, sem gravar nada (é o que a simulação do recálculo usa)', async () => {
+        const { result, paramsSnapshot } = await new RunCalculationUseCase().calculate(savedParams, 2026, 11);
+
+        expect(result).toBe(fakeResult);
+        expect(paramsSnapshot).toEqual(toCalculationParams(savedParams));
+        expect(prisma.calculationLog.create).not.toHaveBeenCalled();
+        expect(prisma.processCalculationParams.update).not.toHaveBeenCalled();
+        expect(prisma.creditAsset.update).not.toHaveBeenCalled();
+    });
+
     it('botão "Calcular" passa pelo mesmo caminho, registrando quem calculou', async () => {
         await new RunCalculationUseCase().execute({ legalOneId: 123, auth0UserId: 'auth0|admin-exemplo', referenceYear: 2026, referenceMonth: 11 });
 
