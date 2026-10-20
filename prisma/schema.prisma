@@ -398,6 +398,12 @@ model ProcessCalculationParams {
   // Parcelas do valor base: [{baseValue, baseDate, description}]
   installments        Json     @default("[]")
 
+  // Vários cálculos no mesmo processo (ex.: dois contratos com índices ou juros diferentes).
+  // Os campos acima são o primeiro cálculo; cada item de extraCalculations tem os mesmos
+  // campos e um `label`. O valor do processo é a soma de todos.
+  calculationLabel    String?
+  extraCalculations   Json?
+
   // Resultado do último cálculo
   lastCalculatedValue Float?
   lastCalculatedAt    DateTime?

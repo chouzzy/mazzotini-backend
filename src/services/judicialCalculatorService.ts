@@ -94,6 +94,15 @@ export interface CalculationResult {
     abatimentoTotal:      number;   // total deduzido
     totalValue:           number;   // grossTotal − abatimentoTotal
     installmentResults:   InstallmentResult[];
+    calculations?:        CalculationSummary[];   // só quando o processo tem mais de um cálculo
+}
+
+/** Resumo de um dos cálculos de um processo com vários cálculos. */
+export interface CalculationSummary {
+    label:          string;
+    baseTotal:      number;
+    correctedValue: number;
+    totalValue:     number;
 }
 
 // ── utilidades de data ────────────────────────────────────────────────────────
@@ -395,5 +404,60 @@ export async function calculateJudicialDebt(
         abatimentoTotal:      round2(abatimentoTotal),
         totalValue:           round2(finalTotal),
         installmentResults,
+    };
+}
+
+// ── vários cálculos no mesmo processo ─────────────────────────────────────────
+
+/**
+ * Junta os resultados de vários cálculos do mesmo processo (ex.: dois contratos com índices
+ * ou juros diferentes). Cada cálculo é feito por inteiro, com os próprios honorários e
+ * multas, e os valores são somados, como se fossem cálculos separados. As parcelas e os
+ * abatimentos levam o nome do cálculo na descrição. Com um cálculo só, nada muda.
+ */
+export function combineResults(parts: { label: string; result: CalculationResult }[]): CalculationResult {
+    if (parts.length === 1) return parts[0].result;
+
+    const sum = (pick: (r: CalculationResult) => number) =>
+        round2(parts.reduce((total, p) => total + pick(p.result), 0));
+
+    const installmentResults: InstallmentResult[] = [];
+    const abatimentoResults: AbatimentoResult[] = [];
+    for (const { label, result } of parts) {
+        for (const inst of result.installmentResults) {
+            installmentResults.push({
+                ...inst,
+                installmentIndex: installmentResults.length + 1,
+                description:      `${label} · ${inst.description}`,
+            });
+        }
+        for (const abat of result.abatimentoResults) {
+            abatimentoResults.push({ ...abat, description: `${label} · ${abat.description}` });
+        }
+    }
+
+    return {
+        referenceMonth:       parts[0].result.referenceMonth,
+        referenceYear:        parts[0].result.referenceYear,
+        baseTotal:            sum(r => r.baseTotal),
+        correctedValue:       sum(r => r.correctedValue),
+        moratoryInterest:     sum(r => r.moratoryInterest),
+        compensatoryInterest: sum(r => r.compensatoryInterest),
+        multaValue:           sum(r => r.multaValue),
+        subtotalA:            sum(r => r.subtotalA),
+        feesValue:            sum(r => r.feesValue),
+        subtotalB:            sum(r => r.subtotalB),
+        penaltyValue:         sum(r => r.penaltyValue),
+        grossTotal:           sum(r => r.grossTotal),
+        abatimentoResults,
+        abatimentoTotal:      sum(r => r.abatimentoTotal),
+        totalValue:           sum(r => r.totalValue),
+        installmentResults,
+        calculations: parts.map(({ label, result }) => ({
+            label,
+            baseTotal:      result.baseTotal,
+            correctedValue: result.correctedValue,
+            totalValue:     result.totalValue,
+        })),
     };
 }

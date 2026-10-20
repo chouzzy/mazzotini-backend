@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { RunCalculationUseCase, toCalculationParams } from './RunCalculationUseCase';
+import { RunCalculationUseCase, toCalculationParams, toExtraCalculations } from './RunCalculationUseCase';
 import { calculateJudicialDebt } from '../../../../services/judicialCalculatorService';
 
 jest.mock('@prisma/client', () => {
@@ -12,6 +12,7 @@ jest.mock('@prisma/client', () => {
 });
 
 jest.mock('../../../../services/judicialCalculatorService', () => ({
+    ...jest.requireActual('../../../../services/judicialCalculatorService'),
     calculateJudicialDebt: jest.fn(),
 }));
 
@@ -142,6 +143,72 @@ describe('RunCalculationUseCase', () => {
 
         await expect(new RunCalculationUseCase().execute({ legalOneId: 123, auth0UserId: 'auth0|admin-exemplo' }))
             .rejects.toThrow('Parâmetros de cálculo não configurados para este processo.');
+        expect(prisma.calculationLog.create).not.toHaveBeenCalled();
+        expect(prisma.creditAsset.update).not.toHaveBeenCalled();
+    });
+});
+
+describe('RunCalculationUseCase com vários cálculos no mesmo processo', () => {
+    /** Resultado fictício completo de um cálculo, com uma parcela. */
+    const resultOf = (total: number, description: string) => ({
+        referenceMonth: 11, referenceYear: 2026,
+        baseTotal: total, correctedValue: total, moratoryInterest: 0, compensatoryInterest: 0,
+        multaValue: 0, subtotalA: total, feesValue: 0, subtotalB: total, penaltyValue: 0, grossTotal: total,
+        abatimentoResults: [], abatimentoTotal: 0, totalValue: total,
+        installmentResults: [{ installmentIndex: 1, description, baseValue: total }],
+    });
+
+    const twoContracts = {
+        ...savedParams,
+        calculationLabel: 'Contrato 1',
+        extraCalculations: [{
+            label: 'Contrato 2',
+            correctionIndex: 'TJSP_LEI14905',
+            moratoryMode: 'PERSONALIZADO', moratoryRate: 1, moratoryRateUnit: 'AM', moratoryType: 'SIMPLES',
+            moratoryStartDate: '2025-12-10T00:00:00.000Z',
+            compensatoryRate: 5, compensatoryRateUnit: 'AA', compensatoryType: 'SIMPLES',
+            compensatoryStartDate: '2025-12-10T00:00:00.000Z',
+            multaPercentage: 0, feesMode: 'PERCENTUAL', feesPercentage: 10, feesFixedValue: 0,
+            penaltyPercentage: 0, feesOnPenalty: false,
+            installments: [{ baseValue: 500, baseDate: '2025-12-10T00:00:00.000Z', description: 'Parcela B' }],
+        }],
+    };
+
+    beforeEach(() => jest.clearAllMocks());
+
+    it('toExtraCalculations lê os cálculos extras com os padrões do primeiro', () => {
+        const [extra] = toExtraCalculations({ ...savedParams, extraCalculations: [{ correctionIndex: 'IPCA', installments: [] }] });
+
+        expect(extra.label).toBe('Cálculo 2');
+        expect(extra.params).toMatchObject({ correctionIndex: 'IPCA', moratoryMode: 'TAXA_LEGAL', moratoryRateUnit: 'AM', feesMode: 'PERCENTUAL', feesOnPenalty: false });
+        expect(toExtraCalculations(savedParams)).toEqual([]);
+    });
+
+    it('calcula cada cálculo, grava a soma e guarda todos no snapshot', async () => {
+        (calculateJudicialDebt as jest.Mock)
+            .mockResolvedValueOnce(resultOf(1000, 'Parcela exemplo'))
+            .mockResolvedValueOnce(resultOf(500, 'Parcela B'));
+
+        const result = await new RunCalculationUseCase().calculateAndSave(twoContracts, 'cron', 2026, 11);
+
+        expect(calculateJudicialDebt).toHaveBeenCalledTimes(2);
+        expect((calculateJudicialDebt as jest.Mock).mock.calls[1][0]).toMatchObject({ compensatoryRate: 5, compensatoryRateUnit: 'AA' });
+        expect(result.totalValue).toBe(1500);
+        expect(result.installmentResults.map(i => i.description)).toEqual(['Contrato 1 · Parcela exemplo', 'Contrato 2 · Parcela B']);
+
+        const log = prisma.calculationLog.create.mock.calls[0][0].data;
+        expect(log.totalValue).toBe(1500);
+        expect(log.paramsSnapshot).toMatchObject({ calculationLabel: 'Contrato 1', extraCalculations: [{ label: 'Contrato 2' }] });
+        expect(prisma.creditAsset.update).toHaveBeenCalledWith({ where: { id: 'asset-1' }, data: { currentValue: 1500 } });
+    });
+
+    it('um erro num dos cálculos diz qual foi e não grava nada', async () => {
+        (calculateJudicialDebt as jest.Mock)
+            .mockResolvedValueOnce(resultOf(1000, 'Parcela exemplo'))
+            .mockRejectedValueOnce(new Error('Nenhuma parcela informada.'));
+
+        await expect(new RunCalculationUseCase().calculateAndSave(twoContracts, 'cron', 2026, 11))
+            .rejects.toThrow('Contrato 2: Nenhuma parcela informada.');
         expect(prisma.calculationLog.create).not.toHaveBeenCalled();
         expect(prisma.creditAsset.update).not.toHaveBeenCalled();
     });

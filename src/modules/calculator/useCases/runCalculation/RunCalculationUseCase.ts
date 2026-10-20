@@ -1,6 +1,8 @@
 import type { ProcessCalculationParams } from '@prisma/client';
 import { prisma } from '../../../../prisma';
-import { calculateJudicialDebt, CalculationParams, CalculationResult, Installment } from '../../../../services/judicialCalculatorService';
+import {
+    calculateJudicialDebt, CalculationParams, CalculationResult, combineResults, Installment,
+} from '../../../../services/judicialCalculatorService';
 
 interface IRequest {
     legalOneId: number;
@@ -36,6 +38,33 @@ export function toCalculationParams(params: ProcessCalculationParams): Calculati
     };
 }
 
+/** Os outros cálculos do processo (`extraCalculations`), com os mesmos padrões do primeiro. */
+export function toExtraCalculations(params: ProcessCalculationParams): { label: string; params: CalculationParams }[] {
+    const extras = Array.isArray(params.extraCalculations) ? (params.extraCalculations as any[]) : [];
+    return extras.map((e, i) => ({
+        label: (typeof e.label === 'string' && e.label.trim()) || `Cálculo ${i + 2}`,
+        params: {
+            correctionIndex:       e.correctionIndex,
+            moratoryMode:          e.moratoryMode          ?? 'TAXA_LEGAL',
+            moratoryRate:          e.moratoryRate          ?? 0,
+            moratoryRateUnit:      e.moratoryRateUnit      ?? 'AM',
+            moratoryType:          e.moratoryType          ?? 'SIMPLES',
+            moratoryStartDate:     e.moratoryStartDate     ?? null,
+            compensatoryRate:      e.compensatoryRate      ?? 0,
+            compensatoryRateUnit:  e.compensatoryRateUnit  ?? 'AM',
+            compensatoryType:      e.compensatoryType      ?? 'SIMPLES',
+            compensatoryStartDate: e.compensatoryStartDate ?? null,
+            multaPercentage:       e.multaPercentage       ?? 0,
+            feesMode:              e.feesMode              ?? 'PERCENTUAL',
+            feesPercentage:        e.feesPercentage        ?? 0,
+            feesFixedValue:        e.feesFixedValue        ?? 0,
+            penaltyPercentage:     e.penaltyPercentage     ?? 0,
+            feesOnPenalty:         e.feesOnPenalty         ?? false,
+            installments:          e.installments          ?? [],
+        },
+    }));
+}
+
 class RunCalculationUseCase {
     async execute({ legalOneId, auth0UserId, referenceYear, referenceMonth }: IRequest) {
         const asset = await prisma.creditAsset.findUnique({ where: { legalOneId } });
@@ -62,7 +91,30 @@ class RunCalculationUseCase {
         refM: number,
     ): Promise<CalculationResult> {
         const calcParams = toCalculationParams(params);
-        const result = await calculateJudicialDebt(calcParams, refY, refM);
+        const extras     = toExtraCalculations(params);
+
+        let result: CalculationResult;
+        let paramsSnapshot: object = calcParams;
+        if (extras.length === 0) {
+            result = await calculateJudicialDebt(calcParams, refY, refM);
+        } else {
+            // Vários cálculos no mesmo processo: cada um é feito por inteiro e o valor é a soma
+            const parts = [{ label: params.calculationLabel?.trim() || 'Cálculo 1', params: calcParams }, ...extras];
+            const results: { label: string; result: CalculationResult }[] = [];
+            for (const part of parts) {
+                try {
+                    results.push({ label: part.label, result: await calculateJudicialDebt(part.params, refY, refM) });
+                } catch (e: any) {
+                    throw new Error(`${part.label}: ${e.message}`);
+                }
+            }
+            result = combineResults(results);
+            paramsSnapshot = {
+                ...calcParams,
+                calculationLabel:  parts[0].label,
+                extraCalculations: extras.map(e => ({ label: e.label, ...e.params })),
+            };
+        }
 
         // Salva log de cálculo, com o snapshot de todos os parâmetros usados (para reabertura futura)
         await prisma.calculationLog.create({
@@ -79,7 +131,7 @@ class RunCalculationUseCase {
                 penaltyValue:         result.penaltyValue,
                 totalValue:           result.totalValue,
                 breakdown:            result.installmentResults as any,
-                paramsSnapshot:       calcParams as any,
+                paramsSnapshot:       paramsSnapshot as any,
             },
         });
 

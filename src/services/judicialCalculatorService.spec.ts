@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { calculateJudicialDebt, CalculationParams, NAO_ATUALIZAR } from './judicialCalculatorService';
+import { calculateJudicialDebt, CalculationParams, combineResults, NAO_ATUALIZAR } from './judicialCalculatorService';
 
 jest.mock('@prisma/client', () => {
     const mPrisma: any = { indexSeries: { findMany: jest.fn() } };
@@ -112,5 +112,62 @@ describe('fator de correção com a tabela oficial (acumulado)', () => {
         const inst = (await calculateJudicialDebt(tjsp, 2026, 3)).installmentResults[0];
 
         expect(inst.correctionFactor).toBeCloseTo(1.0302, 8);
+    });
+});
+
+describe('combineResults (vários cálculos no mesmo processo)', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    // Dois contratos fictícios, sem correção, para os valores ficarem fáceis de conferir
+    const contrato1 = () => calculateJudicialDebt(params, 2026, 7);   // total 1.188 (ver o primeiro teste)
+    const contrato2 = () => calculateJudicialDebt({
+        ...params,
+        multaPercentage: 0,
+        feesPercentage:  0,
+        installments: [{ baseValue: 500, baseDate: '2026-03-10T00:00:00.000Z', description: 'Parcela B' }],
+    }, 2026, 7);                                                       // 500 + 4 meses a 1% = 520
+
+    it('com um cálculo só, devolve o resultado como está', async () => {
+        const result = await contrato1();
+
+        expect(combineResults([{ label: 'Cálculo 1', result }])).toBe(result);
+    });
+
+    it('soma os cálculos e marca as parcelas com o nome de cada um', async () => {
+        const combined = combineResults([
+            { label: 'Contrato 1', result: await contrato1() },
+            { label: 'Contrato 2', result: await contrato2() },
+        ]);
+
+        expect(combined.totalValue).toBe(1708);
+        expect(combined.baseTotal).toBe(1500);
+        expect(combined.moratoryInterest).toBe(80);
+        expect(combined.installmentResults.map(i => [i.installmentIndex, i.description])).toEqual([
+            [1, 'Contrato 1 · Parcela exemplo'],
+            [2, 'Contrato 2 · Parcela B'],
+        ]);
+        expect(combined.calculations).toEqual([
+            { label: 'Contrato 1', baseTotal: 1000, correctedValue: 1000, totalValue: 1188 },
+            { label: 'Contrato 2', baseTotal: 500,  correctedValue: 500,  totalValue: 520 },
+        ]);
+    });
+
+    it('junta os abatimentos de cada cálculo', async () => {
+        const comAbatimento = await calculateJudicialDebt({
+            ...params,
+            installments: [
+                ...params.installments,
+                { baseValue: 100, baseDate: '2026-03-10T00:00:00.000Z', description: 'Depósito', type: 'ABATIMENTO', deductionPoint: 'APOS_TUDO' },
+            ],
+        }, 2026, 7);
+
+        const combined = combineResults([
+            { label: 'Contrato 1', result: comAbatimento },
+            { label: 'Contrato 2', result: await contrato2() },
+        ]);
+
+        expect(combined.abatimentoResults.map(a => a.description)).toEqual(['Contrato 1 · Depósito']);
+        expect(combined.abatimentoTotal).toBe(100);
+        expect(combined.totalValue).toBe(1088 + 520);
     });
 });
