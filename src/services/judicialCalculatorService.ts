@@ -295,8 +295,10 @@ function checkIndexMonths(
     for (const { year, month } of months) {
         if (hasMonth(ymKey(year, month))) continue;
         const n = year * 12 + month;
-        if (n < bounds.first) {
-            throw new Error(`Não há ${label} para ${formatYM(year, month)}: a série começa em ${boundToYM(bounds.first)}.`);
+        // O limite é o do banco, não o do índice (o IPCA existe antes de 2000). A taxa legal começa
+        // em 08/2024 por definição: um mês dela antes do primeiro gravado é falta de dado
+        if (n < bounds.first && indexName !== TAXA_LEGAL) {
+            throw new Error(`O banco de índices tem ${label} só a partir de ${boundToYM(bounds.first)}, e o cálculo precisa de ${formatYM(year, month)}. Mude a data da parcela, escolha outro índice ou avise o suporte.`);
         }
         if (n <= bounds.last) {
             throw new Error(`Falta ${label} de ${formatYM(year, month)} no banco de índices. Avise o suporte.`);
@@ -404,11 +406,14 @@ export async function calculateJudicialDebt(
         });
     }
 
-    // A parcela mais antiga usa todos os meses de que as outras precisam. O TJSP, que divide os
-    // acumulados, precisa também do mês dela
+    // A parcela mais antiga usa todos os meses de que as outras precisam. Com a tabela oficial do
+    // TJSP, o fator divide pelo acumulado do mês da parcela, que então também precisa existir; com
+    // a série só de taxas, ou sem nenhum mês de correção (parcela no mês de referência ou depois),
+    // o mês da parcela não entra na conta
     if (!isFixed) {
-        const months = correctionMonths(globalStart.year, globalStart.month, referenceYear, referenceMonth, courtTable);
-        if (params.correctionIndex === TJSP) months.unshift(globalStart);
+        const months   = correctionMonths(globalStart.year, globalStart.month, referenceYear, referenceMonth, courtTable);
+        const firstRow = months.length > 0 ? rateMap.get(ymKey(months[0].year, months[0].month)) : undefined;
+        if (params.correctionIndex === TJSP && firstRow?.accumulatedValue) months.unshift(globalStart);
         checkIndexMonths(params.correctionIndex, months, key => rateMap.has(key), await seriesBounds(params.correctionIndex), warnings);
     }
 

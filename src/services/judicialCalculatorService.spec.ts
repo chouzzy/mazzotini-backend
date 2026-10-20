@@ -142,6 +142,27 @@ describe('fator de correção com a tabela oficial (acumulado)', () => {
         expect(inst.correctionFactor).toBeCloseTo(1.02, 8);
         expect(inst.monthBreakdown.map(m => `${m.month}/${m.year}`)).toEqual(['1/2026']);
     });
+
+    it('parcela no mês de referência ou depois dele não pede o mês da parcela nem gera aviso', async () => {
+        mockSeries({ TJSP_LEI14905: official });   // tabela até 03/2026
+
+        for (const baseDate of ['2026-04-03', '2026-05-10']) {
+            const result = await calculateJudicialDebt(plain(baseDate, { correctionIndex: 'TJSP_LEI14905' }), 2026, 4);
+
+            expect(result.totalValue).toBe(1000);
+            expect(result.warnings).toBeUndefined();
+        }
+    });
+
+    it('com a série só de taxas (sem a tabela oficial), a parcela anterior ao primeiro mês usa as linhas seguintes', async () => {
+        // A linha de 01/2000 já traz o índice de 12/1999
+        mockSeries({ TJSP_LEI14905: [row(2000, 1, 1), row(2000, 2, 2)] });
+
+        const result = await calculateJudicialDebt(plain('1999-12-15', { correctionIndex: 'TJSP_LEI14905' }), 2000, 2);
+
+        expect(result.installmentResults[0].correctionFactor).toBeCloseTo(1.01 * 1.02, 8);
+        expect(result.warnings).toBeUndefined();
+    });
 });
 
 // Os valores esperados abaixo saíram do "Cálculo de débitos judiciais" do Dr. Calc (drcalc.net), a
@@ -239,6 +260,13 @@ describe('convenções do Dr. Calc', () => {
                 .rejects.toThrow('Falta taxa legal de 02/2025 no banco de índices. Avise o suporte.');
         });
 
+        it('a taxa legal começa em 08/2024: um mês dela antes do primeiro gravado é falta de dado', async () => {
+            mockSeries({ [TAXA_LEGAL]: [row(2024, 9, 0.6762), row(2024, 10, 0.7042)] });
+
+            await expect(calculateJudicialDebt(legal('2024-08-15'), 2024, 11))
+                .rejects.toThrow('Falta taxa legal de 08/2024 no banco de índices. Avise o suporte.');
+        });
+
         it('recusa quando a taxa legal ainda não foi carregada', async () => {
             await expect(calculateJudicialDebt(legal('2025-01-15'), 2025, 4))
                 .rejects.toThrow('Não há dados de taxa legal no banco de índices. Avise o suporte.');
@@ -282,7 +310,7 @@ describe('convenções do Dr. Calc', () => {
             mockSeries({ IPCA: [row(2000, 1, 0.62), row(2000, 2, 0.13)] });
 
             await expect(calculateJudicialDebt(plain('1999-12-15', { correctionIndex: 'IPCA' }), 2000, 3))
-                .rejects.toThrow('Não há IPCA para 12/1999: a série começa em 01/2000.');
+                .rejects.toThrow('O banco de índices tem IPCA só a partir de 01/2000, e o cálculo precisa de 12/1999. Mude a data da parcela, escolha outro índice ou avise o suporte.');
         });
 
         it('recusa um índice sem nenhum dado no banco', async () => {
@@ -308,7 +336,7 @@ describe('convenções do Dr. Calc', () => {
             mockSeries({ TJSP_LEI14905: [row(1964, 10, 0, 1), row(1964, 11, 0, 1.05)] });
 
             await expect(calculateJudicialDebt(plain('1964-09-15', { correctionIndex: 'TJSP_LEI14905' }), 1964, 11))
-                .rejects.toThrow('Não há TJSP para 09/1964: a série começa em 10/1964.');
+                .rejects.toThrow('O banco de índices tem TJSP só a partir de 10/1964, e o cálculo precisa de 09/1964. Mude a data da parcela, escolha outro índice ou avise o suporte.');
         });
 
         it('"Não atualizar (fixo)" recusa datas anteriores ao Real', async () => {
