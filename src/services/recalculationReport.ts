@@ -1,34 +1,48 @@
-import { prisma } from '../prisma';
 import { notifyAllAdmins } from './notificationService';
 
 export interface RecalculationFailure {
-    assetId: string;
-    error:   string;
+    assetId:        string;
+    legalOneId?:    number | null;
+    processNumber?: string | null;
+    error:          string;
 }
 
-/** Quantos processos a notificação lista; os outros entram como "e mais N". */
-const MAX_LISTED = 10;
+/** Quantos processos recusados viram notificação; os demais entram num resumo. */
+const MAX_NOTIFIED = 20;
 
-/** Avisa os admins dos processos que o recálculo mensal recusou e que ficaram com o valor anterior. */
+/** Nome do processo no log e na notificação: "número (Legal One N)", ou o id se o processo não existe mais. */
+export function describeAsset(f: Pick<RecalculationFailure, 'assetId' | 'legalOneId' | 'processNumber'>): string {
+    if (!f.processNumber && !f.legalOneId) return f.assetId;
+    return [f.processNumber, f.legalOneId ? `(Legal One ${f.legalOneId})` : null].filter(Boolean).join(' ');
+}
+
+/**
+ * Avisa os admins dos processos que o recálculo mensal recusou e que ficaram com o valor anterior.
+ * É uma notificação por processo, como as de falha no Legal One: o processo aparece na coluna
+ * "Cliente / Entidade" e na mensagem, junto com o motivo.
+ */
 export async function notifyRecalculationFailures(failures: RecalculationFailure[]): Promise<void> {
-    if (failures.length === 0) return;
+    for (const f of failures.slice(0, MAX_NOTIFIED)) {
+        await notifyAllAdmins({
+            title:             'Recálculo mensal recusado',
+            message:           `Processo ${describeAsset(f)}: ${f.error} O valor atualizado continua o anterior.`,
+            type:              'warning',
+            notificationType:  'CALCULATION',
+            relatedEntityId:   f.assetId,
+            relatedEntityType: 'CreditAsset',
+            relatedEntityName: describeAsset(f),
+            link:              f.legalOneId ? `/processos/${f.legalOneId}` : '/processos',
+        });
+    }
 
-    const assets = await prisma.creditAsset.findMany({
-        where:  { id: { in: failures.map(f => f.assetId) } },
-        select: { id: true, legalOneId: true, processNumber: true },
-    });
-    const name = (assetId: string) => {
-        const asset = assets.find(a => a.id === assetId);
-        return asset ? `${asset.processNumber} (Legal One ${asset.legalOneId})` : assetId;
-    };
-    const listed = failures.slice(0, MAX_LISTED).map(f => `${name(f.assetId)}: ${f.error}`);
-    const rest   = failures.length - listed.length;
-
-    await notifyAllAdmins({
-        title:            `Recálculo mensal: ${failures.length} ${failures.length === 1 ? 'processo ficou' : 'processos ficaram'} com o valor anterior`,
-        message:          `O cálculo foi recusado e o valor atualizado não mudou. ${listed.join(' | ')}${rest > 0 ? ` | e mais ${rest}.` : ''}`,
-        type:             'warning',
-        notificationType: 'CALCULATION',
-        link:             '/processos',
-    });
+    const rest = failures.length - MAX_NOTIFIED;
+    if (rest > 0) {
+        await notifyAllAdmins({
+            title:            'Recálculo mensal recusado',
+            message:          `Mais ${rest} ${rest === 1 ? 'processo foi recusado e ficou' : 'processos foram recusados e ficaram'} com o valor anterior. Avise o suporte para ver a lista completa.`,
+            type:             'warning',
+            notificationType: 'CALCULATION',
+            link:             '/processos',
+        });
+    }
 }

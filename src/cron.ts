@@ -6,7 +6,7 @@ import { SyncFeeContractsUseCase } from './modules/creditAssets/useCases/syncFee
 import { RunCalculationUseCase } from './modules/calculator/useCases/runCalculation/RunCalculationUseCase';
 import { prisma } from './prisma';
 import { describeIndexLoad, ensureIndexSeriesLoaded, updateIndexSeries } from './services/indexUpdateService';
-import { notifyRecalculationFailures, RecalculationFailure } from './services/recalculationReport';
+import { describeAsset, notifyRecalculationFailures, RecalculationFailure } from './services/recalculationReport';
 
 const syncUseCase = new SyncProcessUpdatesUseCase();
 const importUseCase = new ImportNewAssetsUseCase();
@@ -80,6 +80,12 @@ export const startScheduledJobs = () => {
             // 2. Recalcula todos os processos com parâmetros configurados, pelo mesmo
             // caminho do botão "Calcular": mesmos parâmetros, mesmo log, mesmo valor.
             const allParams = await prisma.processCalculationParams.findMany();
+            // Número do processo e do Legal One, para o log e o aviso dos recusados
+            const assets = await prisma.creditAsset.findMany({
+                where:  { id: { in: allParams.map(p => p.assetId) } },
+                select: { id: true, legalOneId: true, processNumber: true },
+            });
+            const assetOf = new Map(assets.map(a => [a.id, a]));
             let ok = 0, withWarnings = 0;
             const failures: RecalculationFailure[] = [];
 
@@ -89,8 +95,10 @@ export const startScheduledJobs = () => {
                     if (result.warnings?.length) withWarnings++;
                     ok++;
                 } catch (e: any) {
-                    console.error(`  Erro ao recalcular processo ${params.assetId}:`, e.message);
-                    failures.push({ assetId: params.assetId, error: e.message });
+                    const asset   = assetOf.get(params.assetId);
+                    const failure = { assetId: params.assetId, legalOneId: asset?.legalOneId, processNumber: asset?.processNumber, error: e.message };
+                    console.error(`  Erro ao recalcular o processo ${describeAsset(failure)}:`, e.message);
+                    failures.push(failure);
                 }
             }
 
