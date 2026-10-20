@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { fetchIndexSeries, fetchTJSPSeries } from './ibgeService';
+import { fetchIndexSeries, fetchTJMGSeries, fetchTJPRSeries, fetchTJSPSeries } from './ibgeService';
 
 jest.mock('axios');
 const mockedGet = axios.get as jest.Mock;
@@ -124,5 +124,52 @@ describe('consulta ao BCB', () => {
         await jest.advanceTimersByTimeAsync(2000);
 
         await expect(result).resolves.toEqual([{ year: 2026, month: 9, monthlyRate: 0.82 }]);
+    });
+});
+
+// Valores publicados pelo BCB; batem com a tabela da média INPC/IGP-DI e com os fatores do TJMG
+describe('tabelas do TJPR e do TJMG', () => {
+    beforeEach(() => mockedGet.mockReset());
+
+    it('TJPR: média do INPC e do IGP-DI do mês anterior', async () => {
+        mockedGet.mockImplementation((url: string) => {
+            if (url.includes('bcdata.sgs.188/')) return Promise.resolve(bcb([[1, 2023, '0.46'], [2, 2023, '0.77']]));
+            if (url.includes('bcdata.sgs.190/')) return Promise.resolve(bcb([[1, 2023, '0.06'], [2, 2023, '0.04']]));
+            return Promise.reject(new Error(`URL inesperada: ${url}`));
+        });
+
+        const points = await fetchTJPRSeries(2023, 2, 2023, 3);
+
+        expect(points).toEqual([
+            { year: 2023, month: 2, monthlyRate: expect.closeTo(0.26, 10) },
+            { year: 2023, month: 3, monthlyRate: expect.closeTo(0.405, 10) },
+        ]);
+        expect(mockedGet.mock.calls.map(call => call[0])).toEqual([
+            expect.stringContaining('bcdata.sgs.188/dados?formato=json&dataInicial=01/01/2023&dataFinal=01/02/2023'),
+            expect.stringContaining('bcdata.sgs.190/dados?formato=json&dataInicial=01/01/2023&dataFinal=01/02/2023'),
+        ]);
+    });
+
+    it('TJPR: o mês só entra quando os dois índices já saíram', async () => {
+        mockedGet.mockImplementation((url: string) => Promise.resolve(url.includes('bcdata.sgs.188/')
+            ? bcb([[8, 2026, '0.10'], [9, 2026, '0.80']])   // INPC de setembro já saiu
+            : bcb([[8, 2026, '0.30']])));                     // IGP-DI de setembro ainda não
+
+        const points = await fetchTJPRSeries(2026, 9, 2026, 10);
+
+        expect(points).toEqual([{ year: 2026, month: 9, monthlyRate: expect.closeTo(0.2, 10) }]);
+    });
+
+    it('TJMG: INPC do mês anterior', async () => {
+        mockedGet.mockResolvedValue(bcb([[1, 2025, '0.00'], [2, 2025, '1.48']]));
+
+        const points = await fetchTJMGSeries(2025, 2, 2025, 3);
+
+        expect(points).toEqual([
+            { year: 2025, month: 2, monthlyRate: 0 },
+            { year: 2025, month: 3, monthlyRate: 1.48 },
+        ]);
+        expect(mockedGet).toHaveBeenCalledTimes(1);
+        expect(mockedGet.mock.calls[0][0]).toContain('bcdata.sgs.188/dados?formato=json&dataInicial=01/01/2025&dataFinal=01/02/2025');
     });
 });

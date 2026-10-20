@@ -6,12 +6,16 @@
  * - CDI e SELIC: do último mês gravado até o mês anterior. As taxas são diárias e o BCB
  *   publica o mês corrente parcial; regravar o último mês completa um mês que entrou parcial.
  * - TJSP_LEI14905: estende a tabela oficial (acumulado) a partir do último mês que a tem.
+ * - TJPR_MEDIA_INPC_IGPDI e TJMG_CORREGEDORIA: do último mês gravado até o mês atual. A taxa
+ *   do mês M usa os índices de M-1, então o mês entra quando eles saem.
  *
  * Um mês que ainda não saiu entra na próxima execução, e um índice com erro não impede os outros.
  */
 
 import { prisma } from '../prisma';
-import { fetchIndexSeries, fetchSelicSeries, fetchTJSPSeries, IBGEDataPoint, shiftMonth } from './ibgeService';
+import {
+    fetchIndexSeries, fetchSelicSeries, fetchTJMGSeries, fetchTJPRSeries, fetchTJSPSeries, IBGEDataPoint, shiftMonth,
+} from './ibgeService';
 
 type YearMonth = { year: number; month: number };
 
@@ -25,6 +29,12 @@ const TJSP = 'TJSP_LEI14905';
 
 // Índices que o BCB só publica com o mês fechado
 const MONTHLY_INDEXES = ['IPCA_E', 'INPC', 'IPCA', 'IGP_M'];
+
+// Tabelas de tribunal montadas com os índices do mês anterior
+const COURT_TABLES: { indexName: string; fetchTable: typeof fetchTJPRSeries }[] = [
+    { indexName: 'TJPR_MEDIA_INPC_IGPDI', fetchTable: fetchTJPRSeries },
+    { indexName: 'TJMG_CORREGEDORIA',     fetchTable: fetchTJMGSeries },
+];
 
 // Início usado quando o índice ainda não tem nenhum mês gravado (o mesmo do seed)
 const DEFAULT_START: YearMonth       = { year: 2000, month: 1 };
@@ -55,6 +65,11 @@ export async function updateIndexSeries(now = new Date()): Promise<IndexUpdateRe
         (s, e) => fetchSelicSeries(s.year, s.month, e.year, e.month))));
 
     results.push(await run(TJSP, () => updateTJSPSeries(current)));
+
+    for (const { indexName, fetchTable } of COURT_TABLES) {
+        results.push(await run(indexName, () => refresh(indexName, DEFAULT_START, current,
+            (s, e) => fetchTable(s.year, s.month, e.year, e.month))));
+    }
 
     return results;
 }

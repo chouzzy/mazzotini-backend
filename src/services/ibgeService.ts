@@ -6,6 +6,7 @@
  *   INPC    : 188    (variação mensal, %)
  *   IPCA    : 433    (variação mensal, %)
  *   IPCA-15 : 7478   (variação mensal, %) — base da tabela do TJSP desde set/2024
+ *   IGP-DI  : 190    (variação mensal, %) — com o INPC, forma a média do TJPR
  *   SELIC   : 11     (taxa diária, % a.d.) — acumulada por mês no fetchSelicSeries
  */
 
@@ -19,6 +20,7 @@ const SERIES_CODES: Record<string, number> = {
     IPCA:       433,
     IPCA_15:    7478,   // IPCA-15 variação mensal % (usado na tabela do TJSP)
     IGP_M:      189,    // IGP-M variação mensal %
+    IGP_DI:     190,    // IGP-DI variação mensal % (usado na média do TJPR)
     CDI_MENSAL: 4391,   // CDI acumulado no mês %
     // SELIC (série 11) e CDI over (série 12) são diárias, acumuladas por mês em fetchSelicSeries e
     // fetchCDIDiariaSeries. O CDI_DIARIA da calculadora usa hoje a série 4391, como o CDI_MENSAL.
@@ -237,4 +239,56 @@ export async function fetchTJSPSeries(
     return parts
         .map(p => ({ ...shiftMonth(p.year, p.month, 1), monthlyRate: p.monthlyRate }))
         .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+}
+
+/**
+ * Tabela de tribunal em que a taxa do mês M é a variação do índice no mês M-1, como a do
+ * TJSP. Com mais de um índice, vale a média aritmética deles; um mês só entra quando todos
+ * já saíram. Os pontos retornados já vêm no mês da tabela.
+ */
+async function fetchPreviousMonthTable(
+    indexNames: string[],
+    startYear: number,
+    startMonth: number,
+    endYear?: number,
+    endMonth?: number,
+): Promise<IBGEDataPoint[]> {
+    const now    = new Date();
+    const eYear  = endYear  ?? now.getFullYear();
+    const eMonth = endMonth ?? now.getMonth() + 1;
+
+    // Meses de origem do índice: um mês antes dos meses da tabela
+    const srcStart = shiftMonth(startYear, startMonth, -1);
+    const srcEnd   = shiftMonth(eYear, eMonth, -1);
+
+    const rates: Map<number, number>[] = [];
+    for (const name of indexNames) {
+        const points = await fetchIndexSeries(name, srcStart.year, srcStart.month, srcEnd.year, srcEnd.month);
+        rates.push(new Map(points.map(p => [p.year * 100 + p.month, p.monthlyRate])));
+    }
+
+    const points: IBGEDataPoint[] = [];
+    for (const key of rates[0].keys()) {
+        const values = rates.map(r => r.get(key));
+        if (values.some(v => v === undefined)) continue;
+        const average = (values as number[]).reduce((sum, v) => sum + v, 0) / values.length;
+        points.push({ ...shiftMonth(Math.floor(key / 100), key % 100, 1), monthlyRate: average });
+    }
+    return points.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+}
+
+/**
+ * Índice TJPR_MEDIA_INPC_IGPDI: média aritmética do INPC e do IGP-DI do mês anterior
+ * (Decreto 1.544/1995). Conferido com a tabela pública da média INPC/IGP-DI de 2023 e 2024.
+ */
+export function fetchTJPRSeries(startYear: number, startMonth: number, endYear?: number, endMonth?: number) {
+    return fetchPreviousMonthTable(['INPC', 'IGP_DI'], startYear, startMonth, endYear, endMonth);
+}
+
+/**
+ * Índice TJMG_CORREGEDORIA: tabela da Corregedoria-Geral de Justiça do TJMG, pelo INPC do
+ * mês anterior. Conferido com os fatores publicados no DJe de 16/03/2026 (2022 a 2026).
+ */
+export function fetchTJMGSeries(startYear: number, startMonth: number, endYear?: number, endMonth?: number) {
+    return fetchPreviousMonthTable(['INPC'], startYear, startMonth, endYear, endMonth);
 }

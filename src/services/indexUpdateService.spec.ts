@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { updateIndexSeries } from './indexUpdateService';
-import { fetchIndexSeries, fetchSelicSeries, fetchTJSPSeries } from './ibgeService';
+import { fetchIndexSeries, fetchSelicSeries, fetchTJMGSeries, fetchTJPRSeries, fetchTJSPSeries } from './ibgeService';
 
 jest.mock('@prisma/client', () => {
     const mPrisma: any = {
@@ -14,6 +14,8 @@ jest.mock('./ibgeService', () => ({
     fetchIndexSeries: jest.fn(),
     fetchSelicSeries: jest.fn(),
     fetchTJSPSeries:  jest.fn(),
+    fetchTJPRSeries:  jest.fn(),
+    fetchTJMGSeries:  jest.fn(),
 }));
 
 const prisma = new PrismaClient() as any;
@@ -53,6 +55,20 @@ describe('updateIndexSeries', () => {
         (fetchIndexSeries as jest.Mock).mockResolvedValue([]);
         (fetchSelicSeries as jest.Mock).mockResolvedValue([]);
         (fetchTJSPSeries as jest.Mock).mockResolvedValue([]);
+        (fetchTJPRSeries as jest.Mock).mockResolvedValue([]);
+        (fetchTJMGSeries as jest.Mock).mockResolvedValue([]);
+    });
+
+    it('as tabelas do TJPR e do TJMG vão do último mês gravado até o mês atual', async () => {
+        lastStored = { TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 9 } };
+        (fetchTJPRSeries as jest.Mock).mockResolvedValue([{ year: 2026, month: 9, monthlyRate: 0.4 }, { year: 2026, month: 10, monthlyRate: 0.5 }]);
+
+        await updateIndexSeries(NOV_5);
+
+        expect(fetchTJPRSeries).toHaveBeenCalledWith(2026, 9, 2026, 11);
+        expect(savedMonths('TJPR_MEDIA_INPC_IGPDI')).toEqual(['9/2026', '10/2026']);
+        // Sem nenhum mês gravado, começa do mesmo ponto do seed
+        expect(fetchTJMGSeries).toHaveBeenCalledWith(2000, 1, 2026, 11);
     });
 
     it('busca cada índice mensal desde o último mês gravado até o mês atual', async () => {
