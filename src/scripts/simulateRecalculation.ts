@@ -46,20 +46,22 @@ async function main() {
         const current = asset?.currentValue ?? params.lastCalculatedValue ?? 0;
         try {
             const { result } = await useCase.calculate(params, ref.year, ref.month);
-            const diff = current ? (result.totalValue / current - 1) * 100 : 0;
-            if (Math.abs(diff) > 1) changedOver1++;
+            // Sem valor anterior, não há percentual: o processo conta entre os que mudam
+            const diff = current ? (result.totalValue / current - 1) * 100 : null;
+            if (diff === null ? result.totalValue !== 0 : Math.abs(diff) > 1) changedOver1++;
             if (result.warnings?.length) withWarnings++;
             totalBefore += current;
             totalAfter  += result.totalValue;
-            const note = result.warnings?.length ? ` | avisos: ${result.warnings.join('; ')}` : '';
-            console.log(`${name}: ${money(current)} → ${money(result.totalValue)} (${diff >= 0 ? '+' : ''}${diff.toFixed(2)}%)${note}`);
+            const change = diff === null ? 'sem valor anterior' : `${diff >= 0 ? '+' : ''}${diff.toFixed(2)}%`;
+            const note   = result.warnings?.length ? ` | avisos: ${result.warnings.join('; ')}` : '';
+            console.log(`${name}: ${money(current)} → ${money(result.totalValue)} (${change})${note}`);
         } catch (e: any) {
             refused++;
             console.log(`${name}: RECUSADO, manteria ${money(current)} | ${e.message}`);
         }
     }
 
-    console.log(`\n${allParams.length} processos com cálculo: ${refused} recusados, ${withWarnings} com avisos, ${changedOver1} mudam mais de 1%.`);
+    console.log(`\n${allParams.length} processos com cálculo: ${refused} recusados, ${withWarnings} com avisos, ${changedOver1} mudam mais de 1% (ou não tinham valor).`);
     console.log(`Soma dos que calcularam: ${money(totalBefore)} → ${money(totalAfter)}.`);
     await prisma.$disconnect();
 }
