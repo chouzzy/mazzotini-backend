@@ -400,7 +400,7 @@ model ProcessCalculationParams {
 
   // Vários cálculos no mesmo processo (ex.: dois contratos com índices ou juros diferentes).
   // Os campos acima são o primeiro cálculo; cada item de extraCalculations tem os mesmos
-  // campos e um `label`. O valor do processo é a soma de todos.
+  // campos (com as datas em texto ISO) e um `label`. O valor do processo é a soma de todos.
   calculationLabel    String?
   extraCalculations   Json?
 

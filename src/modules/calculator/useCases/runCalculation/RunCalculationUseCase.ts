@@ -3,6 +3,7 @@ import { prisma } from '../../../../prisma';
 import {
     calculateJudicialDebt, CalculationParams, CalculationResult, combineResults, Installment,
 } from '../../../../services/judicialCalculatorService';
+import { CALCULATION_DEFAULTS } from '../../calculationInput';
 
 interface IRequest {
     legalOneId: number;
@@ -17,49 +18,56 @@ interface IRequest {
  * para os dois chegarem ao mesmo valor.
  */
 export function toCalculationParams(params: ProcessCalculationParams): CalculationParams {
+    const d = CALCULATION_DEFAULTS;
     return {
         correctionIndex:       params.correctionIndex,
-        moratoryMode:          params.moratoryMode         ?? 'TAXA_LEGAL',
+        moratoryMode:          params.moratoryMode         ?? d.moratoryMode,
         moratoryRate:          params.moratoryRate,
-        moratoryRateUnit:      params.moratoryRateUnit     ?? 'AM',
+        moratoryRateUnit:      params.moratoryRateUnit     ?? d.moratoryRateUnit,
         moratoryType:          params.moratoryType,
         moratoryStartDate:     params.moratoryStartDate?.toISOString() ?? null,
         compensatoryRate:      params.compensatoryRate,
-        compensatoryRateUnit:  params.compensatoryRateUnit ?? 'AM',
+        compensatoryRateUnit:  params.compensatoryRateUnit ?? d.compensatoryRateUnit,
         compensatoryType:      params.compensatoryType,
         compensatoryStartDate: params.compensatoryStartDate ? new Date(params.compensatoryStartDate).toISOString() : null,
-        multaPercentage:       params.multaPercentage      ?? 0,
-        feesMode:              params.feesMode             ?? 'PERCENTUAL',
+        multaPercentage:       params.multaPercentage      ?? d.multaPercentage,
+        feesMode:              params.feesMode             ?? d.feesMode,
         feesPercentage:        params.feesPercentage,
-        feesFixedValue:        params.feesFixedValue       ?? 0,
+        feesFixedValue:        params.feesFixedValue       ?? d.feesFixedValue,
         penaltyPercentage:     params.penaltyPercentage,
         feesOnPenalty:         params.feesOnPenalty,
         installments:          params.installments as unknown as Installment[],
     };
 }
 
+/** Cálculo extra como fica gravado em `extraCalculations` (datas em texto ISO). */
+type StoredExtraCalculation = Partial<CalculationParams> & { label?: string };
+
 /** Os outros cálculos do processo (`extraCalculations`), com os mesmos padrões do primeiro. */
 export function toExtraCalculations(params: ProcessCalculationParams): { label: string; params: CalculationParams }[] {
-    const extras = Array.isArray(params.extraCalculations) ? (params.extraCalculations as any[]) : [];
+    const extras = Array.isArray(params.extraCalculations)
+        ? (params.extraCalculations as unknown as StoredExtraCalculation[])
+        : [];
+    const d = CALCULATION_DEFAULTS;
     return extras.map((e, i) => ({
         label: (typeof e.label === 'string' && e.label.trim()) || `Cálculo ${i + 2}`,
         params: {
-            correctionIndex:       e.correctionIndex,
-            moratoryMode:          e.moratoryMode          ?? 'TAXA_LEGAL',
-            moratoryRate:          e.moratoryRate          ?? 0,
-            moratoryRateUnit:      e.moratoryRateUnit      ?? 'AM',
-            moratoryType:          e.moratoryType          ?? 'SIMPLES',
+            correctionIndex:       e.correctionIndex       ?? '',
+            moratoryMode:          e.moratoryMode          ?? d.moratoryMode,
+            moratoryRate:          e.moratoryRate          ?? d.moratoryRate,
+            moratoryRateUnit:      e.moratoryRateUnit      ?? d.moratoryRateUnit,
+            moratoryType:          e.moratoryType          ?? d.moratoryType,
             moratoryStartDate:     e.moratoryStartDate     ?? null,
-            compensatoryRate:      e.compensatoryRate      ?? 0,
-            compensatoryRateUnit:  e.compensatoryRateUnit  ?? 'AM',
-            compensatoryType:      e.compensatoryType      ?? 'SIMPLES',
+            compensatoryRate:      e.compensatoryRate      ?? d.compensatoryRate,
+            compensatoryRateUnit:  e.compensatoryRateUnit  ?? d.compensatoryRateUnit,
+            compensatoryType:      e.compensatoryType      ?? d.compensatoryType,
             compensatoryStartDate: e.compensatoryStartDate ?? null,
-            multaPercentage:       e.multaPercentage       ?? 0,
-            feesMode:              e.feesMode              ?? 'PERCENTUAL',
-            feesPercentage:        e.feesPercentage        ?? 0,
-            feesFixedValue:        e.feesFixedValue        ?? 0,
-            penaltyPercentage:     e.penaltyPercentage     ?? 0,
-            feesOnPenalty:         e.feesOnPenalty         ?? false,
+            multaPercentage:       e.multaPercentage       ?? d.multaPercentage,
+            feesMode:              e.feesMode              ?? d.feesMode,
+            feesPercentage:        e.feesPercentage        ?? d.feesPercentage,
+            feesFixedValue:        e.feesFixedValue        ?? d.feesFixedValue,
+            penaltyPercentage:     e.penaltyPercentage     ?? d.penaltyPercentage,
+            feesOnPenalty:         e.feesOnPenalty         ?? d.feesOnPenalty,
             installments:          e.installments          ?? [],
         },
     }));

@@ -165,12 +165,12 @@ describe('RunCalculationUseCase com vários cálculos no mesmo processo', () => 
             label: 'Contrato 2',
             correctionIndex: 'TJSP_LEI14905',
             moratoryMode: 'PERSONALIZADO', moratoryRate: 1, moratoryRateUnit: 'AM', moratoryType: 'SIMPLES',
-            moratoryStartDate: '2025-12-10T00:00:00.000Z',
-            compensatoryRate: 5, compensatoryRateUnit: 'AA', compensatoryType: 'SIMPLES',
-            compensatoryStartDate: '2025-12-10T00:00:00.000Z',
+            moratoryStartDate: '2025-11-15T00:00:00.000Z',
+            compensatoryRate: 6, compensatoryRateUnit: 'AA', compensatoryType: 'SIMPLES',
+            compensatoryStartDate: '2025-11-15T00:00:00.000Z',
             multaPercentage: 0, feesMode: 'PERCENTUAL', feesPercentage: 10, feesFixedValue: 0,
             penaltyPercentage: 0, feesOnPenalty: false,
-            installments: [{ baseValue: 500, baseDate: '2025-12-10T00:00:00.000Z', description: 'Parcela B' }],
+            installments: [{ baseValue: 500, baseDate: '2025-11-15T00:00:00.000Z', description: 'Parcela B' }],
         }],
     };
 
@@ -180,7 +180,7 @@ describe('RunCalculationUseCase com vários cálculos no mesmo processo', () => 
         const [extra] = toExtraCalculations({ ...savedParams, extraCalculations: [{ correctionIndex: 'IPCA', installments: [] }] });
 
         expect(extra.label).toBe('Cálculo 2');
-        expect(extra.params).toMatchObject({ correctionIndex: 'IPCA', moratoryMode: 'TAXA_LEGAL', moratoryRateUnit: 'AM', feesMode: 'PERCENTUAL', feesOnPenalty: false });
+        expect(extra.params).toMatchObject({ correctionIndex: 'IPCA', moratoryMode: 'TAXA_LEGAL', moratoryRate: 1, moratoryRateUnit: 'AM', feesMode: 'PERCENTUAL', feesOnPenalty: false });
         expect(toExtraCalculations(savedParams)).toEqual([]);
     });
 
@@ -192,7 +192,7 @@ describe('RunCalculationUseCase com vários cálculos no mesmo processo', () => 
         const result = await new RunCalculationUseCase().calculateAndSave(twoContracts, 'cron', 2026, 11);
 
         expect(calculateJudicialDebt).toHaveBeenCalledTimes(2);
-        expect((calculateJudicialDebt as jest.Mock).mock.calls[1][0]).toMatchObject({ compensatoryRate: 5, compensatoryRateUnit: 'AA' });
+        expect((calculateJudicialDebt as jest.Mock).mock.calls[1][0]).toMatchObject({ compensatoryRate: 6, compensatoryRateUnit: 'AA' });
         expect(result.totalValue).toBe(1500);
         expect(result.installmentResults.map(i => i.description)).toEqual(['Contrato 1 · Parcela exemplo', 'Contrato 2 · Parcela B']);
 

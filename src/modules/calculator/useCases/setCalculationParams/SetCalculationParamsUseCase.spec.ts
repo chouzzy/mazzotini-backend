@@ -11,24 +11,38 @@ jest.mock('@prisma/client', () => {
 
 const prisma = new PrismaClient() as any;
 
-/** Parâmetros fictícios do primeiro cálculo, como a calculadora envia. */
+/** Cálculo principal fictício, como a calculadora envia. */
 const mainCalculation = {
     legalOneId: 123,
-    correctionIndex: 'TJSP_LEI14905',
+    correctionIndex: 'IPCA',
     moratoryMode: 'PERSONALIZADO',
-    moratoryRate: 1,
+    moratoryRate: 2,
     moratoryType: 'SIMPLES',
-    compensatoryRate: 10,
+    compensatoryRate: 12,
     compensatoryRateUnit: 'AA',
     compensatoryType: 'SIMPLES',
-    feesPercentage: 10,
+    feesPercentage: 15,
     penaltyPercentage: 0,
     feesOnPenalty: false,
-    installments: [{ baseValue: 1000, baseDate: '2025-10-01T00:00:00.000Z', description: 'Parcela exemplo' }],
+    installments: [{ baseValue: 2000, baseDate: '2025-09-01T00:00:00.000Z', description: 'Parcela A' }],
 };
 
-/** O `update` que o use case mandou para o upsert. */
-const updateData = () => prisma.processCalculationParams.upsert.mock.calls[0][0].update;
+/** Cálculo extra fictício. */
+const extraCalculation = (overrides: Record<string, unknown> = {}) => ({
+    label: ' Contrato B ',
+    correctionIndex: 'INPC',
+    moratoryType: 'SIMPLES',
+    compensatoryRate: 6,
+    compensatoryType: 'SIMPLES',
+    feesPercentage: 0,
+    penaltyPercentage: 0,
+    feesOnPenalty: false,
+    installments: [{ baseValue: 700, baseDate: '2025-11-15T00:00:00.000Z' }],
+    ...overrides,
+});
+
+const upsertArgs = () => prisma.processCalculationParams.upsert.mock.calls[0][0];
+const save = (body: Record<string, unknown>) => new SetCalculationParamsUseCase().execute({ ...mainCalculation, ...body });
 
 describe('SetCalculationParamsUseCase', () => {
     beforeEach(() => {
@@ -38,69 +52,82 @@ describe('SetCalculationParamsUseCase', () => {
     });
 
     it('sem os campos dos cálculos extras, não mexe neles (cliente antigo)', async () => {
-        await new SetCalculationParamsUseCase().execute(mainCalculation);
+        await save({});
 
-        expect(updateData()).not.toHaveProperty('extraCalculations');
-        expect(updateData()).not.toHaveProperty('calculationLabel');
-        expect(updateData()).toMatchObject({ correctionIndex: 'TJSP_LEI14905', compensatoryRateUnit: 'AA' });
+        expect(upsertArgs().update).not.toHaveProperty('extraCalculations');
+        expect(upsertArgs().update).not.toHaveProperty('calculationLabel');
+        expect(upsertArgs().update).toMatchObject({ correctionIndex: 'IPCA', compensatoryRateUnit: 'AA', moratoryRateUnit: 'AM' });
     });
 
-    it('grava os cálculos extras com os padrões do primeiro e as datas em ISO', async () => {
-        await new SetCalculationParamsUseCase().execute({
-            ...mainCalculation,
-            calculationLabel: '  Contrato 1 ',
-            extraCalculations: [{
-                label: ' Contrato 2 ',
-                correctionIndex: 'TJSP_LEI14905',
-                moratoryRate: 1,
-                moratoryType: 'SIMPLES',
-                moratoryStartDate: '2025-12-10',
-                compensatoryRate: 5,
-                compensatoryType: 'SIMPLES',
-                feesPercentage: 0,
-                penaltyPercentage: 0,
-                feesOnPenalty: false,
-                installments: [{ baseValue: 500, baseDate: '2025-12-10T00:00:00.000Z' }],
-            }],
+    it('grava os cálculos extras com os padrões do schema e as datas em ISO', async () => {
+        await save({
+            calculationLabel: '  Contrato A ',
+            extraCalculations: [extraCalculation({ moratoryStartDate: '2025-11-15' })],
         });
 
-        expect(updateData().calculationLabel).toBe('Contrato 1');
-        expect(updateData().extraCalculations).toEqual([expect.objectContaining({
-            label: 'Contrato 2',
+        expect(upsertArgs().update.calculationLabel).toBe('Contrato A');
+        expect(upsertArgs().update.extraCalculations).toEqual([expect.objectContaining({
+            label: 'Contrato B',
             moratoryMode: 'TAXA_LEGAL',
+            moratoryRate: 1,
             moratoryRateUnit: 'AM',
-            moratoryStartDate: '2025-12-10T00:00:00.000Z',
+            moratoryStartDate: '2025-11-15T00:00:00.000Z',
             compensatoryRateUnit: 'AM',
             compensatoryStartDate: null,
             multaPercentage: 0,
             feesMode: 'PERCENTUAL',
             feesFixedValue: 0,
+            installments: [{ baseValue: 700, baseDate: '2025-11-15T00:00:00.000Z' }],
         })]);
     });
 
-    it('lista vazia apaga os cálculos extras e o nome do primeiro', async () => {
-        await new SetCalculationParamsUseCase().execute({ ...mainCalculation, calculationLabel: '', extraCalculations: [] });
+    it('cria o registro com os mesmos campos quando o processo ainda não tinha parâmetros', async () => {
+        await save({ extraCalculations: [extraCalculation()] });
 
-        expect(updateData().extraCalculations).toEqual([]);
-        expect(updateData().calculationLabel).toBeNull();
+        expect(upsertArgs().create).toEqual({ assetId: 'asset-1', ...upsertArgs().update });
     });
 
-    it('recusa um cálculo extra sem parcela de débito, sem gravar nada', async () => {
-        const semDebito = {
-            ...mainCalculation,
-            label: 'Contrato 2',
-            installments: [{ baseValue: 100, baseDate: '2025-12-10T00:00:00.000Z', type: 'ABATIMENTO' as const }],
-        };
+    it('lista vazia ou null apaga os cálculos extras; nome vazio apaga o do primeiro', async () => {
+        await save({ calculationLabel: '', extraCalculations: [] });
+        expect(upsertArgs().update.extraCalculations).toEqual([]);
+        expect(upsertArgs().update.calculationLabel).toBeNull();
 
-        await expect(new SetCalculationParamsUseCase().execute({ ...mainCalculation, extraCalculations: [semDebito] }))
-            .rejects.toThrow('Contrato 2: informe ao menos uma parcela de débito.');
+        jest.clearAllMocks();
+        await save({ extraCalculations: null });
+        expect(upsertArgs().update.extraCalculations).toEqual([]);
+    });
+
+    it.each([
+        ['data impossível no início dos juros', { moratoryStartDate: '2025-02-31' }, 'Contrato B: início dos juros moratórios: data inválida (2025-02-31).'],
+        ['mês 13 numa parcela', { installments: [{ baseValue: 700, baseDate: '2025-13-01' }] }, 'Contrato B: parcela 1: data inválida (2025-13-01).'],
+        ['data em outro formato', { compensatoryStartDate: '15/11/2025' }, 'Contrato B: início dos juros remuneratórios: data inválida (15/11/2025).'],
+        ['número em texto', { feesMode: 'FIXO', feesFixedValue: '1000' }, 'Contrato B: honorários (R$): valor inválido.'],
+        ['booleano em texto', { feesOnPenalty: 'false' }, 'Contrato B: honorários sobre a multa do Art. 523: valor inválido.'],
+        ['opção desconhecida', { moratoryRateUnit: 'AS' }, 'Contrato B: unidade dos juros moratórios: valor inválido (AS).'],
+        ['valor de parcela em texto', { installments: [{ baseValue: '700', baseDate: '2025-11-15' }] }, 'Contrato B: parcela 1: valor inválido.'],
+        ['sem parcela de débito', { installments: [{ baseValue: 100, baseDate: '2025-11-15', type: 'ABATIMENTO' }] }, 'Contrato B: informe ao menos uma parcela de débito.'],
+        ['sem índice', { correctionIndex: '' }, 'Contrato B: escolha o índice de correção.'],
+    ])('recusa cálculo extra (%s) sem gravar nada', async (_, overrides, message) => {
+        await expect(save({ extraCalculations: [extraCalculation(overrides)] })).rejects.toThrow(message);
         expect(prisma.processCalculationParams.upsert).not.toHaveBeenCalled();
     });
 
-    it('recusa data inválida num cálculo extra', async () => {
-        const dataInvalida = { ...mainCalculation, label: 'Contrato 2', moratoryStartDate: '31/02/2025' };
+    it.each([
+        ['não é uma lista', { extraCalculations: { label: 'x' } }, 'Os cálculos extras devem ser uma lista.'],
+        ['item nulo', { extraCalculations: [null] }, 'Cálculo 2: formato inválido.'],
+        ['nome que não é texto', { extraCalculations: [extraCalculation({ label: 5 })] }, 'Cálculo 2: nome inválido.'],
+        ['mais de 20 extras', { extraCalculations: Array.from({ length: 21 }, () => extraCalculation()) }, 'O processo pode ter até 21 cálculos.'],
+    ])('recusa a lista de cálculos extras: %s', async (_, body, message) => {
+        await expect(save(body)).rejects.toThrow(message);
+        expect(prisma.processCalculationParams.upsert).not.toHaveBeenCalled();
+    });
 
-        await expect(new SetCalculationParamsUseCase().execute({ ...mainCalculation, extraCalculations: [dataInvalida] }))
-            .rejects.toThrow('Contrato 2: data inválida (31/02/2025).');
+    it('recusa o cálculo principal sem débito; com extras, a mensagem diz qual é', async () => {
+        const onlyAbatimento = { installments: [{ baseValue: 50, baseDate: '2025-09-01', type: 'ABATIMENTO' }] };
+
+        await expect(save(onlyAbatimento)).rejects.toThrow('Informe ao menos uma parcela de débito.');
+        await expect(save({ ...onlyAbatimento, calculationLabel: 'Contrato A', extraCalculations: [extraCalculation()] }))
+            .rejects.toThrow('Contrato A: informe ao menos uma parcela de débito.');
+        expect(prisma.processCalculationParams.upsert).not.toHaveBeenCalled();
     });
 });
