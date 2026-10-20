@@ -5,7 +5,9 @@
  *   IPCA-E  : 10764  (variação mensal, %)
  *   INPC    : 188    (variação mensal, %)
  *   IPCA    : 433    (variação mensal, %)
- *   SELIC   : 11     (meta SELIC, % a.a.) — convertida para mensal no fetchSelicSeries
+ *   IPCA-15 : 7478   (variação mensal, %) — base da tabela do TJSP desde set/2024
+ *   IGP-DI  : 190    (variação mensal, %) — com o INPC, forma a média do TJPR
+ *   SELIC   : 11     (taxa diária, % a.d.) — acumulada por mês no fetchSelicSeries
  */
 
 import axios from 'axios';
@@ -16,9 +18,12 @@ const SERIES_CODES: Record<string, number> = {
     IPCA_E:     10764,
     INPC:       188,
     IPCA:       433,
+    IPCA_15:    7478,   // IPCA-15 variação mensal % (usado na tabela do TJSP)
     IGP_M:      189,    // IGP-M variação mensal %
+    IGP_DI:     190,    // IGP-DI variação mensal % (usado na média do TJPR)
     CDI_MENSAL: 4391,   // CDI acumulado no mês %
-    // SELIC e CDI_DIARIA: série 11 / 12 (taxa diária "over", % a.d.) — acumulação mensal feita em fetchSelicSeries/fetchCDIDiariaSereis
+    // SELIC (série 11) e CDI over (série 12) são diárias, acumuladas por mês em fetchSelicSeries e
+    // fetchCDIDiariaSeries. O CDI_DIARIA da calculadora usa hoje a série 4391, como o CDI_MENSAL.
 };
 
 export interface IBGEDataPoint {
@@ -29,6 +34,29 @@ export interface IBGEDataPoint {
 
 function formatDateBCB(year: number, month: number): string {
     return `01/${String(month).padStart(2, '0')}/${year}`;
+}
+
+// O SGS do BCB às vezes responde 5xx ou 429, devolve uma página no lugar da lista de dados
+// ou demora demais. Como o cron roda uma vez por mês, um índice que falha fica um mês sem
+// atualizar: vale tentar de novo antes de desistir.
+const RETRY_DELAYS_MS = [2000, 5000, 15000];
+
+async function getBCB(url: string, timeout: number): Promise<{ data: string; valor: string }[]> {
+    for (let attempt = 0; ; attempt++) {
+        let failure: unknown;
+        try {
+            const response = await axios.get<{ data: string; valor: string }[]>(url, { timeout });
+            if (Array.isArray(response.data)) return response.data;
+            failure = new Error('Resposta inesperada do BCB: o corpo não é a lista de dados.');
+        } catch (err: any) {
+            const status = err?.response?.status;
+            // Erro 4xx (ex.: 404 de período ainda sem dado publicado) não melhora repetindo; o 429 sim
+            if (status && status < 500 && status !== 429) throw err;
+            failure = err;
+        }
+        if (attempt >= RETRY_DELAYS_MS.length) throw failure;
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+    }
 }
 
 /**
@@ -53,8 +81,7 @@ export async function fetchIndexSeries(
 
     const url = `${BCB_BASE}.${code}/dados?formato=json&dataInicial=${startDate}&dataFinal=${endDate}`;
 
-    const response = await axios.get<{ data: string; valor: string }[]>(url, { timeout: 20000 });
-    const data = response.data;
+    const data = await getBCB(url, 20000);
 
     if (!Array.isArray(data) || data.length === 0) {
         throw new Error(`Sem dados do BCB para ${indexName}`);
@@ -96,8 +123,7 @@ export async function fetchSelicSeries(
     const endDate = `${String(lastDay).padStart(2, '0')}/${String(eMonth).padStart(2, '0')}/${eYear}`;
 
     const url = `${BCB_BASE}.11/dados?formato=json&dataInicial=${formatDateBCB(startYear, startMonth)}&dataFinal=${endDate}`;
-    const response = await axios.get<{ data: string; valor: string }[]>(url, { timeout: 60000 });
-    const data = response.data;
+    const data = await getBCB(url, 60000);
 
     if (!Array.isArray(data) || data.length === 0) throw new Error('Sem dados SELIC diários do BCB (série 11)');
 
@@ -140,8 +166,7 @@ export async function fetchCDIDiariaSeries(
     const endDate = `${String(lastDay).padStart(2, '0')}/${String(eMonth).padStart(2, '0')}/${eYear}`;
 
     const url = `${BCB_BASE}.12/dados?formato=json&dataInicial=${formatDateBCB(startYear, startMonth)}&dataFinal=${endDate}`;
-    const response = await axios.get<{ data: string; valor: string }[]>(url, { timeout: 60000 });
-    const data = response.data;
+    const data = await getBCB(url, 60000);
 
     if (!Array.isArray(data) || data.length === 0) throw new Error('Sem dados CDI diários do BCB (série 12)');
 
@@ -165,10 +190,18 @@ export async function fetchCDIDiariaSeries(
     return points.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
 }
 
+export function shiftMonth(year: number, month: number, delta: number): { year: number; month: number } {
+    const total = year * 12 + (month - 1) + delta;
+    return { year: Math.floor(total / 12), month: (total % 12) + 1 };
+}
+
 /**
- * Índice TJSP_LEI14905 (TJ/SP Débitos Judiciais):
- *   - até ago/2024  : INPC  (série BCB 188)
- *   - set/2024+     : IPCA  (série BCB 433, conforme Lei 14905/2024)
+ * Índice TJSP_LEI14905 (tabela prática do TJ/SP para débitos judiciais).
+ * A taxa da tabela no mês M é a variação do índice no mês M-1:
+ *   - tabela até ago/2024 : INPC do mês anterior     (série BCB 188)
+ *   - tabela set/2024+    : IPCA-15 do mês anterior  (série BCB 7478, Lei 14.905/2024)
+ * Conferido mês a mês contra a tabela do drcalc (src/scripts/data/tjsp-accumulated.json).
+ * Os pontos retornados já vêm no mês da tabela.
  */
 export async function fetchTJSPSeries(
     startYear: number,
@@ -180,26 +213,82 @@ export async function fetchTJSPSeries(
     const eYear  = endYear  ?? now.getFullYear();
     const eMonth = endMonth ?? now.getMonth() + 1;
 
+    // Meses de origem do índice: um mês antes dos meses da tabela
+    const srcStart = shiftMonth(startYear, startMonth, -1);
+    const srcEnd   = shiftMonth(eYear, eMonth, -1);
     const parts: IBGEDataPoint[] = [];
 
-    // Parte 1: INPC até ago/2024
-    const inpcEnd = (eYear < 2024 || (eYear === 2024 && eMonth <= 8))
-        ? { y: eYear, m: eMonth }
-        : { y: 2024, m: 8 };
-
-    if (startYear < 2024 || (startYear === 2024 && startMonth <= 8)) {
-        const inpc = await fetchIndexSeries('INPC', startYear, startMonth, inpcEnd.y, inpcEnd.m);
+    // Parte 1: INPC de origem até jul/2024 (tabela até ago/2024)
+    if (srcStart.year < 2024 || (srcStart.year === 2024 && srcStart.month <= 7)) {
+        const inpcEnd = (srcEnd.year < 2024 || (srcEnd.year === 2024 && srcEnd.month <= 7))
+            ? srcEnd
+            : { year: 2024, month: 7 };
+        const inpc = await fetchIndexSeries('INPC', srcStart.year, srcStart.month, inpcEnd.year, inpcEnd.month);
         parts.push(...inpc);
     }
 
-    // Parte 2: IPCA a partir de set/2024
-    if (eYear > 2024 || (eYear === 2024 && eMonth >= 9)) {
-        const ipcaStart = (startYear > 2024 || (startYear === 2024 && startMonth >= 9))
-            ? { y: startYear, m: startMonth }
-            : { y: 2024, m: 9 };
-        const ipca = await fetchIndexSeries('IPCA', ipcaStart.y, ipcaStart.m, eYear, eMonth);
-        parts.push(...ipca);
+    // Parte 2: IPCA-15 de origem a partir de ago/2024 (tabela a partir de set/2024)
+    if (srcEnd.year > 2024 || (srcEnd.year === 2024 && srcEnd.month >= 8)) {
+        const ipca15Start = (srcStart.year > 2024 || (srcStart.year === 2024 && srcStart.month >= 8))
+            ? srcStart
+            : { year: 2024, month: 8 };
+        const ipca15 = await fetchIndexSeries('IPCA_15', ipca15Start.year, ipca15Start.month, srcEnd.year, srcEnd.month);
+        parts.push(...ipca15);
     }
 
-    return parts.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+    return parts
+        .map(p => ({ ...shiftMonth(p.year, p.month, 1), monthlyRate: p.monthlyRate }))
+        .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+}
+
+/**
+ * Tabela de tribunal em que a taxa do mês M é a variação do índice no mês M-1, como a do
+ * TJSP. Com mais de um índice, vale a média aritmética deles; um mês só entra quando todos
+ * já saíram. Os pontos retornados já vêm no mês da tabela.
+ */
+async function fetchPreviousMonthTable(
+    indexNames: string[],
+    startYear: number,
+    startMonth: number,
+    endYear?: number,
+    endMonth?: number,
+): Promise<IBGEDataPoint[]> {
+    const now    = new Date();
+    const eYear  = endYear  ?? now.getFullYear();
+    const eMonth = endMonth ?? now.getMonth() + 1;
+
+    // Meses de origem do índice: um mês antes dos meses da tabela
+    const srcStart = shiftMonth(startYear, startMonth, -1);
+    const srcEnd   = shiftMonth(eYear, eMonth, -1);
+
+    const rates: Map<number, number>[] = [];
+    for (const name of indexNames) {
+        const points = await fetchIndexSeries(name, srcStart.year, srcStart.month, srcEnd.year, srcEnd.month);
+        rates.push(new Map(points.map(p => [p.year * 100 + p.month, p.monthlyRate])));
+    }
+
+    const points: IBGEDataPoint[] = [];
+    for (const key of rates[0].keys()) {
+        const values = rates.map(r => r.get(key));
+        if (values.some(v => v === undefined)) continue;
+        const average = (values as number[]).reduce((sum, v) => sum + v, 0) / values.length;
+        points.push({ ...shiftMonth(Math.floor(key / 100), key % 100, 1), monthlyRate: average });
+    }
+    return points.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+}
+
+/**
+ * Índice TJPR_MEDIA_INPC_IGPDI: média aritmética do INPC e do IGP-DI do mês anterior
+ * (Decreto 1.544/1995). Conferido com a tabela pública da média INPC/IGP-DI de 2023 e 2024.
+ */
+export function fetchTJPRSeries(startYear: number, startMonth: number, endYear?: number, endMonth?: number) {
+    return fetchPreviousMonthTable(['INPC', 'IGP_DI'], startYear, startMonth, endYear, endMonth);
+}
+
+/**
+ * Índice TJMG_CORREGEDORIA: tabela da Corregedoria-Geral de Justiça do TJMG, pelo INPC do
+ * mês anterior. Conferido com os fatores publicados no DJe de 16/03/2026 (2022 a 2026).
+ */
+export function fetchTJMGSeries(startYear: number, startMonth: number, endYear?: number, endMonth?: number) {
+    return fetchPreviousMonthTable(['INPC'], startYear, startMonth, endYear, endMonth);
 }

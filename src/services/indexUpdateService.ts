@@ -1,0 +1,166 @@
+/**
+ * Atualização mensal dos índices da calculadora (IndexSeries), chamada pelo cron do dia 5.
+ *
+ * - IPCA_E, INPC, IPCA e IGP_M: do último mês gravado (inclusive) até o mês atual. O BCB só
+ *   devolve os meses publicados: o IPCA de um mês sai por volta do dia 10 do mês seguinte.
+ * - CDI e SELIC: do último mês gravado até o mês anterior. As taxas são diárias e o BCB
+ *   publica o mês corrente parcial; regravar o último mês completa um mês que entrou parcial.
+ * - TJSP_LEI14905: estende a tabela oficial (acumulado) a partir do último mês que a tem.
+ * - TJPR_MEDIA_INPC_IGPDI e TJMG_CORREGEDORIA: do último mês gravado até o mês atual. A taxa
+ *   do mês M usa os índices de M-1, então o mês entra quando eles saem.
+ *
+ * Um mês que ainda não saiu entra na próxima execução, e um índice com erro não impede os outros.
+ */
+
+import { prisma } from '../prisma';
+import {
+    fetchIndexSeries, fetchSelicSeries, fetchTJMGSeries, fetchTJPRSeries, fetchTJSPSeries, IBGEDataPoint, shiftMonth,
+} from './ibgeService';
+
+type YearMonth = { year: number; month: number };
+
+export interface IndexUpdateResult {
+    indexName: string;
+    months:    number;
+    error?:    string;
+}
+
+const TJSP = 'TJSP_LEI14905';
+
+// Índices que o BCB só publica com o mês fechado
+const MONTHLY_INDEXES = ['IPCA_E', 'INPC', 'IPCA', 'IGP_M'];
+
+// Tabelas de tribunal montadas com os índices do mês anterior
+const COURT_TABLES: { indexName: string; fetchTable: typeof fetchTJPRSeries }[] = [
+    { indexName: 'TJPR_MEDIA_INPC_IGPDI', fetchTable: fetchTJPRSeries },
+    { indexName: 'TJMG_CORREGEDORIA',     fetchTable: fetchTJMGSeries },
+];
+
+// Início usado quando o índice ainda não tem nenhum mês gravado (o mesmo do seed)
+const DEFAULT_START: YearMonth       = { year: 2000, month: 1 };
+const SELIC_DEFAULT_START: YearMonth = { year: 2024, month: 1 };
+
+const isAfter = (a: YearMonth, b: YearMonth) => a.year * 12 + a.month > b.year * 12 + b.month;
+const formatMonth = (p: YearMonth) => `${String(p.month).padStart(2, '0')}/${p.year}`;
+
+export async function updateIndexSeries(now = new Date()): Promise<IndexUpdateResult[]> {
+    const current: YearMonth   = { year: now.getFullYear(), month: now.getMonth() + 1 };
+    const lastMonth: YearMonth = shiftMonth(current.year, current.month, -1);
+    const results: IndexUpdateResult[] = [];
+
+    for (const indexName of MONTHLY_INDEXES) {
+        results.push(await run(indexName, () => refresh(indexName, DEFAULT_START, current,
+            (s, e) => fetchIndexSeries(indexName, s.year, s.month, e.year, e.month))));
+    }
+
+    // CDI_DIARIA usa a mesma série do CDI_MENSAL, como no seed, mas a partir do próprio
+    // último mês: assim um mês que falte em um dos dois não fica para trás
+    for (const indexName of ['CDI_MENSAL', 'CDI_DIARIA']) {
+        results.push(await run(indexName, () => refresh(indexName, DEFAULT_START, lastMonth,
+            (s, e) => fetchIndexSeries('CDI_MENSAL', s.year, s.month, e.year, e.month))));
+    }
+
+    // SELIC: usada pela taxa legal desde set/2024
+    results.push(await run('SELIC', () => refresh('SELIC', SELIC_DEFAULT_START, lastMonth,
+        (s, e) => fetchSelicSeries(s.year, s.month, e.year, e.month))));
+
+    results.push(await run(TJSP, () => updateTJSPSeries(current)));
+
+    for (const { indexName, fetchTable } of COURT_TABLES) {
+        results.push(await run(indexName, () => refresh(indexName, DEFAULT_START, current,
+            (s, e) => fetchTable(s.year, s.month, e.year, e.month))));
+    }
+
+    return results;
+}
+
+/** Busca do último mês gravado (ou de `defaultStart`) até `end` e grava as taxas. */
+async function refresh(
+    indexName: string,
+    defaultStart: YearMonth,
+    end: YearMonth,
+    fetch: (start: YearMonth, end: YearMonth) => Promise<IBGEDataPoint[]>,
+): Promise<IBGEDataPoint[]> {
+    const start = (await lastStoredMonth(indexName)) ?? defaultStart;
+    if (isAfter(start, end)) return [];
+    const points = await fetch(start, end);
+    await upsertMonthlyRates(indexName, points);
+    return points;
+}
+
+/**
+ * Estende a tabela do TJSP a partir do último mês com acumulado (importado do drcalc ou
+ * gravado aqui): acumulado(M) = acumulado(M-1) × (1 + taxa(M)/100). Assim o cálculo segue
+ * usando a razão entre acumulados, como a tabela oficial. Meses com acumulado não são alterados.
+ */
+async function updateTJSPSeries(current: YearMonth): Promise<IBGEDataPoint[]> {
+    const lastOfficial = await prisma.indexSeries.findFirst({
+        where:   { indexName: TJSP, accumulatedValue: { gt: 0 } },
+        orderBy: [{ year: 'desc' }, { month: 'desc' }],
+    });
+
+    // Sem a tabela oficial: grava só as taxas, sempre desde o início. Recomeçar do último mês
+    // gravado deixaria os meses anteriores com a regra antiga do seed (índice do próprio mês)
+    // e contaria o mês da emenda duas vezes.
+    if (!lastOfficial?.accumulatedValue) {
+        const points = await fetchTJSPSeries(DEFAULT_START.year, DEFAULT_START.month, current.year, current.month);
+        await upsertMonthlyRates(TJSP, points);
+        return points;
+    }
+
+    const start = shiftMonth(lastOfficial.year, lastOfficial.month, 1);
+    if (isAfter(start, current)) return [];
+
+    const points = await fetchTJSPSeries(start.year, start.month, current.year, current.month);
+    let accumulated = lastOfficial.accumulatedValue;
+    let expected    = start;
+    const saved: IBGEDataPoint[] = [];
+
+    for (const p of points) {
+        // Um mês faltando quebra a sequência: o resto entra na próxima execução
+        if (p.year !== expected.year || p.month !== expected.month) break;
+        accumulated = accumulated * (1 + p.monthlyRate / 100);
+        await prisma.indexSeries.upsert({
+            where:  { indexName_year_month: { indexName: TJSP, year: p.year, month: p.month } },
+            create: { indexName: TJSP, year: p.year, month: p.month, monthlyRate: p.monthlyRate, accumulatedValue: accumulated },
+            update: { monthlyRate: p.monthlyRate, accumulatedValue: accumulated },
+        });
+        expected = shiftMonth(expected.year, expected.month, 1);
+        saved.push(p);
+    }
+    return saved;
+}
+
+async function lastStoredMonth(indexName: string): Promise<YearMonth | null> {
+    const last = await prisma.indexSeries.findFirst({
+        where:   { indexName },
+        orderBy: [{ year: 'desc' }, { month: 'desc' }],
+        select:  { year: true, month: true },
+    });
+    return last ? { year: last.year, month: last.month } : null;
+}
+
+async function upsertMonthlyRates(indexName: string, points: IBGEDataPoint[]) {
+    for (const p of points) {
+        await prisma.indexSeries.upsert({
+            where:  { indexName_year_month: { indexName, year: p.year, month: p.month } },
+            create: { indexName, year: p.year, month: p.month, monthlyRate: p.monthlyRate },
+            update: { monthlyRate: p.monthlyRate },
+        });
+    }
+}
+
+/** Roda a atualização de um índice e registra no log os meses gravados ou o erro. */
+async function run(indexName: string, job: () => Promise<IBGEDataPoint[]>): Promise<IndexUpdateResult> {
+    try {
+        const points = await job();
+        const months = points.length;
+        const range  = months > 0 ? ` (${formatMonth(points[0])} a ${formatMonth(points[months - 1])})` : '';
+        console.log(`  Índice ${indexName}: ${months} ${months === 1 ? 'mês gravado' : 'meses gravados'}${range}`);
+        return { indexName, months };
+    } catch (e: any) {
+        const message = e?.message ?? String(e);
+        console.error(`  Erro ao atualizar ${indexName}:`, message);
+        return { indexName, months: 0, error: message };
+    }
+}

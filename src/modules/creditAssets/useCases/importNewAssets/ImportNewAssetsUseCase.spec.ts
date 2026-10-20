@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 const mockPrisma = {
     creditAsset: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(), // busca por processNumber; sem retorno = processo novo
     },
     $disconnect: jest.fn(),
 };
@@ -28,6 +29,18 @@ import { legalOneApiService } from '../../../../services/legalOneApiService';
 import { CreateCreditAssetUseCase } from '../createCreditAsset/CreateCreditAssetUseCase';
 import { LookupAssetFromLegalOneUseCase } from '../../../users/useCases/lookupAssetFromLegalOne/LookupAssetFromLegalOneUseCase';
 
+/** Roda a importação sem esperar os 3 s reais que ela dá entre um processo e outro. */
+async function runImport(useCase: ImportNewAssetsUseCase) {
+    jest.useFakeTimers();
+    try {
+        const running = useCase.execute();
+        await jest.runAllTimersAsync();
+        await running;
+    } finally {
+        jest.useRealTimers();
+    }
+}
+
 describe('ImportNewAssetsUseCase', () => {
     let importUseCase: ImportNewAssetsUseCase;
     let mockLookupInstance: any;
@@ -35,6 +48,7 @@ describe('ImportNewAssetsUseCase', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        (mockPrisma.creditAsset.findFirst as jest.Mock).mockResolvedValue(null);
 
         // Configura os mocks dos UseCases internos
         mockLookupInstance = { execute: jest.fn() };
@@ -50,8 +64,8 @@ describe('ImportNewAssetsUseCase', () => {
     it('deve importar processos novos com sucesso', async () => {
         // ARRANGE
         (legalOneApiService.listLawsuits as jest.Mock).mockResolvedValue([
-            { id: 1001, identifierNumber: 'PROCESSO-001' },
-            { id: 1002, identifierNumber: 'PROCESSO-002' }
+            { id: 1001, identifierNumber: 'PROCESSO-001', __legalOneType: 'Lawsuit' },
+            { id: 1002, identifierNumber: 'PROCESSO-002', __legalOneType: 'Lawsuit' }
         ]);
 
         // Configura o mock do Prisma para retornar null (não existe)
@@ -68,7 +82,7 @@ describe('ImportNewAssetsUseCase', () => {
         });
 
         // ACT
-        await importUseCase.execute();
+        await runImport(importUseCase);
 
         // ASSERT
         expect(legalOneApiService.listLawsuits).toHaveBeenCalled();
@@ -89,16 +103,33 @@ describe('ImportNewAssetsUseCase', () => {
     it('deve pular processos que já existem no banco (Idempotência)', async () => {
         // ARRANGE
         (legalOneApiService.listLawsuits as jest.Mock).mockResolvedValue([
-            { identifierNumber: 'PROCESSO-EXISTENTE' }
+            { identifierNumber: 'PROCESSO-EXISTENTE', __legalOneType: 'Lawsuit' }
         ]);
 
         // Prisma diz que JÁ EXISTE
         (mockPrisma.creditAsset.findUnique as jest.Mock).mockResolvedValue({ id: 'asset-1' });
 
         // ACT
-        await importUseCase.execute();
+        await runImport(importUseCase);
 
         // ASSERT
+        expect(mockLookupInstance.execute).not.toHaveBeenCalled();
+        expect(mockCreateInstance.execute).not.toHaveBeenCalled();
+    });
+
+    it('deve pular processo cujo número já existe no banco com outro ID do Legal One', async () => {
+        // ARRANGE
+        (legalOneApiService.listLawsuits as jest.Mock).mockResolvedValue([
+            { id: 1003, identifierNumber: 'PROCESSO-003', __legalOneType: 'Lawsuit' }
+        ]);
+        (mockPrisma.creditAsset.findUnique as jest.Mock).mockResolvedValue(null);
+        (mockPrisma.creditAsset.findFirst as jest.Mock).mockResolvedValue({ id: 'asset-2' });
+
+        // ACT
+        await runImport(importUseCase);
+
+        // ASSERT
+        expect(mockPrisma.creditAsset.findFirst).toHaveBeenCalledWith({ where: { processNumber: 'PROCESSO-003' } });
         expect(mockLookupInstance.execute).not.toHaveBeenCalled();
         expect(mockCreateInstance.execute).not.toHaveBeenCalled();
     });
@@ -106,8 +137,8 @@ describe('ImportNewAssetsUseCase', () => {
     it('deve continuar a importação mesmo se um processo falhar', async () => {
         // ARRANGE
         (legalOneApiService.listLawsuits as jest.Mock).mockResolvedValue([
-            { identifierNumber: 'PROCESSO-FALHA' },
-            { identifierNumber: 'PROCESSO-SUCESSO' }
+            { identifierNumber: 'PROCESSO-FALHA', __legalOneType: 'Lawsuit' },
+            { identifierNumber: 'PROCESSO-SUCESSO', __legalOneType: 'Lawsuit' }
         ]);
 
         (mockPrisma.creditAsset.findUnique as jest.Mock).mockResolvedValue(null);
@@ -122,7 +153,7 @@ describe('ImportNewAssetsUseCase', () => {
         });
 
         // ACT
-        await importUseCase.execute();
+        await runImport(importUseCase);
 
         // ASSERT
         expect(mockCreateInstance.execute).toHaveBeenCalledTimes(1);

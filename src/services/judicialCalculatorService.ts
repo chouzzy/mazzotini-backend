@@ -7,9 +7,13 @@
  *   - 4 pontos de dedução: DO_VALOR_CORRIGIDO | APOS_HONORARIOS | APOS_MULTA | APOS_TUDO
  *   - Juros Moratórios: Taxa Legal piecewise (art.406/CC) ou Personalizado
  *   - Juros Remuneratórios: taxa adicional (compensatoryRate)
+ *   - Índice NAO_ATUALIZAR ("Não atualizar (fixo)"): sem correção monetária
  */
 
 import { prisma } from '../prisma';
+
+/** "Não atualizar (fixo)": o principal não é corrigido; juros, multa e honorários seguem normais. */
+export const NAO_ATUALIZAR = 'NAO_ATUALIZAR';
 
 export type DeductionPoint = 'DO_VALOR_CORRIGIDO' | 'APOS_HONORARIOS' | 'APOS_MULTA' | 'APOS_TUDO';
 
@@ -175,38 +179,40 @@ async function computeTaxaLegalMoratory(
 }
 
 // ── helper: fator de correção para uma data base ──────────────────────────────
-
+//
+// Percorre os meses de (base + 1) até a referência. Num mês com o acumulado da tabela
+// oficial (drcalc, estendido pelo cron), o fator vem da razão até o último acumulado
+// anterior; nos outros, da taxa mensal (mês sem dado = 0%). Com a tabela completa, o
+// fator é acumulado(ref) / acumulado(base). Sem acumulado na referência (antes do cron
+// do mês), vale a tabela até o último mês que a tem e a taxa mensal depois dele. A taxa
+// mensal gravada nos meses da tabela não interfere: a do detalhamento vem do acumulado.
 function computeFactor(
     sy: number, sm: number,
     refYear: number, refMonth: number,
     rateMap: Map<string, { monthlyRate: number; accumulatedValue: number | null }>,
 ): { factor: number; breakdown: MonthBreakdown[] } {
     const corrMonths = monthRange(sy, sm + 1, refYear, refMonth);
-    const baseKey    = `${sy}-${String(sm).padStart(2,'0')}`;
-    const refKey     = `${refYear}-${String(refMonth).padStart(2,'0')}`;
-    const baseRec    = rateMap.get(baseKey);
-    const refRec     = rateMap.get(refKey);
-    let factor = 1;
+    let lastAcc         = rateMap.get(`${sy}-${String(sm).padStart(2,'0')}`)?.accumulatedValue ?? null;
+    let factorAtLastAcc = 1;
+    let factor          = 1;
     const breakdown: MonthBreakdown[] = [];
 
-    if (baseRec?.accumulatedValue && refRec?.accumulatedValue) {
-        factor = refRec.accumulatedValue / baseRec.accumulatedValue;
-        let runAcc = baseRec.accumulatedValue;
-        for (const { year, month } of corrMonths) {
-            const key         = `${year}-${String(month).padStart(2,'0')}`;
-            const rec         = rateMap.get(key);
-            const monthlyRate = rec?.monthlyRate ?? 0;
-            const thisAcc     = rec?.accumulatedValue ?? runAcc * (1 + monthlyRate / 100);
-            runAcc = thisAcc;
-            breakdown.push({ year, month, monthlyRate, accumulated: thisAcc / baseRec.accumulatedValue });
+    for (const { year, month } of corrMonths) {
+        const rec = rateMap.get(`${year}-${String(month).padStart(2,'0')}`);
+        let monthlyRate: number;
+        if (rec?.accumulatedValue && lastAcc) {
+            const next  = factorAtLastAcc * (rec.accumulatedValue / lastAcc);
+            monthlyRate = (next / factor - 1) * 100;
+            factor      = next;
+        } else {
+            monthlyRate = rec?.monthlyRate ?? 0;
+            factor     *= 1 + monthlyRate / 100;
         }
-    } else {
-        for (const { year, month } of corrMonths) {
-            const key  = `${year}-${String(month).padStart(2,'0')}`;
-            const rate = rateMap.get(key)?.monthlyRate ?? 0;
-            factor *= (1 + rate / 100);
-            breakdown.push({ year, month, monthlyRate: rate, accumulated: factor });
+        if (rec?.accumulatedValue) {
+            lastAcc         = rec.accumulatedValue;
+            factorAtLastAcc = factor;
         }
+        breakdown.push({ year, month, monthlyRate, accumulated: factor });
     }
     return { factor, breakdown };
 }
@@ -234,7 +240,10 @@ export async function calculateJudicialDebt(
     const globalStart   = parseYM(allSorted[0].baseDate);
     const fetchRange    = monthRange(globalStart.year, globalStart.month, referenceYear, referenceMonth);
 
-    const indexRecords = await prisma.indexSeries.findMany({
+    // "Não atualizar (fixo)" não tem série: o fator é 1 e não há detalhamento mês a mês
+    const isFixed = params.correctionIndex === NAO_ATUALIZAR;
+
+    const indexRecords = isFixed ? [] : await prisma.indexSeries.findMany({
         where: { indexName: params.correctionIndex, OR: fetchRange.map(({ year, month }) => ({ year, month })) },
     });
 
@@ -245,6 +254,9 @@ export async function calculateJudicialDebt(
             accumulatedValue: rec.accumulatedValue ?? null,
         });
     }
+
+    const factorFor = (sy: number, sm: number): { factor: number; breakdown: MonthBreakdown[] } =>
+        isFixed ? { factor: 1, breakdown: [] } : computeFactor(sy, sm, referenceYear, referenceMonth, rateMap);
 
     // 2. Processa parcelas de DÉBITO
     const installmentResults: InstallmentResult[] = [];
@@ -260,8 +272,7 @@ export async function calculateJudicialDebt(
     for (let i = 0; i < debitoInstallments.length; i++) {
         const inst = debitoInstallments[i];
         const { year: sy, month: sm } = parseYM(inst.baseDate);
-        const corrMonths = monthRange(sy, sm + 1, referenceYear, referenceMonth);
-        const { factor, breakdown } = computeFactor(sy, sm, referenceYear, referenceMonth, rateMap);
+        const { factor, breakdown } = factorFor(sy, sm);
         const correctedValue = inst.baseValue * factor;
 
         const moratoryStart = params.moratoryStartDate ? parseYM(params.moratoryStartDate) : { year: sy, month: sm };
@@ -320,7 +331,7 @@ export async function calculateJudicialDebt(
     const abatimentoResults: AbatimentoResult[] = [];
     for (const abat of abatimentoInstallments) {
         const { year: sy, month: sm } = parseYM(abat.baseDate);
-        const { factor } = computeFactor(sy, sm, referenceYear, referenceMonth, rateMap);
+        const { factor } = factorFor(sy, sm);
         const correctedDeduction = abat.baseValue * factor;
         abatimentoResults.push({
             description:      abat.description || 'Abatimento',
