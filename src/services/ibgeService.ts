@@ -22,6 +22,7 @@ const SERIES_CODES: Record<string, number> = {
     IGP_M:      189,    // IGP-M variação mensal %
     IGP_DI:     190,    // IGP-DI variação mensal % (usado na média do TJPR)
     CDI_MENSAL: 4391,   // CDI acumulado no mês %
+    TAXA_LEGAL: 29543,  // taxa legal da Lei 14.905 (Res. CMN 5.171), % a.m., desde 08/2024
     // SELIC (série 11) e CDI over (série 12) são diárias, acumuladas por mês em fetchSelicSeries e
     // fetchCDIDiariaSeries. O CDI_DIARIA da calculadora usa hoje a série 4391, como o CDI_MENSAL.
 };
@@ -294,35 +295,12 @@ export function fetchTJMGSeries(startYear: number, startMonth: number, endYear?:
 }
 
 /**
- * Taxa legal (art. 406 do Código Civil, Lei 14.905/2024), pela metodologia da Resolução CMN
- * 5.171/2024, a mesma do Dr. Calc: a taxa do mês M é
- *   (1 + SELIC acumulada no mês M-1) / (1 + IPCA-15 do mês M-1) - 1, nunca menor que zero.
- * A SELIC vem das taxas diárias (série 11). Conferida com o Dr. Calc de 09/2024 a 10/2026, sem
- * diferença. Os pontos retornados já vêm no mês da taxa; um mês só entra com os dois índices.
+ * Taxa legal (art. 406 do Código Civil, Lei 14.905/2024), como o BCB publica na série SGS 29543
+ * (% a.m., desde 08/2024). Pela Resolução CMN 5.171/2024, a taxa do mês M é
+ *   (1 + SELIC acumulada no mês M-1) / (1 + IPCA-15 do mês M-1) - 1, nunca menor que zero,
+ * e sai no começo do mês M. É a mesma série do Dr. Calc (conferida de 08/2024 a 10/2026, sem
+ * diferença).
  */
-export async function fetchTaxaLegalSeries(
-    startYear: number,
-    startMonth: number,
-    endYear?: number,
-    endMonth?: number,
-): Promise<IBGEDataPoint[]> {
-    const now    = new Date();
-    const eYear  = endYear  ?? now.getFullYear();
-    const eMonth = endMonth ?? now.getMonth() + 1;
-
-    // Meses de origem: um mês antes dos meses da taxa
-    const srcStart = shiftMonth(startYear, startMonth, -1);
-    const srcEnd   = shiftMonth(eYear, eMonth, -1);
-
-    const selic  = await fetchSelicSeries(srcStart.year, srcStart.month, srcEnd.year, srcEnd.month);
-    const ipca15 = new Map((await fetchIndexSeries('IPCA_15', srcStart.year, srcStart.month, srcEnd.year, srcEnd.month))
-        .map(p => [p.year * 100 + p.month, p.monthlyRate]));
-
-    return selic
-        .filter(s => ipca15.has(s.year * 100 + s.month))
-        .map(s => {
-            const rate = ((1 + s.monthlyRate / 100) / (1 + ipca15.get(s.year * 100 + s.month)! / 100) - 1) * 100;
-            return { ...shiftMonth(s.year, s.month, 1), monthlyRate: parseFloat(Math.max(rate, 0).toFixed(6)) };
-        })
-        .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+export function fetchTaxaLegalSeries(startYear: number, startMonth: number, endYear?: number, endMonth?: number) {
+    return fetchIndexSeries('TAXA_LEGAL', startYear, startMonth, endYear, endMonth);
 }

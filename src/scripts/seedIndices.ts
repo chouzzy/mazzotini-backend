@@ -68,7 +68,7 @@ async function main() {
         { name: 'TJSP_LEI14905', label: 'TJSP Lei 14905 (INPC até 08/2024 + IPCA-15 desde 09/2024)', fetcher: () => fetchTJSPSeries(START_YEAR, START_MONTH) },
         { name: 'TJPR_MEDIA_INPC_IGPDI', label: 'TJPR (média INPC/IGP-DI do mês anterior)', fetcher: () => fetchTJPRSeries(START_YEAR, START_MONTH) },
         { name: 'TJMG_CORREGEDORIA',     label: 'TJMG (Corregedoria, INPC do mês anterior)', fetcher: () => fetchTJMGSeries(START_YEAR, START_MONTH) },
-        // SELIC: série 11 diária — só precisamos de set/2024+ (P3 da Taxa Legal)
+        // SELIC: série 11 diária, acumulada por mês, para a correção pela SELIC
         { name: 'SELIC', label: 'Meta SELIC diária acumulada (jan/2024+)',                       fetcher: () => fetchSelicSeries(2024, 1) },
         // Taxa legal dos juros de mora desde 30/08/2024
         { name: 'TAXA_LEGAL', label: 'Taxa legal (SELIC e IPCA-15 do mês anterior, ago/2024+)', fetcher: () => fetchTaxaLegalSeries(2024, 8) },

@@ -22,8 +22,16 @@ export const NAO_ATUALIZAR = 'NAO_ATUALIZAR';
 /** Taxa legal da Lei 14.905/2024 (Res. CMN 5.171/2024), série gravada pelo cron e pelo seed. */
 export const TAXA_LEGAL = 'TAXA_LEGAL';
 
+/** Tabela do TJSP: usa a razão entre os acumulados, então precisa também do mês da parcela. */
+const TJSP = 'TJSP_LEI14905';
+
 /** Tabelas de tribunal: a linha do mês M já traz o índice do mês anterior, como a tabela oficial. */
-const COURT_TABLES = new Set(['TJSP_LEI14905', 'TJPR_MEDIA_INPC_IGPDI', 'TJMG_CORREGEDORIA']);
+const COURT_TABLES = new Set([TJSP, 'TJPR_MEDIA_INPC_IGPDI', 'TJMG_CORREGEDORIA']);
+
+/** Índices de correção que o cálculo aceita (a lista da tela fica em utils/indexOptions.ts do front). */
+const CORRECTION_INDEXES = new Set([
+    ...COURT_TABLES, 'IPCA_E', 'INPC', 'IPCA', 'IGP_M', 'SELIC', 'CDI_MENSAL', 'CDI_DIARIA', NAO_ATUALIZAR,
+]);
 
 /** Honorários do Art. 523, § 1º, do CPC: sempre 10%, como no Dr. Calc. */
 const ART_523_FEES_PERCENTAGE = 10;
@@ -265,7 +273,7 @@ function checkIndexMonths(
 ): void {
     if (months.length === 0) return;
     const label = indexLabel(indexName);
-    if (!bounds) throw new Error(`Não há dados de ${label} no banco. Rode a atualização dos índices.`);
+    if (!bounds) throw new Error(`Não há dados de ${label} no banco de índices. Avise o suporte.`);
 
     for (const { year, month } of months) {
         if (hasMonth(ymKey(year, month))) continue;
@@ -274,7 +282,7 @@ function checkIndexMonths(
             throw new Error(`Não há ${label} para ${formatYM(year, month)}: a série começa em ${boundToYM(bounds.first)}.`);
         }
         if (n <= bounds.last) {
-            throw new Error(`Falta ${label} de ${formatYM(year, month)} no banco. Rode a atualização dos índices.`);
+            throw new Error(`Falta ${label} de ${formatYM(year, month)} no banco de índices. Avise o suporte.`);
         }
         warnings.add(`${label.charAt(0).toUpperCase() + label.slice(1)} de ${formatYM(year, month)} ainda sem valor no banco: o mês entrou como 0%.`);
     }
@@ -345,6 +353,11 @@ export async function calculateJudicialDebt(
 
     if (debitoInstallments.length === 0) throw new Error('Informe ao menos uma parcela de débito.');
 
+    // Índice que a tela antiga gravava ("Outro", "IPCA15"): antes virava fator 1 sem aviso
+    if (!CORRECTION_INDEXES.has(params.correctionIndex)) {
+        throw new Error(`Índice de correção desconhecido (${params.correctionIndex}). Escolha um índice da lista.`);
+    }
+
     // 1. Busca índices do banco
     const sortedDebito  = [...debitoInstallments].sort((a, b) => new Date(a.baseDate).getTime() - new Date(b.baseDate).getTime());
     const sortedAbat    = [...abatimentoInstallments].sort((a, b) => new Date(a.baseDate).getTime() - new Date(b.baseDate).getTime());
@@ -377,15 +390,12 @@ export async function calculateJudicialDebt(
         });
     }
 
-    // A parcela mais antiga usa todos os meses de que as outras precisam
+    // A parcela mais antiga usa todos os meses de que as outras precisam. O TJSP, que divide os
+    // acumulados, precisa também do mês dela
     if (!isFixed) {
-        checkIndexMonths(
-            params.correctionIndex,
-            correctionMonths(globalStart.year, globalStart.month, referenceYear, referenceMonth, courtTable),
-            key => rateMap.has(key),
-            await seriesBounds(params.correctionIndex),
-            warnings,
-        );
+        const months = correctionMonths(globalStart.year, globalStart.month, referenceYear, referenceMonth, courtTable);
+        if (params.correctionIndex === TJSP) months.unshift(globalStart);
+        checkIndexMonths(params.correctionIndex, months, key => rateMap.has(key), await seriesBounds(params.correctionIndex), warnings);
     }
 
     const factorFor = (sy: number, sm: number): { factor: number; breakdown: MonthBreakdown[] } =>

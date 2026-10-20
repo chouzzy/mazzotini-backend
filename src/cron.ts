@@ -5,7 +5,8 @@ import { RetryFailedEnrichmentsUseCase } from './modules/creditAssets/useCases/r
 import { SyncFeeContractsUseCase } from './modules/creditAssets/useCases/syncFeeContracts/SyncFeeContractsUseCase';
 import { RunCalculationUseCase } from './modules/calculator/useCases/runCalculation/RunCalculationUseCase';
 import { prisma } from './prisma';
-import { updateIndexSeries } from './services/indexUpdateService';
+import { describeIndexLoad, ensureIndexSeriesLoaded, updateIndexSeries } from './services/indexUpdateService';
+import { notifyAllAdmins } from './services/notificationService';
 
 const syncUseCase = new SyncProcessUpdatesUseCase();
 const importUseCase = new ImportNewAssetsUseCase();
@@ -13,11 +14,44 @@ const retryEnrichmentUseCase = new RetryFailedEnrichmentsUseCase();
 const syncFeeContractsUseCase = new SyncFeeContractsUseCase();
 const runCalculationUseCase = new RunCalculationUseCase();
 
+/** Avisa os admins dos processos que o recálculo mensal recusou e que ficaram com o valor anterior. */
+async function notifyRecalculationFailures(failures: { assetId: string; error: string }[]) {
+    const assets = await prisma.creditAsset.findMany({
+        where:  { id: { in: failures.map(f => f.assetId) } },
+        select: { id: true, legalOneId: true, processNumber: true },
+    });
+    const name = (assetId: string) => {
+        const asset = assets.find(a => a.id === assetId);
+        return asset ? `${asset.processNumber} (Legal One ${asset.legalOneId})` : assetId;
+    };
+    const shown = failures.slice(0, 10).map(f => `${name(f.assetId)}: ${f.error}`);
+    const rest  = failures.length - shown.length;
+
+    await notifyAllAdmins({
+        title:            `Recálculo mensal: ${failures.length} ${failures.length === 1 ? 'processo ficou' : 'processos ficaram'} com o valor anterior`,
+        message:          `O cálculo foi recusado e o valor atualizado não mudou. ${shown.join(' | ')}${rest > 0 ? ` | e mais ${rest}.` : ''}`,
+        type:             'warning',
+        notificationType: 'CALCULATION',
+        link:             '/processos',
+    });
+}
+
 /**
  * Inicia todos os jobs agendados da aplicação.
  */
 export const startScheduledJobs = () => {
     console.log("⏰ Agendador de tarefas iniciado.");
+
+    // De hora em hora: carrega as séries de índice que o cálculo exige e que ainda estejam vazias
+    // (por exemplo, se o BCB estava fora quando o servidor subiu). Com tudo carregado, não faz nada.
+    cron.schedule('15 * * * *', async () => {
+        try {
+            const results = await ensureIndexSeriesLoaded();
+            if (results.length > 0) console.log(`[CRON] Carga de índices vazios: ${describeIndexLoad(results)}`);
+        } catch (e: any) {
+            console.error('[CRON] Falha ao carregar os índices vazios:', e.message);
+        }
+    }, { timezone: 'America/Sao_Paulo' });
 
     // Todos os dias à meia-noite: importa processos novos cadastrados no Legal One
     // nas últimas 48h (janela de 2 dias para cobrir eventuais atrasos de cadastro).
@@ -68,19 +102,24 @@ export const startScheduledJobs = () => {
             // 2. Recalcula todos os processos com parâmetros configurados, pelo mesmo
             // caminho do botão "Calcular": mesmos parâmetros, mesmo log, mesmo valor.
             const allParams = await prisma.processCalculationParams.findMany();
-            let ok = 0, fail = 0;
+            let ok = 0, withWarnings = 0;
+            const failures: { assetId: string; error: string }[] = [];
 
             for (const params of allParams) {
                 try {
-                    await runCalculationUseCase.calculateAndSave(params, 'cron', year, month);
+                    const result = await runCalculationUseCase.calculateAndSave(params, 'cron', year, month);
+                    if (result.warnings?.length) withWarnings++;
                     ok++;
                 } catch (e: any) {
                     console.error(`  Erro ao recalcular processo ${params.assetId}:`, e.message);
-                    fail++;
+                    failures.push({ assetId: params.assetId, error: e.message });
                 }
             }
 
-            console.log(`  Recálculo concluído: ${ok} sucesso, ${fail} falhas`);
+            console.log(`  Recálculo concluído: ${ok} sucesso, ${failures.length} falhas, ${withWarnings} com mês sem índice no banco (contado como 0%)`);
+
+            // Um processo recusado mantém o valor anterior: os admins precisam saber quais são
+            if (failures.length > 0) await notifyRecalculationFailures(failures);
         } catch (e: any) {
             console.error('  Erro crítico no job de índices/recálculo:', e.message);
         }

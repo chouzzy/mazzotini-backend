@@ -236,12 +236,12 @@ describe('convenções do Dr. Calc', () => {
             mockSeries({ [TAXA_LEGAL]: [row(2025, 1, 0.5894), row(2025, 3, 0)] });
 
             await expect(calculateJudicialDebt(legal('2025-01-15'), 2025, 4))
-                .rejects.toThrow('Falta taxa legal de 02/2025 no banco. Rode a atualização dos índices.');
+                .rejects.toThrow('Falta taxa legal de 02/2025 no banco de índices. Avise o suporte.');
         });
 
         it('recusa quando a taxa legal ainda não foi carregada', async () => {
             await expect(calculateJudicialDebt(legal('2025-01-15'), 2025, 4))
-                .rejects.toThrow('Não há dados de taxa legal no banco. Rode a atualização dos índices.');
+                .rejects.toThrow('Não há dados de taxa legal no banco de índices. Avise o suporte.');
         });
 
         it('mês depois do último publicado entra como 0% e vira um aviso', async () => {
@@ -275,7 +275,7 @@ describe('convenções do Dr. Calc', () => {
             mockSeries({ IPCA: [row(2023, 1, 0.53), row(2023, 3, 0.71)] });
 
             await expect(calculateJudicialDebt(plain('2023-01-15', { correctionIndex: 'IPCA' }), 2023, 4))
-                .rejects.toThrow('Falta IPCA de 02/2023 no banco. Rode a atualização dos índices.');
+                .rejects.toThrow('Falta IPCA de 02/2023 no banco de índices. Avise o suporte.');
         });
 
         it('recusa uma data anterior ao início da série', async () => {
@@ -287,7 +287,7 @@ describe('convenções do Dr. Calc', () => {
 
         it('recusa um índice sem nenhum dado no banco', async () => {
             await expect(calculateJudicialDebt(plain('2023-01-15', { correctionIndex: 'TJPR_MEDIA_INPC_IGPDI' }), 2023, 3))
-                .rejects.toThrow('Não há dados de TJPR no banco. Rode a atualização dos índices.');
+                .rejects.toThrow('Não há dados de TJPR no banco de índices. Avise o suporte.');
         });
 
         it('índice ainda não publicado entra como 0% e vira um aviso: R$ 1.004,97, como no Dr. Calc', async () => {
@@ -297,6 +297,18 @@ describe('convenções do Dr. Calc', () => {
 
             expect(result.totalValue).toBe(1004.97);
             expect(result.warnings).toEqual(['IPCA de 10/2026 ainda sem valor no banco: o mês entrou como 0%.']);
+        });
+
+        it('índice que a tela antiga gravava é recusado com uma mensagem clara', async () => {
+            await expect(calculateJudicialDebt(plain('2023-01-15', { correctionIndex: 'Outro' }), 2023, 3))
+                .rejects.toThrow('Índice de correção desconhecido (Outro). Escolha um índice da lista.');
+        });
+
+        it('no TJSP, a parcela anterior ao primeiro mês da tabela é recusada', async () => {
+            mockSeries({ TJSP_LEI14905: [row(1964, 10, 0, 1), row(1964, 11, 0, 1.05)] });
+
+            await expect(calculateJudicialDebt(plain('1964-09-15', { correctionIndex: 'TJSP_LEI14905' }), 1964, 11))
+                .rejects.toThrow('Não há TJSP para 09/1964: a série começa em 10/1964.');
         });
 
         it('"Não atualizar (fixo)" recusa datas anteriores ao Real', async () => {

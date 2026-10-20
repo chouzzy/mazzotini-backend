@@ -67,7 +67,7 @@ export async function updateIndexSeries(now = new Date()): Promise<IndexUpdateRe
             (s, e) => fetchIndexSeries('CDI_MENSAL', s.year, s.month, e.year, e.month))));
     }
 
-    // SELIC: usada pela taxa legal desde set/2024
+    // SELIC: índice de correção da calculadora (a taxa legal tem a própria série, TAXA_LEGAL)
     results.push(await run('SELIC', () => refresh('SELIC', SELIC_DEFAULT_START, lastMonth,
         (s, e) => fetchSelicSeries(s.year, s.month, e.year, e.month))));
 
@@ -85,11 +85,17 @@ export async function updateIndexSeries(now = new Date()): Promise<IndexUpdateRe
 }
 
 /**
- * Carrega, uma vez, as séries que o cálculo exige e que podem estar vazias depois de um deploy:
- * a taxa legal (série nova) e as tabelas do TJPR e do TJMG (quando o seed não rodou). Só busca
- * as que não têm nenhum mês gravado; as outras seguem pelo cron do dia 5.
+ * Carrega as séries que o cálculo exige e que podem estar vazias depois de um deploy: a taxa
+ * legal (série nova) e as tabelas do TJPR e do TJMG (quando o seed não rodou). Só busca as que
+ * não têm nenhum mês gravado; as outras seguem pelo cron do dia 5. Roda no início do servidor e
+ * a cada hora, então um BCB fora do ar no deploy se resolve sozinho.
+ *
+ * A série inteira entra numa gravação só, para nenhum cálculo ver a série pela metade. Com o
+ * PM2 em cluster, só a primeira instância carrega.
  */
 export async function ensureIndexSeriesLoaded(now = new Date()): Promise<IndexUpdateResult[]> {
+    if ((process.env.NODE_APP_INSTANCE ?? '0') !== '0') return [];
+
     const current: YearMonth = { year: now.getFullYear(), month: now.getMonth() + 1 };
     const series = [
         { indexName: TAXA_LEGAL, start: TAXA_LEGAL_START, fetchSeries: fetchTaxaLegalSeries },
@@ -99,10 +105,24 @@ export async function ensureIndexSeriesLoaded(now = new Date()): Promise<IndexUp
 
     for (const { indexName, start, fetchSeries } of series) {
         if (await lastStoredMonth(indexName)) continue;
-        results.push(await run(indexName, () => refresh(indexName, start, current,
-            (s, e) => fetchSeries(s.year, s.month, e.year, e.month))));
+        results.push(await run(indexName, async () => {
+            const points = await fetchSeries(start.year, start.month, current.year, current.month);
+            if (points.length > 0) {
+                await prisma.indexSeries.createMany({
+                    data: points.map(p => ({ indexName, year: p.year, month: p.month, monthlyRate: p.monthlyRate })),
+                });
+            }
+            return points;
+        }));
     }
     return results;
+}
+
+/** Resumo de uma carga para o log: "TAXA_LEGAL (27 meses), TJPR_MEDIA_INPC_IGPDI (erro: ...)". */
+export function describeIndexLoad(results: IndexUpdateResult[]): string {
+    return results
+        .map(r => r.error ? `${r.indexName} (erro: ${r.error})` : `${r.indexName} (${r.months} ${r.months === 1 ? 'mês' : 'meses'})`)
+        .join(', ');
 }
 
 /** Busca do último mês gravado (ou de `defaultStart`) até `end` e grava as taxas. */

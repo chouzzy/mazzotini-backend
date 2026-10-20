@@ -4,7 +4,7 @@ import { fetchIndexSeries, fetchSelicSeries, fetchTaxaLegalSeries, fetchTJMGSeri
 
 jest.mock('@prisma/client', () => {
     const mPrisma: any = {
-        indexSeries: { findFirst: jest.fn(), upsert: jest.fn() },
+        indexSeries: { findFirst: jest.fn(), upsert: jest.fn(), createMany: jest.fn() },
     };
     return { PrismaClient: jest.fn(() => mPrisma) };
 });
@@ -233,6 +233,29 @@ describe('ensureIndexSeriesLoaded', () => {
         expect(fetchTJPRSeries).not.toHaveBeenCalled();
         expect(results).toEqual([{ indexName: 'TAXA_LEGAL', months: 1 }, { indexName: 'TJMG_CORREGEDORIA', months: 1 }]);
         expect(fetchIndexSeries).not.toHaveBeenCalled();
+        // Cada série entra numa gravação só, para nenhum cálculo ver a série pela metade
+        expect(prisma.indexSeries.createMany.mock.calls.map((c: any) => c[0].data)).toEqual([
+            [{ indexName: 'TAXA_LEGAL', year: 2024, month: 8, monthlyRate: 0.6 }],
+            [{ indexName: 'TJMG_CORREGEDORIA', year: 2000, month: 1, monthlyRate: 0.6 }],
+        ]);
+        expect(prisma.indexSeries.upsert).not.toHaveBeenCalled();
+    });
+
+    it('com o PM2 em cluster, só a primeira instância carrega', async () => {
+        process.env.NODE_APP_INSTANCE = '1';
+        try {
+            expect(await ensureIndexSeriesLoaded(NOV_5)).toEqual([]);
+            expect(prisma.indexSeries.findFirst).not.toHaveBeenCalled();
+        } finally {
+            delete process.env.NODE_APP_INSTANCE;
+        }
+    });
+
+    it('um erro do BCB fica no resultado, para o log mostrar', async () => {
+        (fetchTaxaLegalSeries as jest.Mock).mockRejectedValue(new Error('BCB indisponível'));
+        lastStored = { TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 }, TJMG_CORREGEDORIA: { year: 2026, month: 11 } };
+
+        expect(await ensureIndexSeriesLoaded(NOV_5)).toEqual([{ indexName: 'TAXA_LEGAL', months: 0, error: 'BCB indisponível' }]);
     });
 
     it('com tudo carregado, não busca nada', async () => {

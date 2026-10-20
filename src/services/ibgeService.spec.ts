@@ -177,37 +177,17 @@ describe('tabelas do TJPR e do TJMG', () => {
 describe('taxa legal (Res. CMN 5.171/2024)', () => {
     beforeEach(() => mockedGet.mockReset());
 
-    /** Resposta da série 11 do BCB (SELIC diária) para uma lista de [dia, mês, ano, valor]. */
-    const daily = (points: [number, number, number, string][]) => ({
-        data: points.map(([day, month, year, valor]) => ({ data: `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`, valor })),
-    });
+    it('lê a série oficial do BCB (SGS 29543), no mês da taxa', async () => {
+        mockedGet.mockResolvedValue(bcb([[8, 2024, '0.605306'], [9, 2024, '0.676227'], [3, 2025, '0.000000']]));
 
-    it('a taxa do mês é (1 + SELIC do mês anterior) / (1 + IPCA-15 do mês anterior) - 1, nunca menor que zero', async () => {
-        mockedGet.mockImplementation((url: string) => {
-            if (url.includes('bcdata.sgs.11/')) return Promise.resolve(daily([[2, 12, 2024, '1.0'], [2, 1, 2025, '0.5']]));
-            if (url.includes('bcdata.sgs.7478/')) return Promise.resolve(bcb([[12, 2024, '0.34'], [1, 2025, '0.80']]));
-            return Promise.reject(new Error(`URL inesperada: ${url}`));
-        });
-
-        const points = await fetchTaxaLegalSeries(2025, 1, 2025, 2);
+        const points = await fetchTaxaLegalSeries(2024, 8, 2025, 3);
 
         expect(points).toEqual([
-            { year: 2025, month: 1, monthlyRate: 0.657764 },   // 1,01 / 1,0034 - 1
-            { year: 2025, month: 2, monthlyRate: 0 },          // 1,005 / 1,008 - 1 é negativo
+            { year: 2024, month: 8, monthlyRate: 0.605306 },
+            { year: 2024, month: 9, monthlyRate: 0.676227 },
+            { year: 2025, month: 3, monthlyRate: 0 },
         ]);
-        expect(mockedGet.mock.calls.map(call => call[0])).toEqual([
-            expect.stringContaining('bcdata.sgs.11/dados?formato=json&dataInicial=01/12/2024&dataFinal=31/01/2025'),
-            expect.stringContaining('bcdata.sgs.7478/dados?formato=json&dataInicial=01/12/2024&dataFinal=01/01/2025'),
-        ]);
-    });
-
-    it('um mês só entra quando os dois índices já saíram', async () => {
-        mockedGet.mockImplementation((url: string) => Promise.resolve(url.includes('bcdata.sgs.11/')
-            ? daily([[2, 12, 2024, '1.0'], [2, 1, 2025, '0.5']])
-            : bcb([[12, 2024, '0.34']])));                       // IPCA-15 de janeiro ainda não saiu
-
-        const points = await fetchTaxaLegalSeries(2025, 1, 2025, 2);
-
-        expect(points).toEqual([{ year: 2025, month: 1, monthlyRate: 0.657764 }]);
+        expect(mockedGet).toHaveBeenCalledTimes(1);
+        expect(mockedGet.mock.calls[0][0]).toContain('bcdata.sgs.29543/dados?formato=json&dataInicial=01/08/2024&dataFinal=01/03/2025');
     });
 });
