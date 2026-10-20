@@ -1,6 +1,7 @@
 /**
  * Validação e padrões dos parâmetros de cálculo recebidos em PUT /api/calculator/:legalOneId/params.
- * Vale para o cálculo principal e para os extras (vários cálculos no mesmo processo).
+ * Vale para o cálculo principal e para os extras (vários cálculos no mesmo processo). Também valida
+ * o mês de referência do POST /api/calculator/:legalOneId/calculate.
  */
 
 import {
@@ -90,6 +91,28 @@ export function parseCalendarDate(value: unknown, calcLabel: string | null, what
         throw fail(calcLabel, `${what}: data inválida (${String(value)}).`);
     }
     return date;
+}
+
+/** Inteiro em número ou em texto só com dígitos ("2026"); o resto vira NaN. */
+const toInteger = (value: unknown) =>
+    typeof value === 'number' ? value
+    : typeof value === 'string' && /^\s*\d+\s*$/.test(value) ? Number(value)
+    : NaN;
+
+/**
+ * Mês de referência do POST /calculate: ano e mês juntos, como número (ou texto com o número), ou
+ * nenhum dos dois, para usar o mês atual. Antes qualquer valor ia direto para o cálculo: "2023" em
+ * texto fazia o cálculo pedir índices de meses que não existem.
+ */
+export function parseReferenceMonth(rawYear: unknown, rawMonth: unknown): { referenceYear?: number; referenceMonth?: number } {
+    const empty = (value: unknown) => value === undefined || value === null || value === '';
+    if (empty(rawYear) && empty(rawMonth)) return {};
+    const year  = toInteger(rawYear);
+    const month = toInteger(rawMonth);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12 || year < 1900 || year > 2100) {
+        throw new Error('Mês de referência inválido. Escolha um mês válido ou deixe vazio para usar o mês atual.');
+    }
+    return { referenceYear: year, referenceMonth: month };
 }
 
 /** Parcelas de um cálculo: valor numérico, data válida e ao menos uma de débito. */
