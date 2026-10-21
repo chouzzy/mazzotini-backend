@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { parseReferenceMonth } from '../../calculationInput';
 import { RunCalculationUseCase } from './RunCalculationUseCase';
 
 class RunCalculationController {
@@ -6,7 +7,7 @@ class RunCalculationController {
         try {
             const legalOneId  = parseInt(req.params.legalOneId, 10);
             const auth0UserId = (req as any).auth?.payload?.sub ?? 'manual';
-            const { referenceYear, referenceMonth } = req.body;
+            const { referenceYear, referenceMonth } = parseReferenceMonth(req.body?.referenceYear, req.body?.referenceMonth);
 
             const useCase = new RunCalculationUseCase();
             const result  = await useCase.execute({ legalOneId, auth0UserId, referenceYear, referenceMonth });

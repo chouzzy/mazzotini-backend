@@ -98,31 +98,7 @@ class RunCalculationUseCase {
         refY: number,
         refM: number,
     ): Promise<CalculationResult> {
-        const calcParams = toCalculationParams(params);
-        const extras     = toExtraCalculations(params);
-
-        let result: CalculationResult;
-        let paramsSnapshot: object = calcParams;
-        if (extras.length === 0) {
-            result = await calculateJudicialDebt(calcParams, refY, refM);
-        } else {
-            // Vários cálculos no mesmo processo: cada um é feito por inteiro e o valor é a soma
-            const parts = [{ label: params.calculationLabel?.trim() || 'Cálculo 1', params: calcParams }, ...extras];
-            const results: { label: string; result: CalculationResult }[] = [];
-            for (const part of parts) {
-                try {
-                    results.push({ label: part.label, result: await calculateJudicialDebt(part.params, refY, refM) });
-                } catch (e: any) {
-                    throw new Error(`${part.label}: ${e.message}`);
-                }
-            }
-            result = combineResults(results);
-            paramsSnapshot = {
-                ...calcParams,
-                calculationLabel:  parts[0].label,
-                extraCalculations: extras.map(e => ({ label: e.label, ...e.params })),
-            };
-        }
+        const { result, paramsSnapshot } = await this.calculate(params, refY, refM);
 
         // Salva log de cálculo, com o snapshot de todos os parâmetros usados (para reabertura futura)
         await prisma.calculationLog.create({
@@ -158,6 +134,44 @@ class RunCalculationUseCase {
         });
 
         return result;
+    }
+
+    /**
+     * Só calcula, sem gravar nada: o resultado e o snapshot dos parâmetros usados. É o mesmo
+     * caminho do botão e do cron; a simulação do recálculo (scripts/simulateRecalculation) usa.
+     */
+    async calculate(
+        params: ProcessCalculationParams,
+        refY: number,
+        refM: number,
+    ): Promise<{ result: CalculationResult; paramsSnapshot: object }> {
+        const calcParams = toCalculationParams(params);
+        const extras     = toExtraCalculations(params);
+
+        let result: CalculationResult;
+        let paramsSnapshot: object = calcParams;
+        if (extras.length === 0) {
+            result = await calculateJudicialDebt(calcParams, refY, refM);
+        } else {
+            // Vários cálculos no mesmo processo: cada um é feito por inteiro e o valor é a soma
+            const parts = [{ label: params.calculationLabel?.trim() || 'Cálculo 1', params: calcParams }, ...extras];
+            const results: { label: string; result: CalculationResult }[] = [];
+            for (const part of parts) {
+                try {
+                    results.push({ label: part.label, result: await calculateJudicialDebt(part.params, refY, refM) });
+                } catch (e: any) {
+                    throw new Error(`${part.label}: ${e.message}`);
+                }
+            }
+            result = combineResults(results);
+            paramsSnapshot = {
+                ...calcParams,
+                calculationLabel:  parts[0].label,
+                extraCalculations: extras.map(e => ({ label: e.label, ...e.params })),
+            };
+        }
+
+        return { result, paramsSnapshot };
     }
 }
 

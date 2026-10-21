@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { fetchIndexSeries, fetchTJMGSeries, fetchTJPRSeries, fetchTJSPSeries } from './ibgeService';
+import { fetchIndexSeries, fetchTaxaLegalSeries, fetchTJMGSeries, fetchTJPRSeries, fetchTJSPSeries } from './ibgeService';
 
 jest.mock('axios');
 const mockedGet = axios.get as jest.Mock;
@@ -171,5 +171,23 @@ describe('tabelas do TJPR e do TJMG', () => {
         ]);
         expect(mockedGet).toHaveBeenCalledTimes(1);
         expect(mockedGet.mock.calls[0][0]).toContain('bcdata.sgs.188/dados?formato=json&dataInicial=01/01/2025&dataFinal=01/02/2025');
+    });
+});
+
+describe('taxa legal (Res. CMN 5.171/2024)', () => {
+    beforeEach(() => mockedGet.mockReset());
+
+    it('lê a série oficial do BCB (SGS 29543), no mês da taxa', async () => {
+        mockedGet.mockResolvedValue(bcb([[8, 2024, '0.605306'], [9, 2024, '0.676227'], [3, 2025, '0.000000']]));
+
+        const points = await fetchTaxaLegalSeries(2024, 8, 2025, 3);
+
+        expect(points).toEqual([
+            { year: 2024, month: 8, monthlyRate: 0.605306 },
+            { year: 2024, month: 9, monthlyRate: 0.676227 },
+            { year: 2025, month: 3, monthlyRate: 0 },
+        ]);
+        expect(mockedGet).toHaveBeenCalledTimes(1);
+        expect(mockedGet.mock.calls[0][0]).toContain('bcdata.sgs.29543/dados?formato=json&dataInicial=01/08/2024&dataFinal=01/03/2025');
     });
 });

@@ -5,15 +5,69 @@
  *   - Parcelas de débito (tipo DEBITO) e abatimentos/descontos (tipo ABATIMENTO)
  *   - Abatimentos corrigidos pelo mesmo índice até o mês de referência
  *   - 4 pontos de dedução: DO_VALOR_CORRIGIDO | APOS_HONORARIOS | APOS_MULTA | APOS_TUDO
- *   - Juros Moratórios: Taxa Legal piecewise (art.406/CC) ou Personalizado
+ *   - Juros Moratórios: Taxa Legal (art.406/CC, Lei 14.905/2024) ou Personalizado
  *   - Juros Remuneratórios: taxa adicional (compensatoryRate)
  *   - Índice NAO_ATUALIZAR ("Não atualizar (fixo)"): sem correção monetária
+ *
+ * As convenções seguem o Dr. Calc (drcalc.net), a referência do escritório: a correção e os juros
+ * contam do mês da parcela ao mês anterior ao de referência, e um mês sem índice antes do início
+ * ou no meio da série recusa o cálculo.
  */
 
 import { prisma } from '../prisma';
 
 /** "Não atualizar (fixo)": o principal não é corrigido; juros, multa e honorários seguem normais. */
 export const NAO_ATUALIZAR = 'NAO_ATUALIZAR';
+
+/** Taxa legal da Lei 14.905/2024 (Res. CMN 5.171/2024), série gravada pelo cron e pelo seed. */
+export const TAXA_LEGAL = 'TAXA_LEGAL';
+
+/** Tabela do TJSP: usa a razão entre os acumulados, então precisa também do mês da parcela. */
+const TJSP = 'TJSP_LEI14905';
+
+/** Tabelas de tribunal: a linha do mês M já traz o índice do mês anterior, como a tabela oficial. */
+const COURT_TABLES = new Set([TJSP, 'TJPR_MEDIA_INPC_IGPDI', 'TJMG_CORREGEDORIA']);
+
+/** Índices de correção que o cálculo aceita (a lista da tela fica em utils/indexOptions.ts do front). */
+const CORRECTION_INDEXES = new Set([
+    ...COURT_TABLES, 'IPCA_E', 'INPC', 'IPCA', 'IGP_M', 'SELIC', 'CDI_MENSAL', 'CDI_DIARIA', NAO_ATUALIZAR,
+]);
+
+/** Honorários do Art. 523, § 1º, do CPC: sempre 10%, como no Dr. Calc. */
+const ART_523_FEES_PERCENTAGE = 10;
+
+/** "Não atualizar (fixo)" vale a partir do Real (01/07/1994), como no Dr. Calc. */
+const FIXED_INDEX_START = Date.UTC(1994, 6, 1);
+
+/** O índice é um dos que o cálculo aceita? O salvamento dos parâmetros usa a mesma regra. */
+export const isCorrectionIndex = (indexName: string) => CORRECTION_INDEXES.has(indexName);
+
+export const unknownIndexError = (indexName: string) =>
+    `índice de correção desconhecido (${indexName}). Escolha um índice da lista.`;
+
+/**
+ * Com "Não atualizar (fixo)", a mensagem de erro de uma parcela anterior ao Real (o valor estaria
+ * em outra moeda e o Dr. Calc também recusa), ou null. O salvamento dos parâmetros usa a mesma regra.
+ */
+export function fixedIndexDateError(installments: { baseDate: string }[]): string | null {
+    const early = installments.find(i => new Date(i.baseDate).getTime() < FIXED_INDEX_START);
+    return early
+        ? `"Não atualizar (fixo)" vale para datas a partir de 01/07/1994. Mude a data da parcela de ${formatDate(early.baseDate)} ou escolha outro índice.`
+        : null;
+}
+
+/** Nome dos índices nas mensagens. */
+const INDEX_LABELS: Record<string, string> = {
+    TJSP_LEI14905:         'TJSP',
+    TJPR_MEDIA_INPC_IGPDI: 'TJPR',
+    TJMG_CORREGEDORIA:     'TJMG',
+    IPCA_E:                'IPCA-E',
+    IGP_M:                 'IGP-M',
+    CDI_MENSAL:            'CDI',
+    CDI_DIARIA:            'CDI',
+    [TAXA_LEGAL]:          'taxa legal',
+};
+const indexLabel = (indexName: string) => INDEX_LABELS[indexName] ?? indexName;
 
 export type DeductionPoint = 'DO_VALOR_CORRIGIDO' | 'APOS_HONORARIOS' | 'APOS_MULTA' | 'APOS_TUDO';
 
@@ -95,6 +149,7 @@ export interface CalculationResult {
     totalValue:           number;   // grossTotal − abatimentoTotal
     installmentResults:   InstallmentResult[];
     calculations?:        CalculationSummary[];   // só quando o processo tem mais de um cálculo
+    warnings?:            string[];               // meses depois do último índice gravado (entraram como 0%)
 }
 
 /** Resumo de um dos cálculos de um processo com vários cálculos. */
@@ -127,6 +182,20 @@ function monthRange(sy: number, sm: number, ey: number, em: number): { year: num
     return months;
 }
 
+function shiftYM(year: number, month: number, delta: number): { year: number; month: number } {
+    const total = year * 12 + (month - 1) + delta;
+    return { year: Math.floor(total / 12), month: (total % 12) + 1 };
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const ymKey = (year: number, month: number) => `${year}-${pad2(month)}`;
+const formatYM = (year: number, month: number) => `${pad2(month)}/${year}`;
+
+function formatDate(isoDate: string): string {
+    const d = new Date(isoDate);
+    return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
+}
+
 function round2(n: number): number { return Math.round(n * 100) / 100; }
 
 // Converte taxa a.a. ou a.d. para mensal
@@ -146,68 +215,129 @@ function toMonthlyRate(rate: number, unit: string | undefined, type: string): nu
     return rate;
 }
 
-// ── Taxa Legal piecewise (art.406/CC / Lei 14905/2024) ────────────────────────
+// ── Taxa legal (art. 406 do CC, Lei 14.905/2024), como no Dr. Calc ───────────
 //
-//   P1  ≤ Jan/2003               : 6% a.a.  = 0,5%/mês
-//   P2  Fev/2003 → Ago/2024      : 12% a.a. = 1%/mês
-//   P3  Set/2024+                 : SELIC mensal − IPCA mensal
-//
-async function computeTaxaLegalMoratory(
+// Juros simples sobre o valor corrigido, pelos meses do mês de início ao mês anterior ao de
+// referência (a mesma janela dos juros com taxa fixa). A taxa de cada mês soma as taxas diárias:
+//   - até 11/02/2003: 6% a.a. (Código Civil de 1916), 6%/365 por dia;
+//   - de 12/02/2003 a 29/08/2024: 12% a.a. (Código Civil de 2002), 12%/365 por dia;
+//   - a partir de 30/08/2024: a taxa legal do mês (série TAXA_LEGAL), dividida pelos dias do mês.
+// As datas de troca são as do Dr. Calc, a referência do escritório.
+
+const DAY_MS          = 86_400_000;
+const TWELVE_PCT_FROM = Date.UTC(2003, 1, 12);   // 12/02/2003
+const LEGAL_RATE_FROM = Date.UTC(2024, 7, 30);   // 30/08/2024
+
+/** Dias do mês em cada período da taxa legal. */
+function legalRateDays(year: number, month: number) {
+    const first = Date.UTC(year, month - 1, 1);
+    const next  = Date.UTC(year, month, 1);
+    const span  = (from: number, to: number) => Math.max(0, Math.min(next, to) - Math.max(first, from)) / DAY_MS;
+    return {
+        days:      (next - first) / DAY_MS,
+        sixPct:    span(-Infinity, TWELVE_PCT_FROM),
+        twelvePct: span(TWELVE_PCT_FROM, LEGAL_RATE_FROM),
+        legalRate: span(LEGAL_RATE_FROM, Infinity),
+    };
+}
+
+/** Meses dos juros pela taxa legal: do mês de início ao mês anterior ao de referência. */
+function legalRateMonths(startYear: number, startMonth: number, refYear: number, refMonth: number) {
+    const last = shiftYM(refYear, refMonth, -1);
+    return monthRange(startYear, startMonth, last.year, last.month);
+}
+
+function computeTaxaLegalMoratory(
     correctedValue: number,
     startYear: number, startMonth: number,
     refYear: number,   refMonth: number,
-): Promise<{ interest: number; months: number }> {
-    const hasP3 = refYear > 2024 || (refYear === 2024 && refMonth >= 9);
-    const selicMap = new Map<string, number>();
-    const ipcaMap  = new Map<string, number>();
-
-    if (hasP3) {
-        const p3Range = monthRange(2024, 9, refYear, refMonth);
-        const where   = p3Range.map(({ year, month }) => ({ year, month }));
-        const [sR, iR] = await Promise.all([
-            prisma.indexSeries.findMany({ where: { indexName: 'SELIC', OR: where } }),
-            prisma.indexSeries.findMany({ where: { indexName: 'IPCA',  OR: where } }),
-        ]);
-        for (const r of sR) selicMap.set(`${r.year}-${String(r.month).padStart(2,'0')}`, r.monthlyRate);
-        for (const r of iR) ipcaMap.set(`${r.year}-${String(r.month).padStart(2,'0')}`, r.monthlyRate);
-    }
-
-    const allMonths = monthRange(startYear, startMonth, refYear, refMonth);
+    legalRates: Map<string, number>,
+): { interest: number; months: number } {
+    const months = legalRateMonths(startYear, startMonth, refYear, refMonth);
     let totalRate = 0;
-    for (const { year, month } of allMonths) {
-        let rate: number;
-        if (year < 2003 || (year === 2003 && month <= 1))      rate = 0.5;
-        else if (year < 2024 || (year === 2024 && month <= 8)) rate = 1.0;
-        else {
-            const key = `${year}-${String(month).padStart(2,'0')}`;
-            rate = Math.max((selicMap.get(key) ?? 0) - (ipcaMap.get(key) ?? 0), 0);
-        }
-        totalRate += rate;
+    for (const { year, month } of months) {
+        const d = legalRateDays(year, month);
+        totalRate += d.sixPct * 6 / 365 + d.twelvePct * 12 / 365;
+        if (d.legalRate > 0) totalRate += (legalRates.get(ymKey(year, month)) ?? 0) * d.legalRate / d.days;
     }
-    return { interest: correctedValue * totalRate / 100, months: allMonths.length };
+    return { interest: correctedValue * totalRate / 100, months: months.length };
+}
+
+// ── meses sem índice ──────────────────────────────────────────────────────────
+//
+// Como o Dr. Calc: um mês antes do início da série ou faltando no meio dela recusa o cálculo;
+// um mês depois do último gravado (ainda não publicado ou não carregado) entra como 0% e vira um aviso.
+
+type SeriesBounds = { first: number; last: number };   // ano * 12 + mês
+
+const boundToYM = (n: number) => { const year = Math.floor((n - 1) / 12); return formatYM(year, n - year * 12); };
+
+async function seriesBounds(indexName: string): Promise<SeriesBounds | null> {
+    const select = { year: true, month: true } as const;
+    const [first, last] = await Promise.all([
+        prisma.indexSeries.findFirst({ where: { indexName }, orderBy: [{ year: 'asc' }, { month: 'asc' }], select }),
+        prisma.indexSeries.findFirst({ where: { indexName }, orderBy: [{ year: 'desc' }, { month: 'desc' }], select }),
+    ]);
+    return first && last ? { first: first.year * 12 + first.month, last: last.year * 12 + last.month } : null;
+}
+
+function checkIndexMonths(
+    indexName: string,
+    months: { year: number; month: number }[],
+    hasMonth: (key: string) => boolean,
+    bounds: SeriesBounds | null,
+    warnings: Set<string>,
+): void {
+    if (months.length === 0) return;
+    const label = indexLabel(indexName);
+    if (!bounds) throw new Error(`Não há dados de ${label} no banco de índices. Avise o suporte.`);
+
+    for (const { year, month } of months) {
+        if (hasMonth(ymKey(year, month))) continue;
+        const n = year * 12 + month;
+        // O limite é o do banco, não o do índice (o IPCA existe antes de 2000). A taxa legal começa
+        // em 08/2024 por definição: um mês dela antes do primeiro gravado é falta de dado
+        if (n < bounds.first && indexName !== TAXA_LEGAL) {
+            throw new Error(`O banco de índices tem ${label} só a partir de ${boundToYM(bounds.first)}, e o cálculo precisa de ${formatYM(year, month)}. Mude a data da parcela, escolha outro índice ou avise o suporte.`);
+        }
+        if (n <= bounds.last) {
+            throw new Error(`Falta ${label} de ${formatYM(year, month)} no banco de índices. Avise o suporte.`);
+        }
+        warnings.add(`${label.charAt(0).toUpperCase() + label.slice(1)} de ${formatYM(year, month)} ainda sem valor no banco: o mês entrou como 0%.`);
+    }
 }
 
 // ── helper: fator de correção para uma data base ──────────────────────────────
 //
-// Percorre os meses de (base + 1) até a referência. Num mês com o acumulado da tabela
-// oficial (drcalc, estendido pelo cron), o fator vem da razão até o último acumulado
-// anterior; nos outros, da taxa mensal (mês sem dado = 0%). Com a tabela completa, o
-// fator é acumulado(ref) / acumulado(base). Sem acumulado na referência (antes do cron
-// do mês), vale a tabela até o último mês que a tem e a taxa mensal depois dele. A taxa
-// mensal gravada nos meses da tabela não interfere: a do detalhamento vem do acumulado.
+// Usa a inflação dos meses do mês da parcela ao mês anterior ao de referência, como o Dr. Calc.
+// Nos índices de preço e de juros, a linha do mês M traz a variação do próprio mês: são as linhas
+// desses meses. Nas tabelas de tribunal, a linha do mês M já traz o índice de M-1: são as linhas
+// do mês seguinte à parcela até o de referência.
+function correctionMonths(sy: number, sm: number, refYear: number, refMonth: number, courtTable: boolean) {
+    const from = courtTable ? shiftYM(sy, sm, 1) : { year: sy, month: sm };
+    const to   = courtTable ? { year: refYear, month: refMonth } : shiftYM(refYear, refMonth, -1);
+    return monthRange(from.year, from.month, to.year, to.month);
+}
+
+// Num mês com o acumulado da tabela oficial (drcalc, estendido pelo cron), o fator vem da razão
+// até o último acumulado anterior; nos outros, da taxa mensal. Com a tabela completa, o fator é
+// acumulado(ref) / acumulado(base). Sem acumulado na referência (antes do cron do mês), vale a
+// tabela até o último mês que a tem e a taxa mensal depois dele. A taxa mensal gravada nos meses
+// da tabela não interfere: a do detalhamento vem do acumulado.
 function computeFactor(
     sy: number, sm: number,
     refYear: number, refMonth: number,
     rateMap: Map<string, { monthlyRate: number; accumulatedValue: number | null }>,
+    courtTable: boolean,
 ): { factor: number; breakdown: MonthBreakdown[] } {
-    const corrMonths = monthRange(sy, sm + 1, refYear, refMonth);
-    let lastAcc         = rateMap.get(`${sy}-${String(sm).padStart(2,'0')}`)?.accumulatedValue ?? null;
+    const corrMonths = correctionMonths(sy, sm, refYear, refMonth, courtTable);
+    let lastAcc         = courtTable ? (rateMap.get(ymKey(sy, sm))?.accumulatedValue ?? null) : null;
     let factorAtLastAcc = 1;
     let factor          = 1;
     const breakdown: MonthBreakdown[] = [];
 
     for (const { year, month } of corrMonths) {
-        const rec = rateMap.get(`${year}-${String(month).padStart(2,'0')}`);
+        const rec = rateMap.get(ymKey(year, month));
         let monthlyRate: number;
         if (rec?.accumulatedValue && lastAcc) {
             const next  = factorAtLastAcc * (rec.accumulatedValue / lastAcc);
@@ -242,6 +372,12 @@ export async function calculateJudicialDebt(
 
     if (debitoInstallments.length === 0) throw new Error('Informe ao menos uma parcela de débito.');
 
+    // Índice que a tela antiga gravava ("Outro", "IPCA15"): antes virava fator 1 sem aviso
+    if (!isCorrectionIndex(params.correctionIndex)) {
+        const message = unknownIndexError(params.correctionIndex);
+        throw new Error(message.charAt(0).toUpperCase() + message.slice(1));
+    }
+
     // 1. Busca índices do banco
     const sortedDebito  = [...debitoInstallments].sort((a, b) => new Date(a.baseDate).getTime() - new Date(b.baseDate).getTime());
     const sortedAbat    = [...abatimentoInstallments].sort((a, b) => new Date(a.baseDate).getTime() - new Date(b.baseDate).getTime());
@@ -250,7 +386,13 @@ export async function calculateJudicialDebt(
     const fetchRange    = monthRange(globalStart.year, globalStart.month, referenceYear, referenceMonth);
 
     // "Não atualizar (fixo)" não tem série: o fator é 1 e não há detalhamento mês a mês
-    const isFixed = params.correctionIndex === NAO_ATUALIZAR;
+    const isFixed    = params.correctionIndex === NAO_ATUALIZAR;
+    const courtTable = COURT_TABLES.has(params.correctionIndex);
+    const warnings   = new Set<string>();
+
+    // Antes do Real, o valor estaria em outra moeda: o Dr. Calc recusa, e aqui também
+    const fixedDateError = isFixed ? fixedIndexDateError(allSorted) : null;
+    if (fixedDateError) throw new Error(fixedDateError);
 
     const indexRecords = isFixed ? [] : await prisma.indexSeries.findMany({
         where: { indexName: params.correctionIndex, OR: fetchRange.map(({ year, month }) => ({ year, month })) },
@@ -258,14 +400,41 @@ export async function calculateJudicialDebt(
 
     const rateMap = new Map<string, { monthlyRate: number; accumulatedValue: number | null }>();
     for (const rec of indexRecords) {
-        rateMap.set(`${rec.year}-${String(rec.month).padStart(2,'0')}`, {
+        rateMap.set(ymKey(rec.year, rec.month), {
             monthlyRate:     rec.monthlyRate,
             accumulatedValue: rec.accumulatedValue ?? null,
         });
     }
 
+    // A parcela mais antiga usa todos os meses de que as outras precisam. Com a tabela oficial do
+    // TJSP, o fator divide pelo acumulado do mês da parcela, que então também precisa existir; com
+    // a série só de taxas, ou sem nenhum mês de correção (parcela no mês de referência ou depois),
+    // o mês da parcela não entra na conta
+    if (!isFixed) {
+        const months   = correctionMonths(globalStart.year, globalStart.month, referenceYear, referenceMonth, courtTable);
+        const firstRow = months.length > 0 ? rateMap.get(ymKey(months[0].year, months[0].month)) : undefined;
+        if (params.correctionIndex === TJSP && firstRow?.accumulatedValue) months.unshift(globalStart);
+        checkIndexMonths(params.correctionIndex, months, key => rateMap.has(key), await seriesBounds(params.correctionIndex), warnings);
+    }
+
     const factorFor = (sy: number, sm: number): { factor: number; breakdown: MonthBreakdown[] } =>
-        isFixed ? { factor: 1, breakdown: [] } : computeFactor(sy, sm, referenceYear, referenceMonth, rateMap);
+        isFixed ? { factor: 1, breakdown: [] } : computeFactor(sy, sm, referenceYear, referenceMonth, rateMap, courtTable);
+
+    // Taxa legal dos juros de mora: a série só é necessária a partir de 30/08/2024
+    const usesLegalRate = (params.moratoryMode ?? 'TAXA_LEGAL') === 'TAXA_LEGAL';
+    const legalRates    = new Map<string, number>();
+    if (usesLegalRate) {
+        const earliest = params.moratoryStartDate ? parseYM(params.moratoryStartDate) : parseYM(sortedDebito[0].baseDate);
+        const months   = legalRateMonths(earliest.year, earliest.month, referenceYear, referenceMonth)
+            .filter(({ year, month }) => legalRateDays(year, month).legalRate > 0);
+        if (months.length > 0) {
+            const rows = await prisma.indexSeries.findMany({
+                where: { indexName: TAXA_LEGAL, OR: months.map(({ year, month }) => ({ year, month })) },
+            });
+            for (const row of rows) legalRates.set(ymKey(row.year, row.month), row.monthlyRate);
+            checkIndexMonths(TAXA_LEGAL, months, key => legalRates.has(key), await seriesBounds(TAXA_LEGAL), warnings);
+        }
+    }
 
     // 2. Processa parcelas de DÉBITO
     const installmentResults: InstallmentResult[] = [];
@@ -287,8 +456,8 @@ export async function calculateJudicialDebt(
         const moratoryStart = params.moratoryStartDate ? parseYM(params.moratoryStartDate) : { year: sy, month: sm };
         let moratoryInterest = 0, nMoratory = 0;
 
-        if ((params.moratoryMode ?? 'TAXA_LEGAL') === 'TAXA_LEGAL') {
-            const ml = await computeTaxaLegalMoratory(correctedValue, moratoryStart.year, moratoryStart.month, referenceYear, referenceMonth);
+        if (usesLegalRate) {
+            const ml = computeTaxaLegalMoratory(correctedValue, moratoryStart.year, moratoryStart.month, referenceYear, referenceMonth, legalRates);
             moratoryInterest = ml.interest;
             nMoratory = ml.months;
         } else {
@@ -372,11 +541,10 @@ export async function calculateJudicialDebt(
     // APOS_HONORARIOS — antes de Art.523
     const effectiveSubtotalB = subtotalB - deductAt('APOS_HONORARIOS');
 
+    // Art. 523, § 1º, do CPC: a multa e os honorários de 10% incidem sobre o débito já com os
+    // honorários da condenação, mesmo quando eles são um valor fixo (como no Dr. Calc)
     const penaltyValue       = effectiveSubtotalB * (params.penaltyPercentage / 100);
-    // feesOnPenalty só se aplica no modo percentual
-    const feesOnPenaltyValue = (params.feesOnPenalty && !isFeesFixed)
-        ? effectiveSubtotalB * (params.feesPercentage / 100)
-        : 0;
+    const feesOnPenaltyValue = params.feesOnPenalty ? effectiveSubtotalB * (ART_523_FEES_PERCENTAGE / 100) : 0;
     const afterArt523        = effectiveSubtotalB + penaltyValue + feesOnPenaltyValue;
 
     // APOS_MULTA — após Art.523 completo
@@ -404,6 +572,7 @@ export async function calculateJudicialDebt(
         abatimentoTotal:      round2(abatimentoTotal),
         totalValue:           round2(finalTotal),
         installmentResults,
+        ...(warnings.size > 0 ? { warnings: [...warnings] } : {}),
     };
 }
 
@@ -435,6 +604,7 @@ export function combineResults(parts: { label: string; result: CalculationResult
             abatimentoResults.push({ ...abat, description: `${label} · ${abat.description}` });
         }
     }
+    const warnings = parts.flatMap(({ label, result }) => (result.warnings ?? []).map(w => `${label}: ${w}`));
 
     return {
         referenceMonth:       parts[0].result.referenceMonth,
@@ -459,5 +629,6 @@ export function combineResults(parts: { label: string; result: CalculationResult
             correctedValue: result.correctedValue,
             totalValue:     result.totalValue,
         })),
+        ...(warnings.length > 0 ? { warnings } : {}),
     };
 }

@@ -1,9 +1,12 @@
 /**
  * Validação e padrões dos parâmetros de cálculo recebidos em PUT /api/calculator/:legalOneId/params.
- * Vale para o cálculo principal e para os extras (vários cálculos no mesmo processo).
+ * Vale para o cálculo principal e para os extras (vários cálculos no mesmo processo). Também valida
+ * o mês de referência do POST /api/calculator/:legalOneId/calculate.
  */
 
-import type { Installment } from '../../services/judicialCalculatorService';
+import {
+    fixedIndexDateError, Installment, isCorrectionIndex, NAO_ATUALIZAR, unknownIndexError,
+} from '../../services/judicialCalculatorService';
 
 export const MAX_EXTRA_CALCULATIONS = 20;
 export const MAX_LABEL_LENGTH = 60;
@@ -90,6 +93,28 @@ export function parseCalendarDate(value: unknown, calcLabel: string | null, what
     return date;
 }
 
+/** Inteiro em número ou em texto só com dígitos ("2026"); o resto vira NaN. */
+const toInteger = (value: unknown) =>
+    typeof value === 'number' ? value
+    : typeof value === 'string' && /^\s*\d+\s*$/.test(value) ? Number(value)
+    : NaN;
+
+/**
+ * Mês de referência do POST /calculate: ano e mês juntos, como número (ou texto com o número), ou
+ * nenhum dos dois, para usar o mês atual. Antes qualquer valor ia direto para o cálculo: "2023" em
+ * texto fazia o cálculo pedir índices de meses que não existem.
+ */
+export function parseReferenceMonth(rawYear: unknown, rawMonth: unknown): { referenceYear?: number; referenceMonth?: number } {
+    const empty = (value: unknown) => value === undefined || value === null || value === '';
+    if (empty(rawYear) && empty(rawMonth)) return {};
+    const year  = toInteger(rawYear);
+    const month = toInteger(rawMonth);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12 || year < 1900 || year > 2100) {
+        throw new Error('Mês de referência inválido. Escolha um mês válido ou deixe vazio para usar o mês atual.');
+    }
+    return { referenceYear: year, referenceMonth: month };
+}
+
 /** Parcelas de um cálculo: valor numérico, data válida e ao menos uma de débito. */
 export function validateInstallments(raw: unknown, calcLabel: string | null): Installment[] {
     if (!Array.isArray(raw)) throw fail(calcLabel, 'as parcelas devem ser uma lista.');
@@ -135,6 +160,8 @@ export function validateCalculation(raw: any, calcLabel: string | null): ValidCa
     if (typeof raw.correctionIndex !== 'string' || !raw.correctionIndex.trim()) {
         throw fail(calcLabel, 'escolha o índice de correção.');
     }
+    // Mesmas regras do cálculo, para o erro aparecer ao salvar e não só ao calcular
+    if (!isCorrectionIndex(raw.correctionIndex)) throw fail(calcLabel, unknownIndexError(raw.correctionIndex));
 
     const values: Record<string, unknown> = {};
     for (const [field, { label, values: allowed }] of Object.entries(OPTIONS)) {
@@ -148,15 +175,21 @@ export function validateCalculation(raw: any, calcLabel: string | null): ValidCa
         values[field] = value;
     }
     const feesOnPenalty = raw.feesOnPenalty ?? CALCULATION_DEFAULTS.feesOnPenalty;
-    if (typeof feesOnPenalty !== 'boolean') throw fail(calcLabel, 'honorários sobre a multa do Art. 523: valor inválido.');
+    if (typeof feesOnPenalty !== 'boolean') throw fail(calcLabel, 'honorários do Art. 523: valor inválido.');
+
+    const moratoryStartDate     = parseCalendarDate(raw.moratoryStartDate, calcLabel, 'início dos juros moratórios');
+    const compensatoryStartDate = parseCalendarDate(raw.compensatoryStartDate, calcLabel, 'início dos juros remuneratórios');
+    const installments          = validateInstallments(raw.installments, calcLabel);
+    const fixedDateError        = raw.correctionIndex === NAO_ATUALIZAR ? fixedIndexDateError(installments) : null;
+    if (fixedDateError) throw fail(calcLabel, fixedDateError);
 
     return {
         ...(values as Omit<ValidCalculation, 'correctionIndex' | 'moratoryStartDate' | 'compensatoryStartDate' | 'feesOnPenalty' | 'installments'>),
-        correctionIndex:       raw.correctionIndex,
-        moratoryStartDate:     parseCalendarDate(raw.moratoryStartDate, calcLabel, 'início dos juros moratórios'),
-        compensatoryStartDate: parseCalendarDate(raw.compensatoryStartDate, calcLabel, 'início dos juros remuneratórios'),
+        correctionIndex: raw.correctionIndex,
+        moratoryStartDate,
+        compensatoryStartDate,
         feesOnPenalty,
-        installments:          validateInstallments(raw.installments, calcLabel),
+        installments,
     };
 }
 

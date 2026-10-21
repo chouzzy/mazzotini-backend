@@ -5,7 +5,8 @@ import { RetryFailedEnrichmentsUseCase } from './modules/creditAssets/useCases/r
 import { SyncFeeContractsUseCase } from './modules/creditAssets/useCases/syncFeeContracts/SyncFeeContractsUseCase';
 import { RunCalculationUseCase } from './modules/calculator/useCases/runCalculation/RunCalculationUseCase';
 import { prisma } from './prisma';
-import { updateIndexSeries } from './services/indexUpdateService';
+import { describeIndexLoad, ensureIndexSeriesLoaded, isFirstInstance, updateIndexSeries } from './services/indexUpdateService';
+import { describeAsset, notifyRecalculationFailures, RecalculationFailure } from './services/recalculationReport';
 
 const syncUseCase = new SyncProcessUpdatesUseCase();
 const importUseCase = new ImportNewAssetsUseCase();
@@ -18,6 +19,17 @@ const runCalculationUseCase = new RunCalculationUseCase();
  */
 export const startScheduledJobs = () => {
     console.log("⏰ Agendador de tarefas iniciado.");
+
+    // De hora em hora: carrega as séries de índice que o cálculo exige e que ainda estejam vazias
+    // (por exemplo, se o BCB estava fora quando o servidor subiu). Com tudo carregado, não faz nada.
+    cron.schedule('15 * * * *', async () => {
+        try {
+            const results = await ensureIndexSeriesLoaded();
+            if (results.length > 0) console.log(`[CRON] Carga de índices vazios: ${describeIndexLoad(results)}`);
+        } catch (e: any) {
+            console.error('[CRON] Falha ao carregar os índices vazios:', e.message);
+        }
+    }, { timezone: 'America/Sao_Paulo' });
 
     // Todos os dias à meia-noite: importa processos novos cadastrados no Legal One
     // nas últimas 48h (janela de 2 dias para cobrir eventuais atrasos de cadastro).
@@ -68,19 +80,32 @@ export const startScheduledJobs = () => {
             // 2. Recalcula todos os processos com parâmetros configurados, pelo mesmo
             // caminho do botão "Calcular": mesmos parâmetros, mesmo log, mesmo valor.
             const allParams = await prisma.processCalculationParams.findMany();
-            let ok = 0, fail = 0;
+            // Número do processo e do Legal One, para o log e o aviso dos recusados
+            const assets = await prisma.creditAsset.findMany({
+                where:  { id: { in: allParams.map(p => p.assetId) } },
+                select: { id: true, legalOneId: true, processNumber: true },
+            });
+            const assetOf = new Map(assets.map(a => [a.id, a]));
+            let ok = 0, withWarnings = 0;
+            const failures: RecalculationFailure[] = [];
 
             for (const params of allParams) {
                 try {
-                    await runCalculationUseCase.calculateAndSave(params, 'cron', year, month);
+                    const result = await runCalculationUseCase.calculateAndSave(params, 'cron', year, month);
+                    if (result.warnings?.length) withWarnings++;
                     ok++;
                 } catch (e: any) {
-                    console.error(`  Erro ao recalcular processo ${params.assetId}:`, e.message);
-                    fail++;
+                    const asset   = assetOf.get(params.assetId);
+                    const failure = { assetId: params.assetId, legalOneId: asset?.legalOneId, processNumber: asset?.processNumber, error: e.message };
+                    console.error(`  Erro ao recalcular o processo ${describeAsset(failure)}:`, e.message);
+                    failures.push(failure);
                 }
             }
 
-            console.log(`  Recálculo concluído: ${ok} sucesso, ${fail} falhas`);
+            console.log(`  Recálculo concluído: ${ok} sucesso, ${failures.length} falhas, ${withWarnings} com mês sem índice no banco (contado como 0%)`);
+
+            // Um processo recusado mantém o valor anterior: os admins precisam saber quais são
+            await notifyRecalculationFailures(failures);
         } catch (e: any) {
             console.error('  Erro crítico no job de índices/recálculo:', e.message);
         }
@@ -103,5 +128,19 @@ export const startScheduledJobs = () => {
     }, {
         timezone: "America/Sao_Paulo"
     });
+
+    // Todos os dias às 6h: grava os índices publicados desde a última execução, sem recalcular.
+    // Assim o cálculo manual usa um índice assim que o BCB o publica, como no Dr. Calc, em vez de
+    // esperar o dia 5 (o IPCA de um mês sai por volta do dia 10 do seguinte). Usa só o BCB, não o
+    // Legal One. Com o PM2 em cluster, só a primeira instância atualiza.
+    cron.schedule('0 6 * * *', async () => {
+        if (!isFirstInstance()) return;
+        console.log('--- Executando job agendado: Atualizar Índices ---');
+        try {
+            await updateIndexSeries();
+        } catch (e: any) {
+            console.error('--- FALHA no job de atualização de índices:', e.message);
+        }
+    }, { timezone: 'America/Sao_Paulo' });
 };
 

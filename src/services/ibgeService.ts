@@ -8,6 +8,7 @@
  *   IPCA-15 : 7478   (variação mensal, %) — base da tabela do TJSP desde set/2024
  *   IGP-DI  : 190    (variação mensal, %) — com o INPC, forma a média do TJPR
  *   SELIC   : 11     (taxa diária, % a.d.) — acumulada por mês no fetchSelicSeries
+ *   Taxa legal : 29543 (% a.m., desde 08/2024) — juros de mora pela Lei 14.905 (Res. CMN 5.171)
  */
 
 import axios from 'axios';
@@ -22,6 +23,7 @@ const SERIES_CODES: Record<string, number> = {
     IGP_M:      189,    // IGP-M variação mensal %
     IGP_DI:     190,    // IGP-DI variação mensal % (usado na média do TJPR)
     CDI_MENSAL: 4391,   // CDI acumulado no mês %
+    TAXA_LEGAL: 29543,  // taxa legal da Lei 14.905 (Res. CMN 5.171), % a.m., desde 08/2024
     // SELIC (série 11) e CDI over (série 12) são diárias, acumuladas por mês em fetchSelicSeries e
     // fetchCDIDiariaSeries. O CDI_DIARIA da calculadora usa hoje a série 4391, como o CDI_MENSAL.
 };
@@ -291,4 +293,15 @@ export function fetchTJPRSeries(startYear: number, startMonth: number, endYear?:
  */
 export function fetchTJMGSeries(startYear: number, startMonth: number, endYear?: number, endMonth?: number) {
     return fetchPreviousMonthTable(['INPC'], startYear, startMonth, endYear, endMonth);
+}
+
+/**
+ * Taxa legal (art. 406 do Código Civil, Lei 14.905/2024), como o BCB publica na série SGS 29543
+ * (% a.m., desde 08/2024). Pela Resolução CMN 5.171/2024, a taxa do mês M é
+ *   (1 + SELIC acumulada no mês M-1) / (1 + IPCA-15 do mês M-1) - 1, nunca menor que zero,
+ * e sai no começo do mês M. É a mesma série do Dr. Calc (conferida de 08/2024 a 10/2026, sem
+ * diferença).
+ */
+export function fetchTaxaLegalSeries(startYear: number, startMonth: number, endYear?: number, endMonth?: number) {
+    return fetchIndexSeries('TAXA_LEGAL', startYear, startMonth, endYear, endMonth);
 }
