@@ -133,6 +133,11 @@ export function validateInstallments(raw: unknown, calcLabel: string | null): In
         if (item.type !== undefined && !INSTALLMENT_TYPES.includes(item.type)) {
             throw fail(calcLabel, `${what}: tipo inválido (${String(item.type)}).`);
         }
+        // Custa e abatimento são valores a somar ou a deduzir: negativo inverteria o sentido. No
+        // débito, o negativo continua valendo como crédito, como no Dr. Calc
+        if ((item.type === 'CUSTA' || item.type === 'ABATIMENTO') && item.baseValue < 0) {
+            throw fail(calcLabel, `${what}: o valor não pode ser negativo.`);
+        }
         if (item.description !== undefined && item.description !== null && typeof item.description !== 'string') {
             throw fail(calcLabel, `${what}: descrição inválida.`);
         }

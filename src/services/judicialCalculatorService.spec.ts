@@ -370,6 +370,29 @@ describe('convenções do Dr. Calc', () => {
             expect(result.totalValue).toBe(1112.34);
         });
 
+        it('custa mais antiga que o débito: IPCA desde 12/2022, R$ 1.115,74, como no Dr. Calc', async () => {
+            mockSeries({ IPCA: ipca });
+
+            const result = await calculateJudicialDebt(comCusta('2022-12-15', { correctionIndex: 'IPCA' }), 2023, 3);
+
+            expect(result.custaTotal).toBe(102);
+            expect(result.totalValue).toBe(1115.74);
+        });
+
+        it('TJSP: a custa mais antiga divide pelo acumulado do mês dela, que precisa estar no banco', async () => {
+            const dezembro = row(2022, 12, 0, 89.222653);
+            mockSeries({ TJSP_LEI14905: [dezembro, ...tjsp] });
+
+            const result = await calculateJudicialDebt(comCusta('2022-12-15', { correctionIndex: 'TJSP_LEI14905' }), 2023, 3);
+
+            expect(result.custaResults[0].correctionFactor).toBeCloseTo(90.946481 / 89.222653, 8);
+            expect(result.custaTotal).toBe(101.93);
+
+            mockSeries({ TJSP_LEI14905: tjsp });
+            await expect(calculateJudicialDebt(comCusta('2022-12-15', { correctionIndex: 'TJSP_LEI14905' }), 2023, 3)).rejects.toThrow(
+                'O banco de índices tem TJSP só a partir de 01/2023, e o cálculo precisa de 12/2022.');
+        });
+
         it('sem custas, o resultado vem com a lista vazia e o total de custas zerado', async () => {
             const result = await calculateJudicialDebt(plain('2023-01-15'), 2023, 3);
 

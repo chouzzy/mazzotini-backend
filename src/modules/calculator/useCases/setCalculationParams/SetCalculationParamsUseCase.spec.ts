@@ -108,6 +108,8 @@ describe('SetCalculationParamsUseCase', () => {
         ['sem parcela de débito', { installments: [{ baseValue: 100, baseDate: '2025-11-15', type: 'ABATIMENTO' }] }, 'Contrato B: informe ao menos uma parcela de débito.'],
         ['só com custa', { installments: [{ baseValue: 100, baseDate: '2025-11-15', type: 'CUSTA' }] }, 'Contrato B: informe ao menos uma parcela de débito.'],
         ['tipo de parcela desconhecido', { installments: [{ baseValue: 700, baseDate: '2025-11-15', type: 'MULTA' }] }, 'Contrato B: parcela 1: tipo inválido (MULTA).'],
+        ['custa negativa', { installments: [{ baseValue: 700, baseDate: '2025-11-15' }, { baseValue: -100, baseDate: '2025-11-15', type: 'CUSTA' }] }, 'Contrato B: parcela 2: o valor não pode ser negativo.'],
+        ['abatimento negativo', { installments: [{ baseValue: 700, baseDate: '2025-11-15' }, { baseValue: -50, baseDate: '2025-11-15', type: 'ABATIMENTO' }] }, 'Contrato B: parcela 2: o valor não pode ser negativo.'],
         ['sem índice', { correctionIndex: '' }, 'Contrato B: escolha o índice de correção.'],
         ['índice que a tela antiga gravava', { correctionIndex: 'Outro' }, 'Contrato B: índice de correção desconhecido (Outro). Escolha um índice da lista.'],
         ['"fixo" com parcela anterior ao Real', { correctionIndex: 'NAO_ATUALIZAR', installments: [{ baseValue: 700, baseDate: '1990-01-15' }] }, 'Contrato B: "Não atualizar (fixo)" vale para datas a partir de 01/07/1994. Mude a data da parcela de 15/01/1990 ou escolha outro índice.'],
