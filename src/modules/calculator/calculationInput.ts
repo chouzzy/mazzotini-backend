@@ -48,6 +48,9 @@ const NUMBERS: Record<string, string> = {
 
 const DEDUCTION_POINTS = ['DO_VALOR_CORRIGIDO', 'APOS_HONORARIOS', 'APOS_MULTA', 'APOS_TUDO'];
 
+/** Débito, abatimento (crédito ou pagamento) ou custa/despesa, que só é corrigida. */
+const INSTALLMENT_TYPES = ['DEBITO', 'ABATIMENTO', 'CUSTA'];
+
 /** Campos de um cálculo já validados, com os padrões aplicados. */
 export interface ValidCalculation {
     correctionIndex:       string;
@@ -127,7 +130,7 @@ export function validateInstallments(raw: unknown, calcLabel: string | null): In
         }
         const date = parseCalendarDate(item.baseDate, calcLabel, what);
         if (!date) throw fail(calcLabel, `${what}: informe a data.`);
-        if (item.type !== undefined && item.type !== 'DEBITO' && item.type !== 'ABATIMENTO') {
+        if (item.type !== undefined && !INSTALLMENT_TYPES.includes(item.type)) {
             throw fail(calcLabel, `${what}: tipo inválido (${String(item.type)}).`);
         }
         if (item.description !== undefined && item.description !== null && typeof item.description !== 'string') {

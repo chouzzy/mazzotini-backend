@@ -106,6 +106,8 @@ describe('SetCalculationParamsUseCase', () => {
         ['opção desconhecida', { moratoryRateUnit: 'AS' }, 'Contrato B: unidade dos juros moratórios: valor inválido (AS).'],
         ['valor de parcela em texto', { installments: [{ baseValue: '700', baseDate: '2025-11-15' }] }, 'Contrato B: parcela 1: valor inválido.'],
         ['sem parcela de débito', { installments: [{ baseValue: 100, baseDate: '2025-11-15', type: 'ABATIMENTO' }] }, 'Contrato B: informe ao menos uma parcela de débito.'],
+        ['só com custa', { installments: [{ baseValue: 100, baseDate: '2025-11-15', type: 'CUSTA' }] }, 'Contrato B: informe ao menos uma parcela de débito.'],
+        ['tipo de parcela desconhecido', { installments: [{ baseValue: 700, baseDate: '2025-11-15', type: 'MULTA' }] }, 'Contrato B: parcela 1: tipo inválido (MULTA).'],
         ['sem índice', { correctionIndex: '' }, 'Contrato B: escolha o índice de correção.'],
         ['índice que a tela antiga gravava', { correctionIndex: 'Outro' }, 'Contrato B: índice de correção desconhecido (Outro). Escolha um índice da lista.'],
         ['"fixo" com parcela anterior ao Real', { correctionIndex: 'NAO_ATUALIZAR', installments: [{ baseValue: 700, baseDate: '1990-01-15' }] }, 'Contrato B: "Não atualizar (fixo)" vale para datas a partir de 01/07/1994. Mude a data da parcela de 15/01/1990 ou escolha outro índice.'],
@@ -131,6 +133,19 @@ describe('SetCalculationParamsUseCase', () => {
         await expect(save({ ...onlyAbatimento, calculationLabel: 'Contrato A', extraCalculations: [extraCalculation()] }))
             .rejects.toThrow('Contrato A: informe ao menos uma parcela de débito.');
         expect(prisma.processCalculationParams.upsert).not.toHaveBeenCalled();
+    });
+
+    it('grava a custa ou despesa como um tipo de parcela, sem ponto de dedução', async () => {
+        await save({
+            installments: [
+                ...mainCalculation.installments,
+                { baseValue: 350, baseDate: '2025-10-05T00:00:00.000Z', description: 'Perícia', type: 'CUSTA', deductionPoint: 'APOS_TUDO' },
+            ],
+        });
+
+        expect(upsertArgs().update.installments[1]).toEqual({
+            baseValue: 350, baseDate: '2025-10-05T00:00:00.000Z', description: 'Perícia', type: 'CUSTA',
+        });
     });
 
     it('recusa no cálculo principal o índice que o cálculo não aceita', async () => {

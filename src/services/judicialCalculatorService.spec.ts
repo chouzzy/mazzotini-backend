@@ -298,6 +298,100 @@ describe('convenções do Dr. Calc', () => {
         });
     });
 
+    describe('custas e despesas', () => {
+        /** O débito de R$ 1.000,00 em 15/01/2023 e uma custa de R$ 100,00, como nos casos do Dr. Calc. */
+        const comCusta = (custaDate: string, extra: Partial<CalculationParams> = {}): CalculationParams => {
+            const base = plain('2023-01-15', extra);
+            return {
+                ...base,
+                installments: [...base.installments, { baseValue: 100, baseDate: `${custaDate}T00:00:00.000Z`, description: 'Custa', type: 'CUSTA' }],
+            };
+        };
+        const ipca = [row(2022, 12, 0.62), row(2023, 1, 0.53), row(2023, 2, 0.84), row(2023, 3, 0.71)];
+        // Acumulados da tabela do TJSP
+        const tjsp = [row(2023, 1, 0, 89.838289), row(2023, 2, 0, 90.251545), row(2023, 3, 0, 90.946481)];
+
+        it('a custa só é corrigida, pelo índice do cálculo, e entra no fim: IPCA, R$ 1.115,11', async () => {
+            mockSeries({ IPCA: ipca });
+
+            const result = await calculateJudicialDebt(comCusta('2023-01-15', { correctionIndex: 'IPCA' }), 2023, 3);
+
+            expect(result.custaResults).toEqual([{
+                description: 'Custa', baseDate: '2023-01-15T00:00:00.000Z', baseValue: 100,
+                correctionFactor: expect.closeTo(1.0137445, 6), correctedValue: 101.37,
+            }]);
+            expect(result.custaTotal).toBe(101.37);
+            // A custa fica fora do valor do débito, sobre o qual correm juros, multa e honorários
+            expect(result.correctedValue).toBe(1013.74);
+            expect(result.totalValue).toBe(1115.11);
+        });
+
+        it('TJSP: R$ 1.113,57', async () => {
+            mockSeries({ TJSP_LEI14905: tjsp });
+
+            const result = await calculateJudicialDebt(comCusta('2023-01-15', { correctionIndex: 'TJSP_LEI14905' }), 2023, 3);
+
+            expect(result.custaTotal).toBe(101.23);
+            expect(result.totalValue).toBe(1113.57);
+        });
+
+        it('cada custa é corrigida a partir da própria data: em 15/02/2023, R$ 1.114,58', async () => {
+            mockSeries({ IPCA: ipca });
+
+            const result = await calculateJudicialDebt(comCusta('2023-02-15', { correctionIndex: 'IPCA' }), 2023, 3);
+
+            expect(result.custaTotal).toBe(100.84);
+            expect(result.totalValue).toBe(1114.58);
+        });
+
+        it('a multa e os honorários do Art. 523 não incidem sobre a custa: R$ 1.316,03', async () => {
+            mockSeries({ TJSP_LEI14905: tjsp });
+
+            const result = await calculateJudicialDebt(comCusta('2023-01-15', { correctionIndex: 'TJSP_LEI14905', penaltyPercentage: 20 }), 2023, 3);
+
+            expect(result.penaltyValue).toBe(202.47);
+            expect(result.totalValue).toBe(1316.03);
+        });
+
+        it('nem juros nem honorários: com juros de 1% a.m. e honorários de 10%, R$ 1.222,00 (o caso de R$ 1.322,00 do Dr. Calc, sem a multa)', async () => {
+            const result = await calculateJudicialDebt(comCusta('2023-01-15', { moratoryRate: 1, feesPercentage: 10 }), 2023, 3);
+
+            expect(result.moratoryInterest).toBe(20);
+            expect(result.feesValue).toBe(102);
+            expect(result.totalValue).toBe(1222);
+        });
+
+        it('a custa com data depois do mês de referência entra pelo valor, sem correção: R$ 1.112,34', async () => {
+            mockSeries({ TJSP_LEI14905: tjsp });
+
+            const result = await calculateJudicialDebt(comCusta('2023-04-15', { correctionIndex: 'TJSP_LEI14905' }), 2023, 3);
+
+            expect(result.custaResults[0]).toMatchObject({ correctionFactor: 1, correctedValue: 100 });
+            expect(result.totalValue).toBe(1112.34);
+        });
+
+        it('sem custas, o resultado vem com a lista vazia e o total de custas zerado', async () => {
+            const result = await calculateJudicialDebt(plain('2023-01-15'), 2023, 3);
+
+            expect(result.custaResults).toEqual([]);
+            expect(result.custaTotal).toBe(0);
+        });
+
+        it('a data da custa também é conferida no banco de índices', async () => {
+            mockSeries({ IPCA: [row(2000, 1, 0.62), row(2000, 2, 0.13)] });
+            const params = plain('2000-01-15', { correctionIndex: 'IPCA' });
+            params.installments.push({ baseValue: 100, baseDate: '1999-12-15T00:00:00.000Z', type: 'CUSTA' });
+
+            await expect(calculateJudicialDebt(params, 2000, 3)).rejects.toThrow(
+                'O banco de índices tem IPCA só a partir de 01/2000, e o cálculo precisa de 12/1999. Mude a data da parcela, escolha outro índice ou avise o suporte.');
+        });
+
+        it('"Não atualizar (fixo)" também recusa a custa anterior ao Real', async () => {
+            await expect(calculateJudicialDebt(comCusta('1990-01-15'), 2023, 3)).rejects.toThrow(
+                '"Não atualizar (fixo)" vale para datas a partir de 01/07/1994. Mude a data da parcela de 15/01/1990 ou escolha outro índice.');
+        });
+    });
+
     describe('mês sem índice', () => {
         it('recusa um mês faltando no meio da série', async () => {
             mockSeries({ IPCA: [row(2023, 1, 0.53), row(2023, 3, 0.71)] });
@@ -399,6 +493,26 @@ describe('combineResults (vários cálculos no mesmo processo)', () => {
         expect(combined.abatimentoResults.map(a => a.description)).toEqual(['Contrato 1 · Depósito']);
         expect(combined.abatimentoTotal).toBe(100);
         expect(combined.totalValue).toBe(1088 + 520);
+    });
+
+    it('junta as custas de cada cálculo', async () => {
+        const comCusta = await calculateJudicialDebt({
+            ...params,
+            installments: [
+                ...params.installments,
+                { baseValue: 150, baseDate: '2026-02-10T00:00:00.000Z', description: 'Perícia', type: 'CUSTA' },
+            ],
+        }, 2026, 7);
+
+        const combined = combineResults([
+            { label: 'Contrato 1', result: comCusta },
+            { label: 'Contrato 2', result: await contrato2() },
+        ]);
+
+        expect(combined.custaResults.map(c => c.description)).toEqual(['Contrato 1 · Perícia']);
+        expect(combined.custaTotal).toBe(150);
+        // A custa não leva juros, multa nem honorários: soma 150 ao total do contrato 1
+        expect(combined.totalValue).toBe(1188 + 150 + 520);
     });
 
     it('junta os avisos de cada cálculo, com o nome dele', async () => {
