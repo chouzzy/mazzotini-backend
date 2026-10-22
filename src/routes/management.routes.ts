@@ -398,8 +398,10 @@ managementRoutes.get(
  *     description: >
  *       Permite ao admin editar qualquer campo do perfil sem passar pelo fluxo de aprovação.
  *       Com `applyReferralToInvestments: true`, o associado indicado (`referredById`, que precisa
- *       ser um associado cadastrado) passa a ser o associado de todos os processos do cliente, na
- *       mesma gravação, e a resposta traz `investmentsUpdated`.
+ *       ser um associado cadastrado) passa a ser o associado dos processos do cliente, na mesma
+ *       gravação: só os investimentos de `referralInvestmentIds`, quando a lista vem, ou todos. A
+ *       resposta traz `investmentsUpdated`. Uma indicação nova que não é associado, ou é o próprio
+ *       cliente, é recusada com 400.
  *     tags: [Gestão]
  *     security:
  *       - bearerAuth: []
