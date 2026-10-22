@@ -17,10 +17,20 @@ interface IAdminUpdateUserOptions {
      * os velhos. A aprovação de uma solicitação não usa esta opção.
      */
     supersedePendingRequests?: boolean;
+    /**
+     * Leva o associado indicado (`referredById`) para todos os processos do cliente, como a
+     * carteira faz processo a processo (`Investment.associateId`). A indicação sozinha só
+     * registra quem indicou; o portal do associado e o detalhe do processo usam o associado
+     * de cada processo. Exige um associado cadastrado.
+     */
+    applyReferralToInvestments?: boolean;
 }
 
+/** O usuário gravado e, quando o associado foi levado aos processos, quantos processos mudaram. */
+type AdminUpdateUserResult = User & { investmentsUpdated?: number };
+
 class AdminUpdateUserUseCase {
-    async execute(userId: string, data: IAdminUpdateUserDTO, options: IAdminUpdateUserOptions = {}): Promise<User> {
+    async execute(userId: string, data: IAdminUpdateUserDTO, options: IAdminUpdateUserOptions = {}): Promise<AdminUpdateUserResult> {
         console.log(`[ADMIN UPDATE] Atualizando perfil do usuário ID: ${userId}`);
 
         // 1. Verifica se usuário existe
@@ -60,6 +70,18 @@ class AdminUpdateUserUseCase {
                     where: { userId, status: 'PENDING' },
                     data: { status: 'REJECTED', rejectionReason: 'Substituída por uma edição direta do administrador.' },
                 });
+            }
+
+            // Na mesma transação: se o associado não puder ir para os processos, a indicação
+            // também não muda, e o admin decide de novo
+            if (options.applyReferralToInvestments) {
+                const associateId = updated.referredById;
+                if (!associateId) throw new Error('Escolha um associado cadastrado para levar aos processos do cliente.');
+                const associate = await tx.user.findUnique({ where: { id: associateId }, select: { role: true } });
+                if (associate?.role !== 'ASSOCIATE') throw new Error('O usuário indicado não é um associado.');
+                const { count } = await tx.investment.updateMany({ where: { userId }, data: { associateId } });
+                console.log(`[ADMIN UPDATE] Associado indicado levado para ${count} processo(s) do usuário ID: ${userId}`);
+                return { ...updated, investmentsUpdated: count };
             }
 
             return updated;

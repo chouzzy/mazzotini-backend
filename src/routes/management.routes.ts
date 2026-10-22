@@ -393,7 +393,11 @@ managementRoutes.get(
  * /api/management/users/{id}:
  *   patch:
  *     summary: Atualiza dados de um usuário (Admin)
- *     description: Permite ao admin editar qualquer campo do perfil sem passar pelo fluxo de aprovação.
+ *     description: >
+ *       Permite ao admin editar qualquer campo do perfil sem passar pelo fluxo de aprovação.
+ *       Com `applyReferralToInvestments: true`, o associado indicado (`referredById`, que precisa
+ *       ser um associado cadastrado) passa a ser o associado de todos os processos do cliente, na
+ *       mesma gravação, e a resposta traz `investmentsUpdated`.
  *     tags: [Gestão]
  *     security:
  *       - bearerAuth: []

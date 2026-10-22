@@ -52,6 +52,14 @@ describe('AdminUpdateUserController', () => {
         expect(mockExecute).toHaveBeenCalledWith('user-1', expect.any(Object), { supersedePendingRequests: true });
     });
 
+    it('repassa o pedido de levar o associado aos processos, sem gravá-lo como campo do cadastro', async () => {
+        const { data } = await run({ ...baseBody, referredById: 'associado-2', applyReferralToInvestments: true });
+
+        expect(mockExecute).toHaveBeenCalledWith('user-1', expect.any(Object), { supersedePendingRequests: true, applyReferralToInvestments: true });
+        expect(data).not.toHaveProperty('applyReferralToInvestments');
+        expect(data).toMatchObject({ referredById: 'associado-2' });
+    });
+
     it('campo vazio limpa o valor (ex.: telefone apagado no formulário)', async () => {
         const { data } = await run({ ...baseBody, rg: '', phone: null });
 
