@@ -142,6 +142,7 @@ export interface InstallmentResult {
     penaltyValue:         number;
     subtotal:             number;
     monthBreakdown:       MonthBreakdown[];
+    nominalFloor?:        boolean;  // inflação negativa no período: o fator ficou em 1 (sem "deflacionar")
 }
 
 export interface AbatimentoResult {
@@ -492,12 +493,16 @@ export async function calculateJudicialDebt(
     // Sem "deflacionar", a inflação negativa não deixa o valor abaixo do nominal: o fator de cada
     // parcela, abatimento ou custa é no mínimo 1 (vale o acumulado, não cada mês), como no Dr. Calc.
     // Antes do Real, o fator da tabela do TJSP também converte a moeda e fica como está
-    const factorFor = (baseDate: string): { factor: number; breakdown: MonthBreakdown[] } => {
+    const factorFor = (baseDate: string): { factor: number; breakdown: MonthBreakdown[]; nominalFloor: boolean } => {
         const { year: sy, month: sm } = parseYM(baseDate);
         const result = isFixed ? { factor: 1, breakdown: [] } : computeFactor(sy, sm, referenceYear, referenceMonth, rateMap, courtTable);
-        const nominalFloor = !params.deflate && new Date(baseDate).getTime() >= REAL_START;
-        return nominalFloor && result.factor < 1 ? { ...result, factor: 1 } : result;
+        const nominalFloor = !params.deflate && result.factor < 1 && new Date(baseDate).getTime() >= REAL_START;
+        return { ...result, factor: nominalFloor ? 1 : result.factor, nominalFloor };
     };
+
+    // Como no Dr. Calc, a data da correção é o último dia do mês de referência: a parcela com data
+    // nele ou depois é "a vencer" e fica sem multa
+    const multaCutoff = Date.UTC(referenceYear, referenceMonth, 0);
 
     // Juros de mora pela taxa legal, com ou sem o Tema 1368: as taxas de cada série. Na taxa legal,
     // a série só é necessária a partir de 30/08/2024; no Tema 1368, a partir de 03/1995
@@ -535,6 +540,7 @@ export async function calculateJudicialDebt(
     let totalCorrected    = 0;
     let totalMoratory     = 0;
     let totalCompensatory = 0;
+    let multaBase         = 0;   // valor corrigido das parcelas já vencidas
 
     // Converte taxas a.a. → a.m. uma única vez antes do loop
     const effectiveMoratoryRate     = toMonthlyRate(params.moratoryRate,     params.moratoryRateUnit,     params.moratoryType);
@@ -543,10 +549,11 @@ export async function calculateJudicialDebt(
     for (let i = 0; i < debitoInstallments.length; i++) {
         const inst = debitoInstallments[i];
         const { year: sy, month: sm } = parseYM(inst.baseDate);
-        const { factor, breakdown } = factorFor(inst.baseDate);
+        const { factor, breakdown, nominalFloor } = factorFor(inst.baseDate);
         // Cada linha é arredondada em centavos, e os juros correm sobre o valor corrigido já
         // arredondado, como no Dr. Calc
         const correctedValue = round2(inst.baseValue * factor);
+        if (new Date(inst.baseDate).getTime() < multaCutoff) multaBase += correctedValue;
 
         const moratoryStart = params.moratoryStartDate ? parseYM(params.moratoryStartDate) : { year: sy, month: sm };
         let moratoryInterest = 0, nMoratory = 0;
@@ -595,6 +602,7 @@ export async function calculateJudicialDebt(
             penaltyValue:         0,
             subtotal:             round2(correctedValue + moratoryInterest + compensatoryInterest),
             monthBreakdown:       breakdown,
+            ...(nominalFloor ? { nominalFloor: true } : {}),
         });
 
         totalBase         += inst.baseValue;
@@ -627,8 +635,9 @@ export async function calculateJudicialDebt(
     const correctedSum    = round2(totalCorrected);
     const moratorySum     = round2(totalMoratory);
     const compensatorySum = round2(totalCompensatory);
-    // A multa incide sobre o total corrigido (a multa por linha do Dr. Calc é só exibição)
-    const multaValue      = round2(correctedSum * ((params.multaPercentage ?? 0) / 100));
+    // A multa incide sobre o total corrigido das parcelas já vencidas, e não sobre a multa de cada
+    // linha arredondada (no Dr. Calc, a multa por linha é só exibição)
+    const multaValue      = round2(round2(multaBase) * ((params.multaPercentage ?? 0) / 100));
     const grossSubtotalA  = round2(correctedSum + moratorySum + compensatorySum + multaValue);
 
     // DO_VALOR_CORRIGIDO — reduz a base antes dos honorários

@@ -3,7 +3,7 @@
  *
  * Uso: npx ts-node src/scripts/seedIndices.ts
  *
- * Busca séries históricas da API do BCB a partir de jan/2000 e popula
+ * Busca séries históricas da API do BCB a partir de jan/2000 (a taxa legal + Tema 1368, de mar/1995) e popula
  * a collection IndexSeries no banco.
  *
  * Índices populados:

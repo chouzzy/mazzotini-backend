@@ -6,7 +6,7 @@ import {
 
 jest.mock('@prisma/client', () => {
     const mPrisma: any = {
-        indexSeries: { findFirst: jest.fn(), upsert: jest.fn(), createMany: jest.fn() },
+        indexSeries: { findFirst: jest.fn(), upsert: jest.fn(), createMany: jest.fn(), count: jest.fn() },
     };
     return { PrismaClient: jest.fn(() => mPrisma) };
 });
@@ -30,6 +30,8 @@ const NOV_5 = new Date(2026, 10, 5, 4, 0);
 /** Banco simulado: último mês gravado por índice e último mês do TJSP com acumulado. */
 let lastStored: Record<string, { year: number; month: number }>;
 let lastOfficialTJSP: { year: number; month: number; accumulatedValue: number } | null;
+/** Meses gravados por série; só a do Tema 1368, que tem tamanho fixo, é contada. */
+let storedCounts: Record<string, number>;
 
 /** Upserts gravados de um índice. */
 const saved = (indexName: string) => prisma.indexSeries.upsert.mock.calls
@@ -53,7 +55,9 @@ describe('updateIndexSeries', () => {
         jest.spyOn(console, 'log').mockImplementation(() => {});
         jest.spyOn(console, 'error').mockImplementation(() => {});
         lastStored = {};
+        storedCounts = {};
         lastOfficialTJSP = null;
+        prisma.indexSeries.count.mockImplementation(({ where }: any) => Promise.resolve(storedCounts[where.indexName] ?? 0));
         prisma.indexSeries.findFirst.mockImplementation(({ where }: any) =>
             Promise.resolve(where.accumulatedValue ? lastOfficialTJSP : (lastStored[where.indexName] ?? null)));
         (fetchIndexSeries as jest.Mock).mockResolvedValue([]);
@@ -250,7 +254,9 @@ describe('ensureIndexSeriesLoaded', () => {
         jest.spyOn(console, 'log').mockImplementation(() => {});
         jest.spyOn(console, 'error').mockImplementation(() => {});
         lastStored = {};
+        storedCounts = {};
         prisma.indexSeries.findFirst.mockImplementation(({ where }: any) => Promise.resolve(lastStored[where.indexName] ?? null));
+        prisma.indexSeries.count.mockImplementation(({ where }: any) => Promise.resolve(storedCounts[where.indexName] ?? 0));
         (fetchTaxaLegalSeries as jest.Mock).mockResolvedValue([{ year: 2024, month: 8, monthlyRate: 0.6 }]);
         (fetchTJPRSeries as jest.Mock).mockResolvedValue([]);
         (fetchTJMGSeries as jest.Mock).mockResolvedValue([{ year: 2000, month: 1, monthlyRate: 0.6 }]);
@@ -282,8 +288,8 @@ describe('ensureIndexSeriesLoaded', () => {
     });
 
     it('duas chamadas ao mesmo tempo compartilham a mesma carga, sem gravar a série duas vezes', async () => {
+        storedCounts = { TAXA_LEGAL_TEMA1368: 353 };
         lastStored = {
-            TAXA_LEGAL_TEMA1368:   { year: 2024, month: 7 },
             TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 },
             TJMG_CORREGEDORIA:     { year: 2026, month: 11 },
         };
@@ -307,8 +313,8 @@ describe('ensureIndexSeriesLoaded', () => {
 
     it('um erro do BCB fica no resultado, para o log mostrar', async () => {
         (fetchTaxaLegalSeries as jest.Mock).mockRejectedValue(new Error('BCB indisponível'));
+        storedCounts = { TAXA_LEGAL_TEMA1368: 353 };
         lastStored = {
-            TAXA_LEGAL_TEMA1368:   { year: 2024, month: 7 },
             TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 },
             TJMG_CORREGEDORIA:     { year: 2026, month: 11 },
         };
@@ -316,10 +322,20 @@ describe('ensureIndexSeriesLoaded', () => {
         expect(await ensureIndexSeriesLoaded(NOV_5)).toEqual([{ indexName: 'TAXA_LEGAL', months: 0, error: 'BCB indisponível' }]);
     });
 
+    it('completa a série do Tema 1368 que ficou pela metade, sem apagar o que já está gravado', async () => {
+        storedCounts = { TAXA_LEGAL_TEMA1368: 200 };
+        lastStored = { TAXA_LEGAL: { year: 2026, month: 11 }, TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 }, TJMG_CORREGEDORIA: { year: 2026, month: 11 } };
+        (fetchTaxaLegalTema1368Series as jest.Mock).mockResolvedValue([{ year: 1995, month: 3, monthlyRate: 2.71 }, { year: 1995, month: 4, monthlyRate: 2.94 }]);
+
+        expect(await ensureIndexSeriesLoaded(NOV_5)).toEqual([{ indexName: 'TAXA_LEGAL_TEMA1368', months: 2 }]);
+        expect(prisma.indexSeries.createMany).not.toHaveBeenCalled();
+        expect(savedMonths('TAXA_LEGAL_TEMA1368')).toEqual(['3/1995', '4/1995']);
+    });
+
     it('com tudo carregado, não busca nada', async () => {
+        storedCounts = { TAXA_LEGAL_TEMA1368: 353 };
         lastStored = {
             TAXA_LEGAL:            { year: 2026, month: 11 },
-            TAXA_LEGAL_TEMA1368:   { year: 2024, month: 7 },
             TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 },
             TJMG_CORREGEDORIA:     { year: 2026, month: 11 },
         };

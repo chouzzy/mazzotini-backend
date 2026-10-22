@@ -34,9 +34,9 @@ app.listen(PORT, '0.0.0.0', async () => {
     runMonthlyIndexUpdate();
     runDailyHealthCheck();
 
-    // O cálculo recusa índice sem dados: carrega as séries que ainda estão vazias (a taxa legal
-    // depois do deploy, ou o TJPR e o TJMG se o seed não rodou), sem segurar o servidor. Se
-    // falhar, o cron de hora em hora tenta de novo.
+    // O cálculo recusa índice sem dados: carrega as séries que ainda estão vazias (a taxa legal e
+    // a taxa legal + Tema 1368 depois do deploy, ou o TJPR e o TJMG se o seed não rodou), sem
+    // segurar o servidor. Se falhar, o cron de hora em hora tenta de novo.
     ensureIndexSeriesLoaded()
         .then(results => {
             if (results.length > 0) console.log(`[STARTUP] Carga de índices vazios: ${describeIndexLoad(results)}`);

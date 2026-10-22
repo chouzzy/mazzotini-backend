@@ -2,8 +2,8 @@
  * Simula o recálculo mensal sem gravar nada.
  *
  * Para cada processo com parâmetros de cálculo, calcula pelo mesmo caminho do botão "Calcular" e
- * do cron do dia 5 e mostra o valor atual, o simulado, a diferença, os avisos (meses sem índice
- * no banco, contados como 0%) e os processos que o cálculo recusa (eles manteriam o valor atual).
+ * do cron do dia 5 e mostra o valor atual, o simulado, a diferença, os avisos (como meses sem
+ * índice no banco, contados como 0%) e os processos que o cálculo recusa (eles manteriam o valor atual).
  * Só lê o banco.
  *
  * Uso, no servidor e na pasta do backend:

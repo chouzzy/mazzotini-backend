@@ -102,7 +102,7 @@ export const startScheduledJobs = () => {
                 }
             }
 
-            console.log(`  Recálculo concluído: ${ok} sucesso, ${failures.length} falhas, ${withWarnings} com mês sem índice no banco (contado como 0%)`);
+            console.log(`  Recálculo concluído: ${ok} sucesso, ${failures.length} falhas, ${withWarnings} com avisos (como um mês ainda sem índice no banco, contado como 0%)`);
 
             // Um processo recusado mantém o valor anterior: os admins precisam saber quais são
             await notifyRecalculationFailures(failures);

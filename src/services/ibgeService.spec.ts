@@ -202,11 +202,13 @@ describe('taxa legal + Tema 1368 do STJ', () => {
         return list;
     };
     /** BCB fictício: SELIC mensal de 1% (1,47% em 12/2005), SELIC diária de 0,5% em dois dias de cada mês e IPCA-E de 0,5%. */
-    const mockBCB = (ipcaE: Record<string, string> = {}, skipIpcaE?: string) => mockedGet.mockImplementation((url: string) => {
+    const mockBCB = (ipcaE: Record<string, string> = {}, skipIpcaE?: string, skipSelic?: string) => mockedGet.mockImplementation((url: string) => {
         const range = url.match(/dataInicial=\d{2}\/(\d{2})\/(\d{4})&dataFinal=\d{2}\/(\d{2})\/(\d{4})/)!;
         const months = monthsBetween([+range[1], +range[2]], [+range[3], +range[4]]);
         const key = (m: number, y: number) => `${String(m).padStart(2, '0')}/${y}`;
-        if (url.includes('bcdata.sgs.4390/')) return Promise.resolve(bcb(months.map(([m, y]) => [m, y, key(m, y) === '12/2005' ? '1.47' : '1.00'])));
+        if (url.includes('bcdata.sgs.4390/')) {
+            return Promise.resolve(bcb(months.filter(([m, y]) => key(m, y) !== skipSelic).map(([m, y]) => [m, y, key(m, y) === '12/2005' ? '1.47' : '1.00'])));
+        }
         if (url.includes('bcdata.sgs.11/')) {
             return Promise.resolve({ data: months.flatMap(([m, y]) => ['01', '02'].map(d => ({ data: `${d}/${key(m, y)}`, valor: '0.500000' }))) });
         }
@@ -247,5 +249,8 @@ describe('taxa legal + Tema 1368 do STJ', () => {
         mockBCB({}, '05/2010');
 
         await expect(fetchTaxaLegalTema1368Series()).rejects.toThrow('Sem IPCA-E de 05/2010 no BCB.');
+
+        mockBCB({}, undefined, '07/2003');
+        await expect(fetchTaxaLegalTema1368Series()).rejects.toThrow('Sem SELIC de 07/2003 no BCB.');
     });
 });

@@ -46,8 +46,9 @@ const COURT_TABLES: { indexName: string; fetchTable: typeof fetchTJPRSeries }[] 
 // Taxa legal da Lei 14.905/2024, a partir de 30/08/2024 (o mês de agosto entra pelos dois últimos dias)
 const TAXA_LEGAL = 'TAXA_LEGAL';
 
-// Taxa legal + Tema 1368 do STJ, de 03/1995 a 07/2024
+// Taxa legal + Tema 1368 do STJ, de 03/1995 a 07/2024 (353 meses)
 const TAXA_LEGAL_TEMA1368 = 'TAXA_LEGAL_TEMA1368';
+const TAXA_LEGAL_TEMA1368_MONTHS = 353;
 
 // Início usado quando o índice ainda não tem nenhum mês gravado (o mesmo do seed)
 const DEFAULT_START: YearMonth       = { year: 2000, month: 1 };
@@ -117,8 +118,10 @@ async function updateAllSeries(now: Date): Promise<IndexUpdateResult[]> {
 /**
  * Carrega as séries que o cálculo exige e que podem estar vazias depois de um deploy: a taxa
  * legal e a taxa legal + Tema 1368 (séries novas) e as tabelas do TJPR e do TJMG (quando o seed
- * não rodou). Só busca as que não têm nenhum mês gravado; as outras seguem pelo cron do dia 5. Roda
- * no início do servidor e a cada hora, então um BCB fora do ar no deploy se resolve sozinho.
+ * não rodou). Só busca as que não têm nenhum mês gravado; as outras seguem pelo cron do dia 5. A do
+ * Tema 1368, que é histórica e tem tamanho fixo, também é completada quando está pela metade (uma
+ * carga interrompida), já que o cron não a busca. Roda no início do servidor e a cada hora, então
+ * um BCB fora do ar no deploy se resolve sozinho.
  *
  * Cada série entra de uma vez (um createMany), e não mês a mês: um cálculo que rode durante a
  * carga quase sempre vê a série vazia ou inteira. Não é uma transação, então sobra uma janela de
@@ -138,9 +141,9 @@ export function ensureIndexSeriesLoaded(now = new Date()): Promise<IndexUpdateRe
 
 async function loadEmptySeries(now: Date): Promise<IndexUpdateResult[]> {
     const current: YearMonth = { year: now.getFullYear(), month: now.getMonth() + 1 };
-    const series: { indexName: string; fetchSeries: () => Promise<IBGEDataPoint[]> }[] = [
+    const series: { indexName: string; fetchSeries: () => Promise<IBGEDataPoint[]>; months?: number }[] = [
         { indexName: TAXA_LEGAL, fetchSeries: () => fetchTaxaLegalSeries(TAXA_LEGAL_START.year, TAXA_LEGAL_START.month, current.year, current.month) },
-        { indexName: TAXA_LEGAL_TEMA1368, fetchSeries: fetchTaxaLegalTema1368Series },
+        { indexName: TAXA_LEGAL_TEMA1368, fetchSeries: fetchTaxaLegalTema1368Series, months: TAXA_LEGAL_TEMA1368_MONTHS },
         ...COURT_TABLES.map(t => ({
             indexName:   t.indexName,
             fetchSeries: () => t.fetchTable(DEFAULT_START.year, DEFAULT_START.month, current.year, current.month),
@@ -148,14 +151,20 @@ async function loadEmptySeries(now: Date): Promise<IndexUpdateResult[]> {
     ];
     const results: IndexUpdateResult[] = [];
 
-    for (const { indexName, fetchSeries } of series) {
-        if (await lastStoredMonth(indexName)) continue;
+    for (const { indexName, fetchSeries, months } of series) {
+        // Série de tamanho fixo: conta os meses; as outras só são carregadas quando vazias
+        const stored = months ? await prisma.indexSeries.count({ where: { indexName } }) : (await lastStoredMonth(indexName) ? 1 : 0);
+        if (stored >= (months ?? 1)) continue;
         results.push(await run(indexName, async () => {
             const points = await fetchSeries();
-            if (points.length > 0) {
+            if (points.length === 0) return points;
+            if (stored === 0) {
                 await prisma.indexSeries.createMany({
                     data: points.map(p => ({ indexName, year: p.year, month: p.month, monthlyRate: p.monthlyRate })),
                 });
+            } else {
+                // Pela metade: completa sem apagar o que já está gravado
+                await upsertMonthlyRates(indexName, points);
             }
             return points;
         }));
