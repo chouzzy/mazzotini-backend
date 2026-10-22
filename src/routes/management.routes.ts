@@ -24,6 +24,7 @@ import { GetUserByIdController } from '../modules/management/useCases/getUserByI
 import { AdminUpdateUserController } from '../modules/management/useCases/adminUpdateUser/AdminUpdateUserController';
 import { AdminDeleteUserDocumentController } from '../modules/management/useCases/adminDeleteUserDocument/AdminDeleteUserDocumentController';
 import { UpdateUserInvestmentsController } from '../modules/management/useCases/updateUserInvestments/UpdateUserInvestmentsController';
+import { ApplyReferralController } from '../modules/management/useCases/applyReferral/ApplyReferralController';
 import { UploadInvestmentDocumentController } from '../modules/management/useCases/uploadInvestmentDocument/UploadInvestmentDocumentController';
 import uploadConfig from '../config/upload';
 import multer from 'multer';
@@ -52,6 +53,7 @@ const getUserByIdController            = new GetUserByIdController();
 const adminUpdateUserController        = new AdminUpdateUserController();
 const adminDeleteUserDocumentController = new AdminDeleteUserDocumentController();
 const updateUserInvestmentsController  = new UpdateUserInvestmentsController();
+const applyReferralController          = new ApplyReferralController();
 const uploadInvestmentDocumentController = new UploadInvestmentDocumentController();
 const adminUploadUserDocumentController = new AdminUploadUserDocumentController();
 const requestProfileChangeController   = new RequestProfileChangeController();
@@ -527,6 +529,42 @@ managementRoutes.patch(
     checkJwt,
     checkRole([ROLES.ADMIN]),
     updateUserInvestmentsController.handle
+);
+
+/**
+ * @swagger
+ * /api/management/users/{id}/apply-referral:
+ *   post:
+ *     summary: Leva o associado indicado do cliente para os processos dele
+ *     description: |
+ *       Usa a indicação já gravada (`referredById`, que precisa ser um associado cadastrado) como
+ *       associado dos investimentos do cliente, sem editar o cadastro. Com `investmentIds`, só esses.
+ *     tags: [Gestão]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               investmentIds: { type: array, items: { type: string } }
+ *     responses:
+ *       200:
+ *         description: Quantos processos foram gravados com o associado (`investmentsUpdated`)
+ *       400:
+ *         description: Sem indicação de um associado cadastrado, ou dados inválidos
+ */
+managementRoutes.post(
+    '/api/management/users/:id/apply-referral',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    applyReferralController.handle
 );
 
 /**

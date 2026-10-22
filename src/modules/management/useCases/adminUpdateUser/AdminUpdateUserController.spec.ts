@@ -60,6 +60,23 @@ describe('AdminUpdateUserController', () => {
         expect(data).toMatchObject({ referredById: 'associado-2' });
     });
 
+    it('repassa os processos que a tela mostrou, para só eles mudarem de associado', async () => {
+        const ids = ['64b7f0c2a1b2c3d4e5f60718', '64b7f0c2a1b2c3d4e5f60719'];
+        const { data } = await run({ ...baseBody, referredById: 'associado-2', applyReferralToInvestments: true, referralInvestmentIds: ids });
+
+        expect(mockExecute).toHaveBeenCalledWith('user-1', expect.any(Object), {
+            supersedePendingRequests: true, applyReferralToInvestments: true, referralInvestmentIds: ids,
+        });
+        expect(data).not.toHaveProperty('referralInvestmentIds');
+    });
+
+    it('recusa um processo com id inválido', async () => {
+        const { res } = await run({ ...baseBody, applyReferralToInvestments: true, referralInvestmentIds: ['não-é-id'] });
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(mockExecute).not.toHaveBeenCalled();
+    });
+
     it('campo vazio limpa o valor (ex.: telefone apagado no formulário)', async () => {
         const { data } = await run({ ...baseBody, rg: '', phone: null });
 

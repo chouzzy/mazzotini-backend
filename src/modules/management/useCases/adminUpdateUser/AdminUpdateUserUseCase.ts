@@ -2,6 +2,7 @@
 import { prisma } from '../../../../prisma';
 import { User } from '@prisma/client';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
+import { applyReferralToInvestments, assertReferralAssociate } from '../../referralInvestments';
 
 
 
@@ -18,12 +19,14 @@ interface IAdminUpdateUserOptions {
      */
     supersedePendingRequests?: boolean;
     /**
-     * Leva o associado indicado (`referredById`) para todos os processos do cliente, como a
-     * carteira faz processo a processo (`Investment.associateId`). A indicação sozinha só
-     * registra quem indicou; o portal do associado e o detalhe do processo usam o associado
-     * de cada processo. Exige um associado cadastrado.
+     * Leva o associado indicado (`referredById`) para os processos do cliente, como a carteira
+     * faz processo a processo (`Investment.associateId`). A indicação sozinha só registra quem
+     * indicou; o portal do associado e o detalhe do processo usam o associado de cada processo.
+     * Exige um associado cadastrado.
      */
     applyReferralToInvestments?: boolean;
+    /** Com `applyReferralToInvestments`, só estes investimentos (os que a tela mostrou ao admin). */
+    referralInvestmentIds?: string[];
 }
 
 /** O usuário gravado e, quando o associado foi levado aos processos, quantos processos mudaram. */
@@ -48,6 +51,12 @@ class AdminUpdateUserUseCase {
         
         if (birthDate) {
             formattedBirthDate = new Date(birthDate);
+        }
+
+        // Uma indicação nova precisa ser um associado cadastrado, e não o próprio cliente. A que
+        // não mudou passa como está, para um cadastro antigo continuar salvando
+        if (typeof updateData.referredById === 'string' && updateData.referredById !== user.referredById) {
+            await assertReferralAssociate(prisma, userId, updateData.referredById);
         }
 
         // 3. Atualiza no Prisma. Campo ausente fica como está; `null` enviado de propósito
@@ -75,11 +84,7 @@ class AdminUpdateUserUseCase {
             // Na mesma transação: se o associado não puder ir para os processos, a indicação
             // também não muda, e o admin decide de novo
             if (options.applyReferralToInvestments) {
-                const associateId = updated.referredById;
-                if (!associateId) throw new Error('Escolha um associado cadastrado para levar aos processos do cliente.');
-                const associate = await tx.user.findUnique({ where: { id: associateId }, select: { role: true } });
-                if (associate?.role !== 'ASSOCIATE') throw new Error('O usuário indicado não é um associado.');
-                const { count } = await tx.investment.updateMany({ where: { userId }, data: { associateId } });
+                const count = await applyReferralToInvestments(tx, userId, updated.referredById, options.referralInvestmentIds);
                 console.log(`[ADMIN UPDATE] Associado indicado levado para ${count} processo(s) do usuário ID: ${userId}`);
                 return { ...updated, investmentsUpdated: count };
             }
