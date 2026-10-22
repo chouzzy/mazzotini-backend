@@ -12,14 +12,16 @@
  * - TAXA_LEGAL: a série inteira, desde 08/2024, a cada execução (são poucos meses): acompanha uma
  *   revisão do BCB e completa um mês que tenha faltado. A taxa do mês M usa a SELIC e o IPCA-15
  *   de M-1, que saem no começo do mês.
+ * - TAXA_LEGAL_TEMA1368 não entra aqui: é histórica (03/1995 a 07/2024) e só é carregada quando está
+ *   vazia, por ensureIndexSeriesLoaded ou pelo seed.
  *
  * Um mês que ainda não saiu entra na próxima execução, e um índice com erro não impede os outros.
  */
 
 import { prisma } from '../prisma';
 import {
-    fetchIndexSeries, fetchSelicSeries, fetchTaxaLegalSeries, fetchTJMGSeries, fetchTJPRSeries, fetchTJSPSeries,
-    IBGEDataPoint, shiftMonth,
+    fetchIndexSeries, fetchSelicSeries, fetchTaxaLegalSeries, fetchTaxaLegalTema1368Series, fetchTJMGSeries,
+    fetchTJPRSeries, fetchTJSPSeries, IBGEDataPoint, shiftMonth,
 } from './ibgeService';
 
 type YearMonth = { year: number; month: number };
@@ -43,6 +45,9 @@ const COURT_TABLES: { indexName: string; fetchTable: typeof fetchTJPRSeries }[] 
 
 // Taxa legal da Lei 14.905/2024, a partir de 30/08/2024 (o mês de agosto entra pelos dois últimos dias)
 const TAXA_LEGAL = 'TAXA_LEGAL';
+
+// Taxa legal + Tema 1368 do STJ, de 03/1995 a 07/2024
+const TAXA_LEGAL_TEMA1368 = 'TAXA_LEGAL_TEMA1368';
 
 // Início usado quando o índice ainda não tem nenhum mês gravado (o mesmo do seed)
 const DEFAULT_START: YearMonth       = { year: 2000, month: 1 };
@@ -111,9 +116,9 @@ async function updateAllSeries(now: Date): Promise<IndexUpdateResult[]> {
 
 /**
  * Carrega as séries que o cálculo exige e que podem estar vazias depois de um deploy: a taxa
- * legal (série nova) e as tabelas do TJPR e do TJMG (quando o seed não rodou). Só busca as que
- * não têm nenhum mês gravado; as outras seguem pelo cron do dia 5. Roda no início do servidor e
- * a cada hora, então um BCB fora do ar no deploy se resolve sozinho.
+ * legal e a taxa legal + Tema 1368 (séries novas) e as tabelas do TJPR e do TJMG (quando o seed
+ * não rodou). Só busca as que não têm nenhum mês gravado; as outras seguem pelo cron do dia 5. Roda
+ * no início do servidor e a cada hora, então um BCB fora do ar no deploy se resolve sozinho.
  *
  * Cada série entra de uma vez (um createMany), e não mês a mês: um cálculo que rode durante a
  * carga quase sempre vê a série vazia ou inteira. Não é uma transação, então sobra uma janela de
@@ -133,16 +138,20 @@ export function ensureIndexSeriesLoaded(now = new Date()): Promise<IndexUpdateRe
 
 async function loadEmptySeries(now: Date): Promise<IndexUpdateResult[]> {
     const current: YearMonth = { year: now.getFullYear(), month: now.getMonth() + 1 };
-    const series = [
-        { indexName: TAXA_LEGAL, start: TAXA_LEGAL_START, fetchSeries: fetchTaxaLegalSeries },
-        ...COURT_TABLES.map(t => ({ indexName: t.indexName, start: DEFAULT_START, fetchSeries: t.fetchTable })),
+    const series: { indexName: string; fetchSeries: () => Promise<IBGEDataPoint[]> }[] = [
+        { indexName: TAXA_LEGAL, fetchSeries: () => fetchTaxaLegalSeries(TAXA_LEGAL_START.year, TAXA_LEGAL_START.month, current.year, current.month) },
+        { indexName: TAXA_LEGAL_TEMA1368, fetchSeries: fetchTaxaLegalTema1368Series },
+        ...COURT_TABLES.map(t => ({
+            indexName:   t.indexName,
+            fetchSeries: () => t.fetchTable(DEFAULT_START.year, DEFAULT_START.month, current.year, current.month),
+        })),
     ];
     const results: IndexUpdateResult[] = [];
 
-    for (const { indexName, start, fetchSeries } of series) {
+    for (const { indexName, fetchSeries } of series) {
         if (await lastStoredMonth(indexName)) continue;
         results.push(await run(indexName, async () => {
-            const points = await fetchSeries(start.year, start.month, current.year, current.month);
+            const points = await fetchSeries();
             if (points.length > 0) {
                 await prisma.indexSeries.createMany({
                     data: points.map(p => ({ indexName, year: p.year, month: p.month, monthlyRate: p.monthlyRate })),

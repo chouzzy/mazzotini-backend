@@ -8,6 +8,7 @@
  *   IPCA-15 : 7478   (variação mensal, %) — base da tabela do TJSP desde set/2024
  *   IGP-DI  : 190    (variação mensal, %) — com o INPC, forma a média do TJPR
  *   SELIC   : 11     (taxa diária, % a.d.) — acumulada por mês no fetchSelicSeries
+ *   SELIC   : 4390   (acumulada no mês, % com 2 casas) — taxa legal + Tema 1368 até 12/2005
  *   Taxa legal : 29543 (% a.m., desde 08/2024) — juros de mora pela Lei 14.905 (Res. CMN 5.171)
  */
 
@@ -23,6 +24,7 @@ const SERIES_CODES: Record<string, number> = {
     IGP_M:      189,    // IGP-M variação mensal %
     IGP_DI:     190,    // IGP-DI variação mensal % (usado na média do TJPR)
     CDI_MENSAL: 4391,   // CDI acumulado no mês %
+    SELIC_MENSAL: 4390, // SELIC acumulada no mês %, com 2 casas (taxa legal + Tema 1368 até 12/2005)
     TAXA_LEGAL: 29543,  // taxa legal da Lei 14.905 (Res. CMN 5.171), % a.m., desde 08/2024
     // SELIC (série 11) e CDI over (série 12) são diárias, acumuladas por mês em fetchSelicSeries e
     // fetchCDIDiariaSeries. O CDI_DIARIA da calculadora usa hoje a série 4391, como o CDI_MENSAL.
@@ -304,4 +306,41 @@ export function fetchTJMGSeries(startYear: number, startMonth: number, endYear?:
  */
 export function fetchTaxaLegalSeries(startYear: number, startMonth: number, endYear?: number, endMonth?: number) {
     return fetchIndexSeries('TAXA_LEGAL', startYear, startMonth, endYear, endMonth);
+}
+
+/**
+ * Taxa legal + Tema 1368 do STJ, de 03/1995 a 07/2024 (desde 08/2024 vale a taxa legal oficial).
+ * É a regra da taxa legal oficial aplicada aos meses anteriores a ela: a taxa do mês M é
+ *   (1 + SELIC acumulada no mês M-1) / (1 + IPCA-E do mês M-1) - 1, nunca menor que zero.
+ * O IPCA-E mensal (série 10764) é o IPCA-15 desde 05/2000. A SELIC do mês vem da série mensal
+ * (4390, com 2 casas) até 12/2005 e do acumulado das taxas diárias (série 11) depois, a mesma
+ * combinação do Dr. Calc: assim a taxa bateu com a dele em 349 dos 353 meses. Nos outros 4
+ * (03/1995, 04/1995, 06/2006 e 01/2009), a base do Dr. Calc tem outro valor de SELIC no mês anterior.
+ *
+ * A série é histórica: a carga é única e falha inteira se faltar um mês, para não gravar meses soltos.
+ */
+export async function fetchTaxaLegalTema1368Series(): Promise<IBGEDataPoint[]> {
+    const first = { year: 1995, month: 2 };   // meses de origem: 02/1995 a 06/2024
+    const last  = { year: 2024, month: 6 };
+    const key   = (p: { year: number; month: number }) => p.year * 100 + p.month;
+
+    const selic = new Map<number, number>();
+    for (const p of await fetchIndexSeries('SELIC_MENSAL', first.year, first.month, 2005, 12)) selic.set(key(p), p.monthlyRate);
+    // A API do BCB devolve no máximo 10 anos de uma série diária por consulta
+    for (const [from, to] of [[{ year: 2006, month: 1 }, { year: 2015, month: 12 }], [{ year: 2016, month: 1 }, last]]) {
+        for (const p of await fetchSelicSeries(from.year, from.month, to.year, to.month)) selic.set(key(p), p.monthlyRate);
+    }
+    const ipcaE = new Map((await fetchIndexSeries('IPCA_E', first.year, first.month, last.year, last.month)).map(p => [key(p), p.monthlyRate]));
+
+    const points: IBGEDataPoint[] = [];
+    for (let src = first; key(src) <= key(last); src = shiftMonth(src.year, src.month, 1)) {
+        const s = selic.get(key(src));
+        const e = ipcaE.get(key(src));
+        if (s === undefined || e === undefined) {
+            throw new Error(`Sem ${s === undefined ? 'SELIC' : 'IPCA-E'} de ${String(src.month).padStart(2, '0')}/${src.year} no BCB.`);
+        }
+        const rate = Math.max(((1 + s / 100) / (1 + e / 100) - 1) * 100, 0);
+        points.push({ ...shiftMonth(src.year, src.month, 1), monthlyRate: parseFloat(rate.toFixed(8)) });
+    }
+    return points;
 }

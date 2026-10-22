@@ -1,6 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import { ensureIndexSeriesLoaded, updateIndexSeries } from './indexUpdateService';
-import { fetchIndexSeries, fetchSelicSeries, fetchTaxaLegalSeries, fetchTJMGSeries, fetchTJPRSeries, fetchTJSPSeries } from './ibgeService';
+import {
+    fetchIndexSeries, fetchSelicSeries, fetchTaxaLegalSeries, fetchTaxaLegalTema1368Series, fetchTJMGSeries, fetchTJPRSeries, fetchTJSPSeries,
+} from './ibgeService';
 
 jest.mock('@prisma/client', () => {
     const mPrisma: any = {
@@ -17,6 +19,7 @@ jest.mock('./ibgeService', () => ({
     fetchTJPRSeries:  jest.fn(),
     fetchTJMGSeries:  jest.fn(),
     fetchTaxaLegalSeries: jest.fn(),
+    fetchTaxaLegalTema1368Series: jest.fn(),
 }));
 
 const prisma = new PrismaClient() as any;
@@ -59,6 +62,7 @@ describe('updateIndexSeries', () => {
         (fetchTJPRSeries as jest.Mock).mockResolvedValue([]);
         (fetchTJMGSeries as jest.Mock).mockResolvedValue([]);
         (fetchTaxaLegalSeries as jest.Mock).mockResolvedValue([]);
+        (fetchTaxaLegalTema1368Series as jest.Mock).mockResolvedValue([]);
     });
 
     it('as tabelas do TJPR e do TJMG vão do último mês gravado até o mês atual', async () => {
@@ -204,6 +208,8 @@ describe('updateIndexSeries', () => {
         // Assim acompanha uma revisão do BCB e completa um mês que tenha faltado
         expect(fetchTaxaLegalSeries).toHaveBeenCalledWith(2024, 8, 2026, 11);
         expect(savedMonths('TAXA_LEGAL')).toEqual(['8/2024', '11/2026']);
+        // A do Tema 1368 é histórica (03/1995 a 07/2024): não entra na atualização
+        expect(fetchTaxaLegalTema1368Series).not.toHaveBeenCalled();
     });
 
     it('duas atualizações ao mesmo tempo compartilham a mesma execução', async () => {
@@ -248,6 +254,7 @@ describe('ensureIndexSeriesLoaded', () => {
         (fetchTaxaLegalSeries as jest.Mock).mockResolvedValue([{ year: 2024, month: 8, monthlyRate: 0.6 }]);
         (fetchTJPRSeries as jest.Mock).mockResolvedValue([]);
         (fetchTJMGSeries as jest.Mock).mockResolvedValue([{ year: 2000, month: 1, monthlyRate: 0.6 }]);
+        (fetchTaxaLegalTema1368Series as jest.Mock).mockResolvedValue([{ year: 1995, month: 3, monthlyRate: 2.71 }]);
     });
 
     it('carrega só as séries que ainda não têm nenhum mês, desde o início de cada uma', async () => {
@@ -258,18 +265,28 @@ describe('ensureIndexSeriesLoaded', () => {
         expect(fetchTaxaLegalSeries).toHaveBeenCalledWith(2024, 8, 2026, 11);
         expect(fetchTJMGSeries).toHaveBeenCalledWith(2000, 1, 2026, 11);
         expect(fetchTJPRSeries).not.toHaveBeenCalled();
-        expect(results).toEqual([{ indexName: 'TAXA_LEGAL', months: 1 }, { indexName: 'TJMG_CORREGEDORIA', months: 1 }]);
+        expect(fetchTaxaLegalTema1368Series).toHaveBeenCalledTimes(1);
+        expect(results).toEqual([
+            { indexName: 'TAXA_LEGAL', months: 1 },
+            { indexName: 'TAXA_LEGAL_TEMA1368', months: 1 },
+            { indexName: 'TJMG_CORREGEDORIA', months: 1 },
+        ]);
         expect(fetchIndexSeries).not.toHaveBeenCalled();
         // Cada série entra numa gravação só, para nenhum cálculo ver a série pela metade
         expect(prisma.indexSeries.createMany.mock.calls.map((c: any) => c[0].data)).toEqual([
             [{ indexName: 'TAXA_LEGAL', year: 2024, month: 8, monthlyRate: 0.6 }],
+            [{ indexName: 'TAXA_LEGAL_TEMA1368', year: 1995, month: 3, monthlyRate: 2.71 }],
             [{ indexName: 'TJMG_CORREGEDORIA', year: 2000, month: 1, monthlyRate: 0.6 }],
         ]);
         expect(prisma.indexSeries.upsert).not.toHaveBeenCalled();
     });
 
     it('duas chamadas ao mesmo tempo compartilham a mesma carga, sem gravar a série duas vezes', async () => {
-        lastStored = { TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 }, TJMG_CORREGEDORIA: { year: 2026, month: 11 } };
+        lastStored = {
+            TAXA_LEGAL_TEMA1368:   { year: 2024, month: 7 },
+            TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 },
+            TJMG_CORREGEDORIA:     { year: 2026, month: 11 },
+        };
 
         const [a, b] = await Promise.all([ensureIndexSeriesLoaded(NOV_5), ensureIndexSeriesLoaded(NOV_5)]);
 
@@ -290,7 +307,11 @@ describe('ensureIndexSeriesLoaded', () => {
 
     it('um erro do BCB fica no resultado, para o log mostrar', async () => {
         (fetchTaxaLegalSeries as jest.Mock).mockRejectedValue(new Error('BCB indisponível'));
-        lastStored = { TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 }, TJMG_CORREGEDORIA: { year: 2026, month: 11 } };
+        lastStored = {
+            TAXA_LEGAL_TEMA1368:   { year: 2024, month: 7 },
+            TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 },
+            TJMG_CORREGEDORIA:     { year: 2026, month: 11 },
+        };
 
         expect(await ensureIndexSeriesLoaded(NOV_5)).toEqual([{ indexName: 'TAXA_LEGAL', months: 0, error: 'BCB indisponível' }]);
     });
@@ -298,11 +319,13 @@ describe('ensureIndexSeriesLoaded', () => {
     it('com tudo carregado, não busca nada', async () => {
         lastStored = {
             TAXA_LEGAL:            { year: 2026, month: 11 },
+            TAXA_LEGAL_TEMA1368:   { year: 2024, month: 7 },
             TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 },
             TJMG_CORREGEDORIA:     { year: 2026, month: 11 },
         };
 
         expect(await ensureIndexSeriesLoaded(NOV_5)).toEqual([]);
         expect(fetchTaxaLegalSeries).not.toHaveBeenCalled();
+        expect(fetchTaxaLegalTema1368Series).not.toHaveBeenCalled();
     });
 });
