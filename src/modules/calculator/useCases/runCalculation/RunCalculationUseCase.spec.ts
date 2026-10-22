@@ -164,7 +164,7 @@ describe('RunCalculationUseCase com vários cálculos no mesmo processo', () => 
         referenceMonth: 11, referenceYear: 2026,
         baseTotal: total, correctedValue: total, moratoryInterest: 0, compensatoryInterest: 0,
         multaValue: 0, subtotalA: total, feesValue: 0, subtotalB: total, penaltyValue: 0, grossTotal: total,
-        abatimentoResults: [], abatimentoTotal: 0, totalValue: total,
+        abatimentoResults: [], abatimentoTotal: 0, custaResults: [], custaTotal: 0, totalValue: total,
         installmentResults: [{ installmentIndex: 1, description, baseValue: total }],
     });
 

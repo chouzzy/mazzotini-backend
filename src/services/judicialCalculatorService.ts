@@ -2,8 +2,10 @@
  * JudicialCalculatorService
  *
  * Suporta:
- *   - Parcelas de débito (tipo DEBITO) e abatimentos/descontos (tipo ABATIMENTO)
+ *   - Parcelas de débito (tipo DEBITO), abatimentos/descontos (tipo ABATIMENTO) e custas ou
+ *     despesas (tipo CUSTA)
  *   - Abatimentos corrigidos pelo mesmo índice até o mês de referência
+ *   - Custas e despesas só corrigidas pelo índice, sem juros, multa nem honorários, e somadas no fim
  *   - 4 pontos de dedução: DO_VALOR_CORRIGIDO | APOS_HONORARIOS | APOS_MULTA | APOS_TUDO
  *   - Juros Moratórios: Taxa Legal (art.406/CC, Lei 14.905/2024) ou Personalizado
  *   - Juros Remuneratórios: taxa adicional (compensatoryRate)
@@ -71,11 +73,14 @@ const indexLabel = (indexName: string) => INDEX_LABELS[indexName] ?? indexName;
 
 export type DeductionPoint = 'DO_VALOR_CORRIGIDO' | 'APOS_HONORARIOS' | 'APOS_MULTA' | 'APOS_TUDO';
 
+/** DEBITO (padrão), ABATIMENTO (crédito ou pagamento) ou CUSTA (custa ou despesa, como no Dr. Calc). */
+export type InstallmentType = 'DEBITO' | 'ABATIMENTO' | 'CUSTA';
+
 export interface Installment {
     baseValue:      number;
     baseDate:       string; // ISO date string
     description?:   string;
-    type?:          'DEBITO' | 'ABATIMENTO';  // default DEBITO
+    type?:          InstallmentType;           // default DEBITO
     deductionPoint?: DeductionPoint;           // only for ABATIMENTO, default APOS_TUDO
 }
 
@@ -131,6 +136,15 @@ export interface AbatimentoResult {
     deductionPoint:   DeductionPoint;
 }
 
+/** Custa ou despesa: corrigida pelo índice do cálculo até o mês de referência e somada no fim. */
+export interface CustaResult {
+    description:      string;
+    baseDate:         string;
+    baseValue:        number;
+    correctionFactor: number;
+    correctedValue:   number;
+}
+
 export interface CalculationResult {
     referenceMonth:       number;
     referenceYear:        number;
@@ -146,7 +160,9 @@ export interface CalculationResult {
     grossTotal:           number;   // antes dos abatimentos
     abatimentoResults:    AbatimentoResult[];
     abatimentoTotal:      number;   // total deduzido
-    totalValue:           number;   // grossTotal − abatimentoTotal
+    custaResults:         CustaResult[];
+    custaTotal:           number;   // custas e despesas corrigidas, somadas no fim
+    totalValue:           number;   // grossTotal − abatimentoTotal + custaTotal
     installmentResults:   InstallmentResult[];
     calculations?:        CalculationSummary[];   // só quando o processo tem mais de um cálculo
     warnings?:            string[];               // meses depois do último índice gravado (entraram como 0%)
@@ -369,6 +385,7 @@ export async function calculateJudicialDebt(
 
     const debitoInstallments    = allInstallments.filter(i => (i.type ?? 'DEBITO') === 'DEBITO');
     const abatimentoInstallments = allInstallments.filter(i => i.type === 'ABATIMENTO');
+    const custaInstallments      = allInstallments.filter(i => i.type === 'CUSTA');
 
     if (debitoInstallments.length === 0) throw new Error('Informe ao menos uma parcela de débito.');
 
@@ -380,8 +397,9 @@ export async function calculateJudicialDebt(
 
     // 1. Busca índices do banco
     const sortedDebito  = [...debitoInstallments].sort((a, b) => new Date(a.baseDate).getTime() - new Date(b.baseDate).getTime());
-    const sortedAbat    = [...abatimentoInstallments].sort((a, b) => new Date(a.baseDate).getTime() - new Date(b.baseDate).getTime());
-    const allSorted     = [...sortedDebito, ...sortedAbat].sort((a, b) => new Date(a.baseDate).getTime() - new Date(b.baseDate).getTime());
+    // As custas também são corrigidas: os meses delas entram na busca e na conferência dos índices
+    const allSorted     = [...debitoInstallments, ...abatimentoInstallments, ...custaInstallments]
+        .sort((a, b) => new Date(a.baseDate).getTime() - new Date(b.baseDate).getTime());
     const globalStart   = parseYM(allSorted[0].baseDate);
     const fetchRange    = monthRange(globalStart.year, globalStart.month, referenceYear, referenceMonth);
 
@@ -551,7 +569,23 @@ export async function calculateJudicialDebt(
     const afterMultaDed = afterArt523 - deductAt('APOS_MULTA');
 
     // APOS_TUDO — após tudo
-    const finalTotal = afterMultaDed - deductAt('APOS_TUDO');
+    const afterDeductions = afterMultaDed - deductAt('APOS_TUDO');
+
+    // 5. Custas e despesas, como no Dr. Calc: só a correção monetária, pelo mesmo índice e a partir
+    // da data de cada uma, sem juros, multa nem honorários (nem os do Art. 523), somadas no fim
+    const custaResults: CustaResult[] = custaInstallments.map(custa => {
+        const { year: sy, month: sm } = parseYM(custa.baseDate);
+        const { factor } = factorFor(sy, sm);
+        return {
+            description:      custa.description || 'Custa ou despesa',
+            baseDate:         custa.baseDate,
+            baseValue:        custa.baseValue,
+            correctionFactor: parseFloat(factor.toFixed(8)),
+            correctedValue:   round2(custa.baseValue * factor),
+        };
+    });
+    const custaTotal = custaResults.reduce((s, c) => s + c.correctedValue, 0);
+    const finalTotal = afterDeductions + custaTotal;
 
     const abatimentoTotal = abatimentoResults.reduce((s, a) => s + a.correctedValue, 0);
 
@@ -570,6 +604,8 @@ export async function calculateJudicialDebt(
         grossTotal:           round2(afterArt523),
         abatimentoResults,
         abatimentoTotal:      round2(abatimentoTotal),
+        custaResults,
+        custaTotal:           round2(custaTotal),
         totalValue:           round2(finalTotal),
         installmentResults,
         ...(warnings.size > 0 ? { warnings: [...warnings] } : {}),
@@ -581,8 +617,8 @@ export async function calculateJudicialDebt(
 /**
  * Junta os resultados de vários cálculos do mesmo processo (ex.: dois contratos com índices
  * ou juros diferentes). Cada cálculo é feito por inteiro, com os próprios honorários e
- * multas, e os valores são somados, como se fossem cálculos separados. As parcelas e os
- * abatimentos levam o nome do cálculo na descrição. Com um cálculo só, nada muda.
+ * multas, e os valores são somados, como se fossem cálculos separados. As parcelas, os
+ * abatimentos e as custas levam o nome do cálculo na descrição. Com um cálculo só, nada muda.
  */
 export function combineResults(parts: { label: string; result: CalculationResult }[]): CalculationResult {
     if (parts.length === 1) return parts[0].result;
@@ -592,6 +628,7 @@ export function combineResults(parts: { label: string; result: CalculationResult
 
     const installmentResults: InstallmentResult[] = [];
     const abatimentoResults: AbatimentoResult[] = [];
+    const custaResults: CustaResult[] = [];
     for (const { label, result } of parts) {
         for (const inst of result.installmentResults) {
             installmentResults.push({
@@ -602,6 +639,9 @@ export function combineResults(parts: { label: string; result: CalculationResult
         }
         for (const abat of result.abatimentoResults) {
             abatimentoResults.push({ ...abat, description: `${label} · ${abat.description}` });
+        }
+        for (const custa of result.custaResults) {
+            custaResults.push({ ...custa, description: `${label} · ${custa.description}` });
         }
     }
     const warnings = parts.flatMap(({ label, result }) => (result.warnings ?? []).map(w => `${label}: ${w}`));
@@ -621,6 +661,8 @@ export function combineResults(parts: { label: string; result: CalculationResult
         grossTotal:           sum(r => r.grossTotal),
         abatimentoResults,
         abatimentoTotal:      sum(r => r.abatimentoTotal),
+        custaResults,
+        custaTotal:           sum(r => r.custaTotal),
         totalValue:           sum(r => r.totalValue),
         installmentResults,
         calculations: parts.map(({ label, result }) => ({
