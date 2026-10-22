@@ -21,7 +21,7 @@
 import { prisma } from '../prisma';
 import {
     fetchIndexSeries, fetchSelicSeries, fetchTaxaLegalSeries, fetchTaxaLegalTema1368Series, fetchTJMGSeries,
-    fetchTJPRSeries, fetchTJSPSeries, IBGEDataPoint, shiftMonth,
+    fetchTJPRSeries, fetchTJSPSeries, IBGEDataPoint, shiftMonth, TAXA_LEGAL_TEMA1368_MONTHS,
 } from './ibgeService';
 
 type YearMonth = { year: number; month: number };
@@ -46,9 +46,8 @@ const COURT_TABLES: { indexName: string; fetchTable: typeof fetchTJPRSeries }[] 
 // Taxa legal da Lei 14.905/2024, a partir de 30/08/2024 (o mês de agosto entra pelos dois últimos dias)
 const TAXA_LEGAL = 'TAXA_LEGAL';
 
-// Taxa legal + Tema 1368 do STJ, de 03/1995 a 07/2024 (353 meses)
+// Taxa legal + Tema 1368 do STJ, de 03/1995 a 07/2024 (o tamanho vem de TAXA_LEGAL_TEMA1368_MONTHS)
 const TAXA_LEGAL_TEMA1368 = 'TAXA_LEGAL_TEMA1368';
-const TAXA_LEGAL_TEMA1368_MONTHS = 353;
 
 // Início usado quando o índice ainda não tem nenhum mês gravado (o mesmo do seed)
 const DEFAULT_START: YearMonth       = { year: 2000, month: 1 };

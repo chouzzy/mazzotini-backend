@@ -1,6 +1,7 @@
 import axios from 'axios';
 import {
     fetchIndexSeries, fetchTaxaLegalSeries, fetchTaxaLegalTema1368Series, fetchTJMGSeries, fetchTJPRSeries, fetchTJSPSeries,
+    TAXA_LEGAL_TEMA1368_MONTHS,
 } from './ibgeService';
 
 jest.mock('axios');
@@ -227,6 +228,8 @@ describe('taxa legal + Tema 1368 do STJ', () => {
         const rate = (month: number, year: number) => points.find(p => p.year === year && p.month === month)?.monthlyRate;
 
         expect(points).toHaveLength(353);
+        // A carga das séries vazias confere a série por esse total
+        expect(TAXA_LEGAL_TEMA1368_MONTHS).toBe(points.length);
         expect(points[0]).toEqual({ year: 1995, month: 3, monthlyRate: expect.closeTo((1.01 / 1.005 - 1) * 100, 7) });
         expect(points[points.length - 1]).toMatchObject({ year: 2024, month: 7 });
         // 01/2006: SELIC de 12/2005 com 2 casas (1,47%) e IPCA-E de 0,38%, como no Dr. Calc (R$ 10,86 em R$ 1.000)

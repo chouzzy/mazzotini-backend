@@ -319,9 +319,16 @@ export function fetchTaxaLegalSeries(startYear: number, startMonth: number, endY
  *
  * A série é histórica: a carga é única e falha inteira se faltar um mês, para não gravar meses soltos.
  */
+const TEMA1368_SOURCE_FIRST = { year: 1995, month: 2 };   // meses de origem: 02/1995 a 06/2024
+const TEMA1368_SOURCE_LAST  = { year: 2024, month: 6 };
+
+/** Quantos meses a série do Tema 1368 tem (03/1995 a 07/2024): a carga das séries vazias confere. */
+export const TAXA_LEGAL_TEMA1368_MONTHS =
+    (TEMA1368_SOURCE_LAST.year - TEMA1368_SOURCE_FIRST.year) * 12 + (TEMA1368_SOURCE_LAST.month - TEMA1368_SOURCE_FIRST.month) + 1;
+
 export async function fetchTaxaLegalTema1368Series(): Promise<IBGEDataPoint[]> {
-    const first = { year: 1995, month: 2 };   // meses de origem: 02/1995 a 06/2024
-    const last  = { year: 2024, month: 6 };
+    const first = TEMA1368_SOURCE_FIRST;
+    const last  = TEMA1368_SOURCE_LAST;
     const key   = (p: { year: number; month: number }) => p.year * 100 + p.month;
 
     const selic = new Map<number, number>();
