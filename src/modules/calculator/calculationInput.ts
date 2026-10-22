@@ -5,7 +5,7 @@
  */
 
 import {
-    fixedIndexDateError, Installment, isCorrectionIndex, NAO_ATUALIZAR, unknownIndexError,
+    fixedIndexDateError, Installment, isCorrectionIndex, MORATORY_MODES, NAO_ATUALIZAR, unknownIndexError,
 } from '../../services/judicialCalculatorService';
 
 export const MAX_EXTRA_CALCULATIONS = 20;
@@ -26,10 +26,13 @@ export const CALCULATION_DEFAULTS = {
     feesFixedValue:       0,
     penaltyPercentage:    0,
     feesOnPenalty:        false,
+    // As duas opções do Dr. Calc, desmarcadas como lá
+    feesOnMulta:          false,
+    deflate:              false,
 };
 
 const OPTIONS: Record<string, { label: string; values: string[] }> = {
-    moratoryMode:         { label: 'modo dos juros moratórios',   values: ['TAXA_LEGAL', 'PERSONALIZADO'] },
+    moratoryMode:         { label: 'modo dos juros moratórios',   values: MORATORY_MODES },
     moratoryRateUnit:     { label: 'unidade dos juros moratórios', values: ['AM', 'AA', 'AD'] },
     moratoryType:         { label: 'tipo dos juros moratórios',   values: ['SIMPLES', 'COMPOSTO'] },
     compensatoryRateUnit: { label: 'unidade dos juros remuneratórios', values: ['AM', 'AA', 'AD'] },
@@ -44,6 +47,12 @@ const NUMBERS: Record<string, string> = {
     feesPercentage:    'honorários (%)',
     feesFixedValue:    'honorários (R$)',
     penaltyPercentage: 'multa do Art. 523',
+};
+
+const FLAGS: Record<string, string> = {
+    feesOnPenalty: 'honorários do Art. 523',
+    feesOnMulta:   'honorários sobre a multa',
+    deflate:       'deflacionar',
 };
 
 const DEDUCTION_POINTS = ['DO_VALOR_CORRIGIDO', 'APOS_HONORARIOS', 'APOS_MULTA', 'APOS_TUDO'];
@@ -69,6 +78,8 @@ export interface ValidCalculation {
     feesFixedValue:        number;
     penaltyPercentage:     number;
     feesOnPenalty:         boolean;
+    feesOnMulta:           boolean;
+    deflate:               boolean;
     installments:          Installment[];
 }
 
@@ -182,8 +193,11 @@ export function validateCalculation(raw: any, calcLabel: string | null): ValidCa
         if (typeof value !== 'number' || !Number.isFinite(value)) throw fail(calcLabel, `${label}: valor inválido.`);
         values[field] = value;
     }
-    const feesOnPenalty = raw.feesOnPenalty ?? CALCULATION_DEFAULTS.feesOnPenalty;
-    if (typeof feesOnPenalty !== 'boolean') throw fail(calcLabel, 'honorários do Art. 523: valor inválido.');
+    for (const [field, label] of Object.entries(FLAGS)) {
+        const value = raw[field] ?? (CALCULATION_DEFAULTS as Record<string, unknown>)[field];
+        if (typeof value !== 'boolean') throw fail(calcLabel, `${label}: valor inválido.`);
+        values[field] = value;
+    }
 
     const moratoryStartDate     = parseCalendarDate(raw.moratoryStartDate, calcLabel, 'início dos juros moratórios');
     const compensatoryStartDate = parseCalendarDate(raw.compensatoryStartDate, calcLabel, 'início dos juros remuneratórios');
@@ -192,11 +206,10 @@ export function validateCalculation(raw: any, calcLabel: string | null): ValidCa
     if (fixedDateError) throw fail(calcLabel, fixedDateError);
 
     return {
-        ...(values as Omit<ValidCalculation, 'correctionIndex' | 'moratoryStartDate' | 'compensatoryStartDate' | 'feesOnPenalty' | 'installments'>),
+        ...(values as Omit<ValidCalculation, 'correctionIndex' | 'moratoryStartDate' | 'compensatoryStartDate' | 'installments'>),
         correctionIndex: raw.correctionIndex,
         moratoryStartDate,
         compensatoryStartDate,
-        feesOnPenalty,
         installments,
     };
 }

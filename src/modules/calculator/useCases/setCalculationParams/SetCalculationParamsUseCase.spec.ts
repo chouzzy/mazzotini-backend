@@ -77,8 +77,19 @@ describe('SetCalculationParamsUseCase', () => {
             multaPercentage: 0,
             feesMode: 'PERCENTUAL',
             feesFixedValue: 0,
+            feesOnMulta: false,
+            deflate: false,
             installments: [{ baseValue: 700, baseDate: '2025-11-15T00:00:00.000Z' }],
         })]);
+    });
+
+    it('grava o modo Tema 1368 e as opções do Dr. Calc; sem elas, as opções ficam desmarcadas', async () => {
+        await save({ moratoryMode: 'TAXA_LEGAL_TEMA1368', feesOnMulta: true, deflate: true });
+        expect(upsertArgs().update).toMatchObject({ moratoryMode: 'TAXA_LEGAL_TEMA1368', feesOnMulta: true, deflate: true });
+
+        jest.clearAllMocks();
+        await save({});
+        expect(upsertArgs().update).toMatchObject({ feesOnMulta: false, deflate: false });
     });
 
     it('cria o registro com os mesmos campos quando o processo ainda não tinha parâmetros', async () => {
@@ -103,6 +114,9 @@ describe('SetCalculationParamsUseCase', () => {
         ['data em outro formato', { compensatoryStartDate: '15/11/2025' }, 'Contrato B: início dos juros remuneratórios: data inválida (15/11/2025).'],
         ['número em texto', { feesMode: 'FIXO', feesFixedValue: '1000' }, 'Contrato B: honorários (R$): valor inválido.'],
         ['booleano em texto', { feesOnPenalty: 'false' }, 'Contrato B: honorários do Art. 523: valor inválido.'],
+        ['honorários sobre a multa em texto', { feesOnMulta: 'true' }, 'Contrato B: honorários sobre a multa: valor inválido.'],
+        ['deflacionar em número', { deflate: 1 }, 'Contrato B: deflacionar: valor inválido.'],
+        ['modo de juros desconhecido', { moratoryMode: 'TEMA_1368' }, 'Contrato B: modo dos juros moratórios: valor inválido (TEMA_1368).'],
         ['opção desconhecida', { moratoryRateUnit: 'AS' }, 'Contrato B: unidade dos juros moratórios: valor inválido (AS).'],
         ['valor de parcela em texto', { installments: [{ baseValue: '700', baseDate: '2025-11-15' }] }, 'Contrato B: parcela 1: valor inválido.'],
         ['sem parcela de débito', { installments: [{ baseValue: 100, baseDate: '2025-11-15', type: 'ABATIMENTO' }] }, 'Contrato B: informe ao menos uma parcela de débito.'],

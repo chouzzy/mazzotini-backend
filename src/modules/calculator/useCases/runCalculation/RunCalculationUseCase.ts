@@ -36,6 +36,9 @@ export function toCalculationParams(params: ProcessCalculationParams): Calculati
         feesFixedValue:        params.feesFixedValue       ?? d.feesFixedValue,
         penaltyPercentage:     params.penaltyPercentage,
         feesOnPenalty:         params.feesOnPenalty,
+        // Processos salvos antes das opções não têm os campos: valem os padrões (desmarcadas)
+        feesOnMulta:           params.feesOnMulta          ?? d.feesOnMulta,
+        deflate:               params.deflate              ?? d.deflate,
         installments:          params.installments as unknown as Installment[],
     };
 }
@@ -68,6 +71,8 @@ export function toExtraCalculations(params: ProcessCalculationParams): { label: 
             feesFixedValue:        e.feesFixedValue        ?? d.feesFixedValue,
             penaltyPercentage:     e.penaltyPercentage     ?? d.penaltyPercentage,
             feesOnPenalty:         e.feesOnPenalty         ?? d.feesOnPenalty,
+            feesOnMulta:           e.feesOnMulta           ?? d.feesOnMulta,
+            deflate:               e.deflate               ?? d.deflate,
             installments:          e.installments          ?? [],
         },
     }));

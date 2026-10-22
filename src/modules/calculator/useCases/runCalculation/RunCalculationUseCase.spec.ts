@@ -38,6 +38,8 @@ const savedParams: any = {
     feesPercentage: 10,
     penaltyPercentage: 10,
     feesOnPenalty: true,
+    feesOnMulta: true,
+    deflate: true,
     installments: [{ baseValue: 1000, baseDate: '2024-01-15T00:00:00.000Z', description: 'Parcela exemplo' }],
     lastCalculatedValue: null,
     lastCalculatedAt: null,
@@ -75,6 +77,8 @@ describe('toCalculationParams', () => {
             feesFixedValue: 1500,
             penaltyPercentage: 10,
             feesOnPenalty: true,
+            feesOnMulta: true,
+            deflate: true,
             installments: savedParams.installments,
         });
     });
@@ -90,6 +94,9 @@ describe('toCalculationParams', () => {
             multaPercentage: undefined,
             feesMode: undefined,
             feesFixedValue: undefined,
+            // Salvos antes das opções do Dr. Calc: o Mongo devolve null
+            feesOnMulta: null,
+            deflate: null,
         };
 
         expect(toCalculationParams(oldRecord)).toMatchObject({
@@ -101,6 +108,8 @@ describe('toCalculationParams', () => {
             multaPercentage: 0,
             feesMode: 'PERCENTUAL',
             feesFixedValue: 0,
+            feesOnMulta: false,
+            deflate: false,
         });
     });
 });
@@ -190,7 +199,10 @@ describe('RunCalculationUseCase com vários cálculos no mesmo processo', () => 
         const [extra] = toExtraCalculations({ ...savedParams, extraCalculations: [{ correctionIndex: 'IPCA', installments: [] }] });
 
         expect(extra.label).toBe('Cálculo 2');
-        expect(extra.params).toMatchObject({ correctionIndex: 'IPCA', moratoryMode: 'TAXA_LEGAL', moratoryRate: 1, moratoryRateUnit: 'AM', feesMode: 'PERCENTUAL', feesOnPenalty: false });
+        expect(extra.params).toMatchObject({
+            correctionIndex: 'IPCA', moratoryMode: 'TAXA_LEGAL', moratoryRate: 1, moratoryRateUnit: 'AM', feesMode: 'PERCENTUAL',
+            feesOnPenalty: false, feesOnMulta: false, deflate: false,
+        });
         expect(toExtraCalculations(savedParams)).toEqual([]);
     });
 

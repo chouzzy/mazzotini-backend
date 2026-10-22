@@ -373,7 +373,7 @@ model ProcessCalculationParams {
   correctionIndex     String   @default("TJSP_LEI14905")
 
   // Juros moratórios
-  moratoryMode        String   @default("TAXA_LEGAL") // "TAXA_LEGAL" | "PERSONALIZADO"
+  moratoryMode        String   @default("TAXA_LEGAL") // "TAXA_LEGAL" | "TAXA_LEGAL_TEMA1368" | "PERSONALIZADO"
   moratoryRate        Float    @default(1)
   moratoryRateUnit    String   @default("AM")         // "AM" | "AA"
   moratoryType        String   @default("SIMPLES")    // "SIMPLES" | "COMPOSTO"
@@ -394,6 +394,11 @@ model ProcessCalculationParams {
   feesPercentage      Float    @default(0)
   penaltyPercentage   Float    @default(0)
   feesOnPenalty       Boolean  @default(false)
+
+  // Opções do Dr. Calc, desmarcadas por padrão: honorários também sobre a multa e inflação
+  // negativa abaixo do valor nominal. Nulos nos processos salvos antes delas (valem como false)
+  feesOnMulta         Boolean? @default(false)
+  deflate             Boolean? @default(false)
 
   // Parcelas do valor base: [{baseValue, baseDate, description}]
   installments        Json     @default("[]")
