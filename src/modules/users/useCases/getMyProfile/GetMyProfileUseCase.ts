@@ -1,12 +1,12 @@
 import { prisma } from '../../../../prisma';
-import { User } from '@prisma/client';
+import { isApprovedAccount } from '../../../../utils/accountStatus';
 // /src/modules/users/useCases/getMyProfile/GetMyProfileUseCase.ts
 
 
 
 
 class GetMyProfileUseCase {
-    async execute(auth0UserId: string): Promise<User | null> {
+    async execute(auth0UserId: string) {
         console.log(`[PROFILE] A buscar perfil para o utilizador: ${auth0UserId}`);
         const user = await prisma.user.findUnique({
             where: { auth0UserId },
@@ -29,6 +29,10 @@ class GetMyProfileUseCase {
             }
             // =================================================================
         });
+        // Conta ainda não aprovada: o próprio cadastro, sem os investimentos. Os processos e os
+        // anexos da carteira só aparecem depois da aprovação, como nas rotas com dados de cliente
+        // (requireApprovedAccount). O onboarding e a tela de espera não usam esse campo
+        if (user && !isApprovedAccount(user.status)) return { ...user, investments: [] };
         return user;
     }
 }
