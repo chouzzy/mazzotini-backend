@@ -3,7 +3,7 @@ import { SyncProcessUpdatesUseCase } from './modules/creditAssets/useCases/syncP
 import { ImportNewAssetsUseCase } from './modules/creditAssets/useCases/importNewAssets/ImportNewAssetsUseCase';
 import { RetryFailedEnrichmentsUseCase } from './modules/creditAssets/useCases/retryFailedEnrichments/RetryFailedEnrichmentsUseCase';
 import { SyncFeeContractsUseCase } from './modules/creditAssets/useCases/syncFeeContracts/SyncFeeContractsUseCase';
-import { describeIndexLoad, ensureIndexSeriesLoaded, isFirstInstance, updateIndexSeries } from './services/indexUpdateService';
+import { describeIndexLoad, ensureIndexSeriesLoaded, isFirstInstance, notifyStaleIndexes, updateIndexSeries } from './services/indexUpdateService';
 import {
     describeRecalculation, LAST_RESUME_DAY, resumeMonthlyRecalculationIfPending, runMonthlyRecalculation,
 } from './services/monthlyRecalculation';
@@ -114,6 +114,8 @@ export const startScheduledJobs = () => {
         console.log('--- Executando job agendado: Atualizar Índices ---');
         try {
             await updateIndexSeries();
+            // Um índice mais atrasado que o normal quer dizer que a atualização parou: avisa os admins
+            await notifyStaleIndexes();
         } catch (e: any) {
             console.error('--- FALHA no job de atualização de índices:', e.message);
         }

@@ -84,7 +84,7 @@ const INDEX_LABELS: Record<string, string> = {
     [TAXA_LEGAL]:          'taxa legal',
     [TAXA_LEGAL_TEMA1368]: 'taxa legal do Tema 1368',
 };
-const indexLabel = (indexName: string) => INDEX_LABELS[indexName] ?? indexName;
+export const indexLabel = (indexName: string) => INDEX_LABELS[indexName] ?? indexName;
 
 export type DeductionPoint = 'DO_VALOR_CORRIGIDO' | 'APOS_HONORARIOS' | 'APOS_MULTA' | 'APOS_TUDO';
 
