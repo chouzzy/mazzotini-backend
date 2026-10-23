@@ -3,6 +3,7 @@ import { app } from './app';
 import { startScheduledJobs } from './cron';
 import { runMonthlyIndexUpdate, runDailyHealthCheck } from './schedulers/cronJob';
 import { describeIndexLoad, ensureIndexSeriesLoaded } from './services/indexUpdateService';
+import { describeRecalculation, resumeMonthlyRecalculationIfPending } from './services/monthlyRecalculation';
 import { prisma } from './prisma';
 
 const PORT = Number(process.env.PORT) || 8080;
@@ -42,4 +43,12 @@ app.listen(PORT, '0.0.0.0', async () => {
             if (results.length > 0) console.log(`[STARTUP] Carga de índices vazios: ${describeIndexLoad(results)}`);
         })
         .catch((error: any) => console.error('[STARTUP] Falha ao carregar os índices vazios:', error.message));
+
+    // Um reinício no meio do recálculo do dia 5 (deploy, PM2) ou no horário dele: retoma o mês,
+    // sem segurar o servidor. Se falhar, o cron de hora em hora tenta de novo
+    resumeMonthlyRecalculationIfPending()
+        .then(summary => {
+            if (summary) console.log(`[STARTUP] Recálculo mensal retomado. ${describeRecalculation(summary)}`);
+        })
+        .catch((error: any) => console.error('[STARTUP] Falha ao retomar o recálculo mensal:', error.message));
 });

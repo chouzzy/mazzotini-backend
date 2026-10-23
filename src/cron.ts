@@ -3,16 +3,15 @@ import { SyncProcessUpdatesUseCase } from './modules/creditAssets/useCases/syncP
 import { ImportNewAssetsUseCase } from './modules/creditAssets/useCases/importNewAssets/ImportNewAssetsUseCase';
 import { RetryFailedEnrichmentsUseCase } from './modules/creditAssets/useCases/retryFailedEnrichments/RetryFailedEnrichmentsUseCase';
 import { SyncFeeContractsUseCase } from './modules/creditAssets/useCases/syncFeeContracts/SyncFeeContractsUseCase';
-import { RunCalculationUseCase } from './modules/calculator/useCases/runCalculation/RunCalculationUseCase';
-import { prisma } from './prisma';
 import { describeIndexLoad, ensureIndexSeriesLoaded, isFirstInstance, updateIndexSeries } from './services/indexUpdateService';
-import { describeAsset, notifyRecalculationFailures, RecalculationFailure } from './services/recalculationReport';
+import {
+    describeRecalculation, LAST_RESUME_DAY, resumeMonthlyRecalculationIfPending, runMonthlyRecalculation,
+} from './services/monthlyRecalculation';
 
 const syncUseCase = new SyncProcessUpdatesUseCase();
 const importUseCase = new ImportNewAssetsUseCase();
 const retryEnrichmentUseCase = new RetryFailedEnrichmentsUseCase();
 const syncFeeContractsUseCase = new SyncFeeContractsUseCase();
-const runCalculationUseCase = new RunCalculationUseCase();
 
 /**
  * Inicia todos os jobs agendados da aplicação.
@@ -28,6 +27,13 @@ export const startScheduledJobs = () => {
             if (results.length > 0) console.log(`[CRON] Carga de índices vazios: ${describeIndexLoad(results)}`);
         } catch (e: any) {
             console.error('[CRON] Falha ao carregar os índices vazios:', e.message);
+        }
+        // Retoma o recálculo do dia 5 que foi pulado ou interrompido (até o dia 10)
+        try {
+            const summary = await resumeMonthlyRecalculationIfPending();
+            if (summary) console.log(`[CRON] Recálculo mensal retomado. ${describeRecalculation(summary)}`);
+        } catch (e: any) {
+            console.error('[CRON] Falha ao retomar o recálculo mensal (tenta de novo na próxima hora):', e.message);
         }
     }, { timezone: 'America/Sao_Paulo' });
 
@@ -66,48 +72,16 @@ export const startScheduledJobs = () => {
         timezone: "America/Sao_Paulo"
     });
 
-    // Todo dia 5 de cada mês às 04h: atualiza os índices (BCB) e recalcula processos.
+    // Todo dia 5 de cada mês às 04h: atualiza os índices (BCB) e recalcula os processos com
+    // parâmetros de cálculo, pelo mesmo caminho do botão "Calcular". Se este horário for pulado ou
+    // a execução parar no meio, o job de hora em hora retoma (services/monthlyRecalculation.ts).
     cron.schedule('0 4 5 * *', async () => {
         console.log('--- Executando job agendado: Atualizar Índices e Recalcular Processos ---');
-        const now = new Date();
-        const year  = now.getFullYear();
-        const month = now.getMonth() + 1;
-
         try {
-            // 1. Busca os meses publicados desde o último gravado de cada índice
-            await updateIndexSeries(now);
-
-            // 2. Recalcula todos os processos com parâmetros configurados, pelo mesmo
-            // caminho do botão "Calcular": mesmos parâmetros, mesmo log, mesmo valor.
-            const allParams = await prisma.processCalculationParams.findMany();
-            // Número do processo e do Legal One, para o log e o aviso dos recusados
-            const assets = await prisma.creditAsset.findMany({
-                where:  { id: { in: allParams.map(p => p.assetId) } },
-                select: { id: true, legalOneId: true, processNumber: true },
-            });
-            const assetOf = new Map(assets.map(a => [a.id, a]));
-            let ok = 0, withWarnings = 0;
-            const failures: RecalculationFailure[] = [];
-
-            for (const params of allParams) {
-                try {
-                    const result = await runCalculationUseCase.calculateAndSave(params, 'cron', year, month);
-                    if (result.warnings?.length) withWarnings++;
-                    ok++;
-                } catch (e: any) {
-                    const asset   = assetOf.get(params.assetId);
-                    const failure = { assetId: params.assetId, legalOneId: asset?.legalOneId, processNumber: asset?.processNumber, error: e.message };
-                    console.error(`  Erro ao recalcular o processo ${describeAsset(failure)}:`, e.message);
-                    failures.push(failure);
-                }
-            }
-
-            console.log(`  Recálculo concluído: ${ok} sucesso, ${failures.length} falhas, ${withWarnings} com avisos (como um mês ainda sem índice no banco, contado como 0%)`);
-
-            // Um processo recusado mantém o valor anterior: os admins precisam saber quais são
-            await notifyRecalculationFailures(failures);
+            const summary = await runMonthlyRecalculation();
+            if (summary) console.log(`  ${describeRecalculation(summary)}`);
         } catch (e: any) {
-            console.error('  Erro crítico no job de índices/recálculo:', e.message);
+            console.error(`  Erro no recálculo mensal (é retomado de hora em hora até o dia ${LAST_RESUME_DAY}):`, e.message);
         }
     }, { timezone: 'America/Sao_Paulo' });
 
@@ -118,6 +92,8 @@ export const startScheduledJobs = () => {
     // das 3h), para não disputar a cota. Documentos já importados ou com hashtag não
     // reconhecida são pulados sem chamar o Legal One; os novos consultam o contato.
     cron.schedule('0 5 * * *', async () => {
+        // Com o PM2 em cluster, duas instâncias criariam o mesmo documento duas vezes
+        if (!isFirstInstance()) return;
         console.log('--- Executando job agendado: Sincronizar Documentos Financeiros ---');
         try {
             const result = await syncFeeContractsUseCase.execute();
