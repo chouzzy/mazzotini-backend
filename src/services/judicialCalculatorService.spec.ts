@@ -958,4 +958,16 @@ describe('revisão de 23/10: créditos maiores que os débitos, como no Dr. Calc
         expect(result.penaltyValue).toBe(-122.2);
         expect(result.totalValue).toBe(-733.2);
     });
+
+    // Outro caso fictício conferido lá: só o crédito de −R$ 1.000, sem o Art. 523
+    it('só o crédito: honorários sobre o saldo negativo, −1.222,00', async () => {
+        const base = plain('2023-01-15', { moratoryRate: 1, multaPercentage: 10, feesPercentage: 10, penaltyPercentage: 0 });
+        const result = await calculateJudicialDebt({
+            ...base,
+            installments: [{ baseValue: -1000, baseDate: '2023-01-15T00:00:00.000Z', description: 'Crédito' }],
+        }, 2023, 3);
+
+        expect(result.feesValue).toBe(-102);
+        expect(result.totalValue).toBe(-1222);
+    });
 });
