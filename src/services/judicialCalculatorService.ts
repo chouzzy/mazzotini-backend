@@ -668,8 +668,11 @@ export async function calculateJudicialDebt(
 
     // Os honorários só incidem sobre a multa com a opção marcada (o padrão do Dr. Calc é não incidir).
     // Um abatimento "do valor corrigido" maior que o principal deixaria a base negativa, e os
-    // honorários reduziriam o saldo: a base mínima é zero
-    const feesBase    = Math.max(0, params.feesOnMulta ? effectiveSubtotalA : round2(effectiveSubtotalA - multaValue));
+    // honorários reduziriam o saldo: o abatimento leva a base no máximo até zero. Sem abatimento, a
+    // base negativa (créditos maiores que os débitos) fica como está, linear como no Dr. Calc
+    const feesBaseWithout = params.feesOnMulta ? grossSubtotalA : round2(grossSubtotalA - multaValue);
+    const feesBaseWith    = params.feesOnMulta ? effectiveSubtotalA : round2(effectiveSubtotalA - multaValue);
+    const feesBase    = Math.max(Math.min(0, feesBaseWithout), feesBaseWith);
     const isFeesFixed = params.feesMode === 'FIXO';
     const feesValue   = isFeesFixed
         ? round2(params.feesFixedValue ?? 0)
@@ -682,8 +685,9 @@ export async function calculateJudicialDebt(
     // Art. 523, § 1º, do CPC: a multa e os honorários de 10% incidem sobre o débito já com os
     // honorários da condenação, mesmo quando eles são um valor fixo (como no Dr. Calc). No campo
     // único da tela, 20% são a multa e os honorários: cada 10% é uma linha arredondada, como lá
-    // Sobre um saldo negativo (abatimentos maiores que o débito), o Art. 523 não incide
-    const penaltyBase        = Math.max(0, effectiveSubtotalB);
+    // Pela mesma regra dos honorários, os abatimentos levam a base do Art. 523 no máximo até zero; um
+    // saldo negativo de créditos, sem abatimento, fica linear como no Dr. Calc
+    const penaltyBase        = Math.max(Math.min(0, round2(grossSubtotalA + feesValue)), effectiveSubtotalB);
     const penaltyMulta       = Math.min(params.penaltyPercentage, ART_523_FEES_PERCENTAGE);
     const penaltyValue       = round2(round2(penaltyBase * (penaltyMulta / 100))
         + round2(penaltyBase * ((params.penaltyPercentage - penaltyMulta) / 100)));

@@ -943,3 +943,19 @@ describe('revisão de 23/10', () => {
         ]);
     });
 });
+
+describe('revisão de 23/10: créditos maiores que os débitos, como no Dr. Calc', () => {
+    // Caso fictício conferido no Dr. Calc: R$ 1.000 e crédito de −R$ 1.500 em 15/01/2023, índice fixo,
+    // referência 03/2023, juros de 1% a.m., multa de 10%, honorários de 10% e Art. 523 de 20%
+    it('honorários e Art. 523 incidem sobre o saldo negativo, de forma linear: −733,20', async () => {
+        const base = plain('2023-01-15', { moratoryRate: 1, multaPercentage: 10, feesPercentage: 10, penaltyPercentage: 20 });
+        const result = await calculateJudicialDebt({
+            ...base,
+            installments: [...base.installments, { baseValue: -1500, baseDate: '2023-01-15T00:00:00.000Z', description: 'Crédito' }],
+        }, 2023, 3);
+
+        expect(result.feesValue).toBe(-51);
+        expect(result.penaltyValue).toBe(-122.2);
+        expect(result.totalValue).toBe(-733.2);
+    });
+});
