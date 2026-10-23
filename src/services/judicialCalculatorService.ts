@@ -152,6 +152,7 @@ export interface AbatimentoResult {
     correctionFactor: number;
     correctedValue:   number;   // valor atualizado até o mês de referência
     deductionPoint:   DeductionPoint;
+    nominalFloor?:    boolean;  // inflação negativa no período: o fator ficou em 1 (sem "deflacionar")
 }
 
 /** Custa ou despesa: corrigida pelo índice do cálculo até o mês de referência e somada no fim. */
@@ -161,6 +162,7 @@ export interface CustaResult {
     baseValue:        number;
     correctionFactor: number;
     correctedValue:   number;
+    nominalFloor?:    boolean;  // inflação negativa no período: o fator ficou em 1 (sem "deflacionar")
 }
 
 export interface CalculationResult {
@@ -362,6 +364,7 @@ function checkIndexMonths(
     const label = indexLabel(indexName);
     if (!bounds) throw new Error(`Não há dados de ${label} no banco de índices. Avise o suporte.`);
 
+    const pending: number[] = [];   // meses depois do último gravado: entram como 0%, com aviso
     for (const { year, month } of months) {
         if (hasMonth(ymKey(year, month))) continue;
         const n = year * 12 + month;
@@ -374,7 +377,19 @@ function checkIndexMonths(
         if (n <= bounds.last || indexName === TAXA_LEGAL_TEMA1368) {
             throw new Error(`Falta ${label} de ${formatYM(year, month)} no banco de índices. Avise o suporte.`);
         }
-        warnings.add(`${label.charAt(0).toUpperCase() + label.slice(1)} de ${formatYM(year, month)} ainda sem valor no banco: o mês entrou como 0%.`);
+        pending.push(n);
+    }
+
+    // Um aviso por intervalo de meses seguidos, e não um por mês: uma série que parou de ser
+    // atualizada daria uma linha por mês
+    const name = label.charAt(0).toUpperCase() + label.slice(1);
+    for (let i = 0; i < pending.length; ) {
+        let j = i;
+        while (j + 1 < pending.length && pending[j + 1] === pending[j] + 1) j++;
+        warnings.add(i === j
+            ? `${name} de ${boundToYM(pending[i])} ainda sem valor no banco: o mês entrou como 0%.`
+            : `${name} de ${boundToYM(pending[i])} a ${boundToYM(pending[j])} ainda sem valor no banco: os meses entraram como 0%.`);
+        i = j + 1;
     }
 }
 
@@ -462,6 +477,13 @@ export async function calculateJudicialDebt(
     const isFixed    = params.correctionIndex === NAO_ATUALIZAR;
     const courtTable = COURT_TABLES.has(params.correctionIndex);
     const warnings   = new Set<string>();
+
+    // Mês de referência antes de todas as parcelas de débito (ex.: 1926 digitado no lugar de 2026):
+    // nada é corrigido nem tem juros. O cálculo sai, com aviso
+    const firstDebit = parseYM(sortedDebito[0].baseDate);
+    if (referenceYear * 12 + referenceMonth < firstDebit.year * 12 + firstDebit.month) {
+        warnings.add(`O mês de referência (${formatYM(referenceYear, referenceMonth)}) é anterior a todas as parcelas de débito: elas ficaram sem correção nem juros. Confira o mês.`);
+    }
 
     // Antes do Real, o valor estaria em outra moeda: o Dr. Calc recusa, e aqui também
     const fixedDateError = isFixed ? fixedIndexDateError(allSorted) : null;
@@ -614,7 +636,7 @@ export async function calculateJudicialDebt(
     // 3. Processa ABATIMENTOS — corrigi cada um pelo mesmo índice
     const abatimentoResults: AbatimentoResult[] = [];
     for (const abat of abatimentoInstallments) {
-        const { factor } = factorFor(abat.baseDate);
+        const { factor, nominalFloor } = factorFor(abat.baseDate);
         const correctedDeduction = abat.baseValue * factor;
         abatimentoResults.push({
             description:      abat.description || 'Abatimento',
@@ -623,6 +645,7 @@ export async function calculateJudicialDebt(
             correctionFactor: parseFloat(factor.toFixed(8)),
             correctedValue:   round2(correctedDeduction),
             deductionPoint:   abat.deductionPoint ?? 'APOS_TUDO',
+            ...(nominalFloor ? { nominalFloor: true } : {}),
         });
     }
 
@@ -643,8 +666,10 @@ export async function calculateJudicialDebt(
     // DO_VALOR_CORRIGIDO — reduz a base antes dos honorários
     const effectiveSubtotalA = round2(grossSubtotalA - deductAt('DO_VALOR_CORRIGIDO'));
 
-    // Os honorários só incidem sobre a multa com a opção marcada (o padrão do Dr. Calc é não incidir)
-    const feesBase    = params.feesOnMulta ? effectiveSubtotalA : round2(effectiveSubtotalA - multaValue);
+    // Os honorários só incidem sobre a multa com a opção marcada (o padrão do Dr. Calc é não incidir).
+    // Um abatimento "do valor corrigido" maior que o principal deixaria a base negativa, e os
+    // honorários reduziriam o saldo: a base mínima é zero
+    const feesBase    = Math.max(0, params.feesOnMulta ? effectiveSubtotalA : round2(effectiveSubtotalA - multaValue));
     const isFeesFixed = params.feesMode === 'FIXO';
     const feesValue   = isFeesFixed
         ? round2(params.feesFixedValue ?? 0)
@@ -657,10 +682,12 @@ export async function calculateJudicialDebt(
     // Art. 523, § 1º, do CPC: a multa e os honorários de 10% incidem sobre o débito já com os
     // honorários da condenação, mesmo quando eles são um valor fixo (como no Dr. Calc). No campo
     // único da tela, 20% são a multa e os honorários: cada 10% é uma linha arredondada, como lá
+    // Sobre um saldo negativo (abatimentos maiores que o débito), o Art. 523 não incide
+    const penaltyBase        = Math.max(0, effectiveSubtotalB);
     const penaltyMulta       = Math.min(params.penaltyPercentage, ART_523_FEES_PERCENTAGE);
-    const penaltyValue       = round2(round2(effectiveSubtotalB * (penaltyMulta / 100))
-        + round2(effectiveSubtotalB * ((params.penaltyPercentage - penaltyMulta) / 100)));
-    const feesOnPenaltyValue = params.feesOnPenalty ? round2(effectiveSubtotalB * (ART_523_FEES_PERCENTAGE / 100)) : 0;
+    const penaltyValue       = round2(round2(penaltyBase * (penaltyMulta / 100))
+        + round2(penaltyBase * ((params.penaltyPercentage - penaltyMulta) / 100)));
+    const feesOnPenaltyValue = params.feesOnPenalty ? round2(penaltyBase * (ART_523_FEES_PERCENTAGE / 100)) : 0;
     const afterArt523        = round2(effectiveSubtotalB + penaltyValue + feesOnPenaltyValue);
 
     // APOS_MULTA — após Art.523 completo
@@ -672,13 +699,14 @@ export async function calculateJudicialDebt(
     // 5. Custas e despesas, como no Dr. Calc: só a correção monetária, pelo mesmo índice e a partir
     // da data de cada uma, sem juros, multa nem honorários (nem os do Art. 523), somadas no fim
     const custaResults: CustaResult[] = custaInstallments.map(custa => {
-        const { factor } = factorFor(custa.baseDate);
+        const { factor, nominalFloor } = factorFor(custa.baseDate);
         return {
             description:      custa.description || 'Custa ou despesa',
             baseDate:         custa.baseDate,
             baseValue:        custa.baseValue,
             correctionFactor: parseFloat(factor.toFixed(8)),
             correctedValue:   round2(custa.baseValue * factor),
+            ...(nominalFloor ? { nominalFloor: true } : {}),
         };
     });
     const custaTotal = round2(custaResults.reduce((s, c) => s + c.correctedValue, 0));
