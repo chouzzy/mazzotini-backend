@@ -8,6 +8,7 @@
 
 import { Router } from 'express';
 import { checkJwt } from '../middleware/auth';
+import { requireApprovedAccount } from '../middleware/requireApprovedAccount';
 import { ListMyInvestmentsController } from '../modules/investments/useCases/listMyInvestments/ListMyInvestmentsController';
 import { UpdateInvestmentAssociateController } from '../modules/investments/useCases/updateInvestmentAssociate/UpdateInvestmentAssociateController';
 
@@ -56,10 +57,13 @@ const updateInvestmentAssociateController = new UpdateInvestmentAssociateControl
  *                     $ref: '#/components/schemas/CreditAssetSummary'
  *       401:
  *         description: Token inválido ou expirado
+ *       403:
+ *         description: Conta ainda não aprovada (code ACCOUNT_NOT_APPROVED)
  */
 investmentRoutes.get(
     '/api/investments/me',
     checkJwt,
+    requireApprovedAccount,
     listMyInvestmentsController.handle
 );
 
@@ -67,6 +71,7 @@ investmentRoutes.get(
 investmentRoutes.patch(
     '/api/investments/:investmentId/associate',
     checkJwt,
+    requireApprovedAccount,
     updateInvestmentAssociateController.handle
 );
 

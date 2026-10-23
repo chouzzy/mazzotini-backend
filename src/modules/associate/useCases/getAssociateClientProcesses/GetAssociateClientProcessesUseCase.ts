@@ -1,5 +1,9 @@
 import { prisma } from '../../../../prisma';
+import { AppError } from '../../../../errors/AppError';
 import { VISIBLE_UPDATES_FILTER } from '../../../../utils/updateDescriptionParser';
+import { UNSYNCED_STATUSES } from '../../../creditAssets/useCases/listAllAssets/ListAllAssetsUseCase';
+
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
 
 class GetAssociateClientProcessesUseCase {
     async execute(auth0UserId: string, clientId: string) {
@@ -7,19 +11,27 @@ class GetAssociateClientProcessesUseCase {
             where: { auth0UserId },
             select: { id: true },
         });
-        if (!associate) throw new Error('Associado não encontrado.');
+        if (!associate) throw new AppError('Associado não encontrado.', 404);
 
-        // Confirms the client exists
+        // Só os clientes que o associado acompanha em algum processo
+        if (!OBJECT_ID.test(clientId)) throw new AppError('Cliente não encontrado.', 404);
+        const linked = await prisma.investment.count({
+            where: { associateId: associate.id, userId: clientId },
+        });
+        if (!linked) throw new AppError('Cliente não encontrado.', 404);
+
         const client = await prisma.user.findUnique({
             where: { id: clientId },
             select: { id: true, name: true, email: true, profilePictureUrl: true },
         });
-        if (!client) throw new Error('Cliente não encontrado.');
+        if (!client) throw new AppError('Cliente não encontrado.', 404);
 
         const investments = await prisma.investment.findMany({
             where: {
                 associateId: associate.id,
                 userId: clientId,
+                // Como no resto do portal do associado: processo ainda sem os dados do Legal One não aparece
+                asset: { status: { notIn: UNSYNCED_STATUSES } },
             },
             select: {
                 id: true,

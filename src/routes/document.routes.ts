@@ -1,6 +1,7 @@
 // /src/routes/document.routes.ts
 import { Router } from 'express';
 import { checkJwt } from '../middleware/auth';
+import { requireApprovedAccount } from '../middleware/requireApprovedAccount';
 import { GetDownloadUrlController } from '../modules/documents/useCases/getDownloadUrl/GetDownloadUrlController';
 import { GetPrivateDocumentsController } from '../modules/documents/useCases/getPrivateDocuments/GetPrivateDocumentsController';
 
@@ -16,6 +17,7 @@ const getPrivateDocumentsController = new GetPrivateDocumentsController();
 documentRoutes.get(
   '/api/documents/private',
   checkJwt,
+  requireApprovedAccount,
   getPrivateDocumentsController.handle
 );
 
@@ -27,6 +29,7 @@ documentRoutes.get(
 documentRoutes.get(
   '/api/documents/:id/download-url',
   checkJwt,
+  requireApprovedAccount,
   getDownloadUrlController.handle
 );
 

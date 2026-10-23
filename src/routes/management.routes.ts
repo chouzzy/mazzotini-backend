@@ -24,10 +24,12 @@ import { GetUserByIdController } from '../modules/management/useCases/getUserByI
 import { AdminUpdateUserController } from '../modules/management/useCases/adminUpdateUser/AdminUpdateUserController';
 import { AdminDeleteUserDocumentController } from '../modules/management/useCases/adminDeleteUserDocument/AdminDeleteUserDocumentController';
 import { UpdateUserInvestmentsController } from '../modules/management/useCases/updateUserInvestments/UpdateUserInvestmentsController';
+import { ApplyReferralController } from '../modules/management/useCases/applyReferral/ApplyReferralController';
 import { UploadInvestmentDocumentController } from '../modules/management/useCases/uploadInvestmentDocument/UploadInvestmentDocumentController';
 import uploadConfig from '../config/upload';
 import multer from 'multer';
 import { AdminUploadUserDocumentController } from '../modules/management/useCases/adminUploadUserDocument/AdminUploadUserDocumentController';
+import { adminDocumentUpload } from '../modules/management/useCases/adminUploadUserDocument/adminDocumentUpload';
 import { RequestProfileChangeController } from '../modules/management/useCases/requestProfileChange/RequestProfileChangeController';
 import { ReviewProfileChangeController } from '../modules/management/useCases/reviewProfileChange/ReviewProfileChangeController';
 import { ListPendingProfileChangesController } from '../modules/management/useCases/listPendingProfileChanges/ListPendingProfileChangesController';
@@ -52,6 +54,7 @@ const getUserByIdController            = new GetUserByIdController();
 const adminUpdateUserController        = new AdminUpdateUserController();
 const adminDeleteUserDocumentController = new AdminDeleteUserDocumentController();
 const updateUserInvestmentsController  = new UpdateUserInvestmentsController();
+const applyReferralController          = new ApplyReferralController();
 const uploadInvestmentDocumentController = new UploadInvestmentDocumentController();
 const adminUploadUserDocumentController = new AdminUploadUserDocumentController();
 const requestProfileChangeController   = new RequestProfileChangeController();
@@ -393,7 +396,13 @@ managementRoutes.get(
  * /api/management/users/{id}:
  *   patch:
  *     summary: Atualiza dados de um usuário (Admin)
- *     description: Permite ao admin editar qualquer campo do perfil sem passar pelo fluxo de aprovação.
+ *     description: >
+ *       Permite ao admin editar qualquer campo do perfil sem passar pelo fluxo de aprovação.
+ *       Com `applyReferralToInvestments: true`, o associado indicado (`referredById`, que precisa
+ *       ser um associado cadastrado) passa a ser o associado dos processos do cliente, na mesma
+ *       gravação: só os investimentos de `referralInvestmentIds`, quando a lista vem, ou todos. A
+ *       resposta traz `investmentsUpdated`. Uma indicação nova que não é associado, ou é o próprio
+ *       cliente, é recusada com 400.
  *     tags: [Gestão]
  *     security:
  *       - bearerAuth: []
@@ -478,8 +487,16 @@ managementRoutes.delete(
  *                 type: string
  *                 format: binary
  *     responses:
- *       200:
+ *       201:
  *         description: Documento salvo
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 url: { type: string, format: uri }
+ *       400:
+ *         description: Sem arquivo, ou o arquivo veio em outro campo
  *       413:
  *         description: Arquivo maior que 10MB
  *       415:
@@ -489,7 +506,7 @@ managementRoutes.post(
     '/api/management/users/:id/documents',
     checkJwt,
     checkRole([ROLES.ADMIN]),
-    upload.single('document'),
+    adminDocumentUpload,
     adminUploadUserDocumentController.handle
 );
 
@@ -523,6 +540,42 @@ managementRoutes.patch(
     checkJwt,
     checkRole([ROLES.ADMIN]),
     updateUserInvestmentsController.handle
+);
+
+/**
+ * @swagger
+ * /api/management/users/{id}/apply-referral:
+ *   post:
+ *     summary: Leva o associado indicado do cliente para os processos dele
+ *     description: |
+ *       Usa a indicação já gravada (`referredById`, que precisa ser um associado cadastrado) como
+ *       associado dos investimentos do cliente, sem editar o cadastro. Com `investmentIds`, só esses.
+ *     tags: [Gestão]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               investmentIds: { type: array, items: { type: string } }
+ *     responses:
+ *       200:
+ *         description: Quantos processos foram gravados com o associado (`investmentsUpdated`)
+ *       400:
+ *         description: Sem indicação de um associado cadastrado, ou dados inválidos
+ */
+managementRoutes.post(
+    '/api/management/users/:id/apply-referral',
+    checkJwt,
+    checkRole([ROLES.ADMIN]),
+    applyReferralController.handle
 );
 
 /**

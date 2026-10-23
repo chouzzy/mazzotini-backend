@@ -11,6 +11,8 @@
 import { Router } from 'express';
 import { checkJwt } from '../middleware/auth';
 import { checkActionSecret } from '../middleware/checkActionSecret';
+import { checkRole } from '../middleware/checkRole';
+import { ROLES } from '../types';
 import multer from 'multer';
 
 import { CreateUserController } from '../modules/users/useCases/createUser/CreateUserController';
@@ -123,8 +125,8 @@ userRoutes.post('/api/users/sync', checkJwt, syncAuth0UserController.handle);
  * @swagger
  * /api/users:
  *   get:
- *     summary: Lista todos os usuários (para selects)
- *     description: Retorna nome e ID de todos os usuários. Usado para preencher seletores de cliente no formulário de ativos.
+ *     summary: Lista todos os usuários (para selects; admin e operador)
+ *     description: Retorna nome e ID de todos os usuários. Usado para preencher seletores de cliente no formulário de ativos, que só admin e operador abrem.
  *     tags: [Usuários]
  *     security:
  *       - bearerAuth: []
@@ -132,14 +134,14 @@ userRoutes.post('/api/users/sync', checkJwt, syncAuth0UserController.handle);
  *       200:
  *         description: Lista de usuários
  */
-userRoutes.get('/api/users', checkJwt, listUsersController.handle);
+userRoutes.get('/api/users', checkJwt, checkRole([ROLES.ADMIN, ROLES.OPERATOR]), listUsersController.handle);
 
 /**
  * @swagger
  * /api/users/associates:
  *   get:
  *     summary: Lista usuários com role ASSOCIATE
- *     description: Usado no formulário de cadastro para o campo de indicação/associado vinculador.
+ *     description: Usado no formulário de cadastro para o campo de indicação/associado vinculador. Traz o id, o nome com o código e o código; sem e-mail.
  *     tags: [Usuários]
  *     security:
  *       - bearerAuth: []
@@ -185,8 +187,10 @@ userRoutes.get('/api/users/me', checkJwt, getMyProfileController.handle);
  *     summary: Atualiza o perfil do usuário autenticado
  *     description: |
  *       Permite editar dados pessoais, endereços e preferências de contato.
- *       Se o usuário já for ACTIVE, a alteração é enviada para aprovação (PENDING_REVIEW).
- *       Se ainda estiver em onboarding, os dados são salvos diretamente.
+ *       No onboarding, salvar leva o cadastro para PENDING_REVIEW e avisa os admins.
+ *       Com o cadastro aprovado (ACTIVE), as alterações valem na hora, menos o CPF/CNPJ,
+ *       que só o escritório altera (400). A indicação precisa ser um associado (400).
+ *       O consentimento dos termos e da privacidade é gravado com a hora do servidor.
  *     tags: [Usuários]
  *     security:
  *       - bearerAuth: []
@@ -197,8 +201,10 @@ userRoutes.get('/api/users/me', checkJwt, getMyProfileController.handle);
  *           schema:
  *             $ref: '#/components/schemas/UserProfile'
  *     responses:
- *       200:
+ *       204:
  *         description: Perfil atualizado
+ *       400:
+ *         description: Erro de validação, CPF/CNPJ alterado com o cadastro aprovado ou indicação que não é associado
  */
 userRoutes.patch('/api/users/me/profile', checkJwt, updateMyProfileController.handle);
 

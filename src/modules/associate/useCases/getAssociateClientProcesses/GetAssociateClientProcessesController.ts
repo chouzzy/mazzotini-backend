@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { AppError } from '../../../../errors/AppError';
 import { GetAssociateClientProcessesUseCase } from './GetAssociateClientProcessesUseCase';
 
 class GetAssociateClientProcessesController {
@@ -13,7 +14,8 @@ class GetAssociateClientProcessesController {
             const result = await useCase.execute(auth0UserId, clientId);
             return response.status(200).json(result);
         } catch (err: any) {
-            return response.status(400).json({ error: err.message });
+            const status = err instanceof AppError ? err.statusCode : 400;
+            return response.status(status).json({ error: err.message });
         }
     };
 }

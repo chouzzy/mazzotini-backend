@@ -23,7 +23,6 @@ class ListAssociatesController {
                         ? `${String(a.associateSequence).padStart(3, '0')} — ${a.name}`
                         : a.name,
                     associateSequence: a.associateSequence,
-                    email: a.email,
                     role: a.role,
                 }));
 

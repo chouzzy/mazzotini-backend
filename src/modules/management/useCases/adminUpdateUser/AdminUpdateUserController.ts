@@ -18,6 +18,10 @@ class AdminUpdateUserController {
         
         referredById: yup.string().nullable().optional(),
         indication: yup.string().nullable().optional(),
+        // Leva o associado indicado para os processos do cliente (não são campos do cadastro):
+        // só os investimentos listados, os que a tela mostrou ao admin
+        applyReferralToInvestments: yup.boolean().optional(),
+        referralInvestmentIds: yup.array().of(yup.string().matches(/^[a-f0-9]{24}$/i, 'Processo inválido.').required()).optional(),
         
         residentialCep: yup.string().required(),
         residentialStreet: yup.string().required(),
@@ -65,14 +69,18 @@ class AdminUpdateUserController {
             });
 
             // Tratamento de Data
+            const { applyReferralToInvestments, referralInvestmentIds, ...userFields } = validatedData;
             const dataToUpdate = {
-                ...validatedData,
-                birthDate: validatedData.birthDate ? new Date(validatedData.birthDate) : undefined,
+                ...userFields,
+                birthDate: userFields.birthDate ? new Date(userFields.birthDate) : undefined,
             };
 
             // A edição direta vale na hora e descarta as solicitações de alteração pendentes
             const useCase = new AdminUpdateUserUseCase();
-            const updatedUser = await useCase.execute(id, dataToUpdate, { supersedePendingRequests: true });
+            const updatedUser = await useCase.execute(id, dataToUpdate, {
+                supersedePendingRequests: true,
+                ...(applyReferralToInvestments ? { applyReferralToInvestments: true, referralInvestmentIds } : {}),
+            });
 
             return response.status(200).json(updatedUser);
 

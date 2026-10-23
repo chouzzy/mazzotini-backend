@@ -99,7 +99,8 @@ class ListAllFoldersUseCase {
                 currentValue: asset.currentValue,
                 status: asset.status,
                 acquisitionDate: asset.acquisitionDate,
-                mainInvestorName: asset.investors[0]?.user?.name || 'N/A',
+                // Fora de admin e operador, o próprio usuário: o primeiro investimento poderia ser de outro cliente
+                mainInvestorName: (isAdmin ? asset.investors[0] : asset.investors.find(inv => inv.user?.id === currentUserId))?.user?.name || 'N/A',
                 investedValue: asset.acquisitionValue,
                 legalOneType: asset.legalOneType
             }));

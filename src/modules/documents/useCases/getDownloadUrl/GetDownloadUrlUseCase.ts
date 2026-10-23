@@ -2,6 +2,7 @@
 
 import { prisma } from '../../../../prisma';
 import { legalOneApiService } from "../../../../services/legalOneApiService";
+import { canSeePrivateDocuments } from '../getPrivateDocuments/GetPrivateDocumentsUseCase';
 
 class GetDownloadUrlUseCase {
     async execute(documentId: string, auth0UserId: string): Promise<string> {
@@ -15,7 +16,7 @@ class GetDownloadUrlUseCase {
 
         const user = await prisma.user.findUnique({
             where: { auth0UserId },
-            select: { id: true, role: true },
+            select: { id: true, role: true, status: true },
         });
 
         if (!user) {
@@ -25,6 +26,10 @@ class GetDownloadUrlUseCase {
         const isPrivileged = user.role === 'ADMIN' || user.role === 'OPERATOR';
 
         if (!isPrivileged) {
+            // Cadastro ainda em análise não baixa documentos
+            if (!canSeePrivateDocuments(user.status)) {
+                throw new Error("Sem permissão para acessar este documento.");
+            }
             if (document.investorUserId) {
                 if (document.investorUserId !== user.id) {
                     throw new Error("Sem permissão para acessar este documento.");

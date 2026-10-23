@@ -1,6 +1,7 @@
 // /src/modules/users/useCases/updateMyProfile/UpdateMyProfileController.ts
 import { Request, Response } from 'express';
 import { UpdateMyProfileUseCase } from './UpdateMyProfileUseCase';
+import { AppError } from '../../../../errors/AppError';
 import * as yup from 'yup';
 
 interface CustomJWTPayload {
@@ -14,7 +15,8 @@ class UpdateMyProfileController {
         const validationSchema = yup.object().shape({
             name: yup.string().required("O nome é obrigatório."),
             cpfOrCnpj: yup.string().required("O CPF/CNPJ é obrigatório."),
-            cellPhone: yup.string().required("O telemóvel é obrigatório."),
+            cellPhone: yup.string().required("O celular é obrigatório."),
+            phone: yup.string().optional().nullable(),
             gender: yup.string().optional(),
             // CORREÇÃO: Aceita o ID ou a Indicação Manual
             indication: yup.string().nullable().optional(),
@@ -51,6 +53,11 @@ class UpdateMyProfileController {
             nationality: yup.string().optional().nullable(),
             maritalStatus: yup.string().optional().nullable(),
             referredById: yup.string().optional().nullable(), // ID do Associado
+
+            // Consentimento LGPD do onboarding (a hora gravada é a do servidor)
+            consentedToTermsAt: yup.date().optional().nullable(),
+            consentedToPrivacyAt: yup.date().optional().nullable(),
+            termsVersion: yup.string().max(20).optional().nullable(),
         });
 
         const payload = (request as any).auth.payload as CustomJWTPayload;
@@ -75,6 +82,10 @@ class UpdateMyProfileController {
             if (err instanceof yup.ValidationError) {
                 console.error("[PROFILE VALIDATION ERROR]", err.errors);
                 return response.status(400).json({ error: 'Erro de validação.', details: err.errors });
+            }
+            // Regra do cadastro (CPF/CNPJ, indicação): a mensagem vai para a tela
+            if (err instanceof AppError) {
+                return response.status(err.statusCode).json({ error: err.message });
             }
             // Trata outros erros
             console.error("[PROFILE] Erro ao atualizar perfil:", err.message);

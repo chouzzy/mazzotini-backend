@@ -159,7 +159,11 @@ class ListAllAssetsUseCase {
         ]);
 
         const items = assets.map(asset => {
-            const mainInvestment = asset.investors?.[0]; 
+            // Para quem não é admin nem operador, o investidor principal é o próprio usuário: o primeiro
+            // investimento poderia ser de outro cliente
+            const mainInvestment = isInternalViewer
+                ? asset.investors?.[0]
+                : asset.investors?.find(inv => inv.user?.id === user.id);
             const parentProcessNumber = (asset.legalOneType === 'Appeal' || asset.legalOneType === 'ProceduralIssue') && asset.folder?.assets?.length
                 ? asset.folder.assets[0].processNumber
                 : null;
