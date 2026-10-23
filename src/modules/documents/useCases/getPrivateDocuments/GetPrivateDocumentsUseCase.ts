@@ -1,7 +1,8 @@
 import { prisma } from '../../../../prisma';
+import { isApprovedAccount } from '../../../../utils/accountStatus';
 
 /** Cadastro aprovado (ou antigo, sem status): só ele vê os documentos privados. */
-export const canSeePrivateDocuments = (status: string | null | undefined) => !status || status === 'ACTIVE';
+export const canSeePrivateDocuments = isApprovedAccount;
 
 export class GetPrivateDocumentsUseCase {
     async execute(auth0UserId: string) {

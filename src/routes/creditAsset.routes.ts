@@ -15,6 +15,7 @@
 import { Router } from 'express';
 import { checkJwt } from '../middleware/auth';
 import { checkRole } from '../middleware/checkRole';
+import { requireApprovedAccount } from '../middleware/requireApprovedAccount';
 
 import { CreateCreditAssetController } from '../modules/creditAssets/useCases/createCreditAsset/CreateCreditAssetController';
 import { GetAssetByProcessNumberController } from '../modules/creditAssets/useCases/getAssetByProcessNumber/GetAssetByProcessNumberController';
@@ -88,6 +89,7 @@ creditAssetRoutes.get(
     '/api/assets/folders',
     checkJwt,
     checkRole([ROLES.ADMIN, ROLES.OPERATOR, ROLES.INVESTOR, ROLES.ASSOCIATE]),
+    requireApprovedAccount,
     listAllFoldersController.handle
 );
 
@@ -184,6 +186,7 @@ creditAssetRoutes.get(
     '/api/assets',
     checkJwt,
     checkRole([ROLES.ADMIN, ROLES.OPERATOR, ROLES.INVESTOR, ROLES.ASSOCIATE]),
+    requireApprovedAccount,
     listAllAssetsController.handle
 );
 
@@ -288,6 +291,7 @@ creditAssetRoutes.get(
     '/api/assets/:legalOneId',
     checkJwt,
     checkRole([ROLES.ADMIN, ROLES.OPERATOR, ROLES.INVESTOR, ROLES.ASSOCIATE]),
+    requireApprovedAccount,
     getAssetByProcessNumberController.handle
 );
 
@@ -327,10 +331,12 @@ creditAssetRoutes.post(
  * @swagger
  * /api/assets/{assetId}/estimate:
  *   get:
- *     summary: Calcula a estimativa de valor atual do ativo
+ *     summary: Projeção do valor do ativo para os próximos 24 meses
  *     description: |
- *       Aplica o índice configurado (IPCA, IGPM, Selic, etc.) sobre o valor de aquisição
- *       acumulando a variação mês a mês até a data atual. Retorna o valor estimado atualizado.
+ *       Parte do valor atual do ativo e aplica, mês a mês, uma taxa estimada do índice do
+ *       processo mais a taxa adicional. Admin e operador veem qualquer ativo; cliente e
+ *       associado, só os que acompanham e já sincronizados com o Legal One. Exige conta
+ *       aprovada.
  *     tags: [Ativos]
  *     security:
  *       - bearerAuth: []
@@ -341,19 +347,30 @@ creditAssetRoutes.post(
  *         schema: { type: string }
  *     responses:
  *       200:
- *         description: Estimativa calculada
+ *         description: Projeção calculada
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 estimatedValue: { type: 'number', example: 97300.50 }
- *                 indexUsed:      { type: 'string', example: 'IGPM' }
+ *                 currentEstimatedValue: { type: number, example: 97300.50 }
+ *                 timeline:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       date:  { type: string, example: '2026-11-23' }
+ *                       value: { type: number, example: 97786.99 }
+ *       403:
+ *         description: Conta ainda não aprovada (code ACCOUNT_NOT_APPROVED)
+ *       404:
+ *         description: Ativo não encontrado, ou que o usuário não acompanha
  */
 creditAssetRoutes.get(
     '/api/assets/:assetId/estimate',
     checkJwt,
     checkRole([ROLES.ADMIN, ROLES.OPERATOR, ROLES.INVESTOR, ROLES.ASSOCIATE]),
+    requireApprovedAccount,
     getAssetEstimationController.handle
 );
 

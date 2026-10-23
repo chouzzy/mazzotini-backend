@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { checkJwt } from '../middleware/auth';
 import { checkRole } from '../middleware/checkRole';
+import { requireApprovedAccount } from '../middleware/requireApprovedAccount';
 import { GetAssociateDashboardController } from '../modules/associate/useCases/getAssociateDashboard/GetAssociateDashboardController';
 import { GetAssociateClientProcessesController } from '../modules/associate/useCases/getAssociateClientProcesses/GetAssociateClientProcessesController';
 import { GetAssociateAllProcessesController } from '../modules/associate/useCases/getAssociateAllProcesses/GetAssociateAllProcessesController';
@@ -18,6 +19,7 @@ associateRoutes.get(
     '/api/associate/dashboard',
     checkJwt,
     checkRole([ROLES.ASSOCIATE]),
+    requireApprovedAccount,
     getAssociateDashboardController.handle
 );
 
@@ -26,6 +28,7 @@ associateRoutes.get(
     '/api/associate/clients/:clientId/processes',
     checkJwt,
     checkRole([ROLES.ASSOCIATE]),
+    requireApprovedAccount,
     getAssociateClientProcessesController.handle
 );
 
@@ -34,6 +37,7 @@ associateRoutes.get(
     '/api/associate/processes',
     checkJwt,
     checkRole([ROLES.ASSOCIATE]),
+    requireApprovedAccount,
     getAssociateAllProcessesController.handle
 );
 

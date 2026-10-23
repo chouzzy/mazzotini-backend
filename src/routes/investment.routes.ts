@@ -8,6 +8,7 @@
 
 import { Router } from 'express';
 import { checkJwt } from '../middleware/auth';
+import { requireApprovedAccount } from '../middleware/requireApprovedAccount';
 import { ListMyInvestmentsController } from '../modules/investments/useCases/listMyInvestments/ListMyInvestmentsController';
 import { UpdateInvestmentAssociateController } from '../modules/investments/useCases/updateInvestmentAssociate/UpdateInvestmentAssociateController';
 
@@ -60,6 +61,7 @@ const updateInvestmentAssociateController = new UpdateInvestmentAssociateControl
 investmentRoutes.get(
     '/api/investments/me',
     checkJwt,
+    requireApprovedAccount,
     listMyInvestmentsController.handle
 );
 
@@ -67,6 +69,7 @@ investmentRoutes.get(
 investmentRoutes.patch(
     '/api/investments/:investmentId/associate',
     checkJwt,
+    requireApprovedAccount,
     updateInvestmentAssociateController.handle
 );
 
