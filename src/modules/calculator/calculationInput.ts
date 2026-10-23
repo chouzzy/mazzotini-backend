@@ -88,6 +88,10 @@ function fail(calcLabel: string | null, message: string): Error {
     return new Error(calcLabel ? `${calcLabel}: ${message}` : message.charAt(0).toUpperCase() + message.slice(1));
 }
 
+/** Anos aceitos nas datas e no mês de referência. */
+const MIN_YEAR = 1900;
+const MAX_YEAR = 2100;
+
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})(T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})?)?$/;
 
 /**
@@ -100,6 +104,10 @@ export function parseCalendarDate(value: unknown, calcLabel: string | null, what
     const date = match ? new Date(value as string) : null;
     if (!match || !date || isNaN(date.getTime())) throw fail(calcLabel, `${what}: data inválida (${String(value)}).`);
     const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+    // Um ano digitado errado (1023 no lugar de 2023) passaria: o início dos juros não consulta índice
+    if (year < MIN_YEAR || year > MAX_YEAR) {
+        throw fail(calcLabel, `${what}: ano fora do intervalo aceito (${MIN_YEAR} a ${MAX_YEAR}) em ${String(value)}.`);
+    }
     const calendar = new Date(Date.UTC(year, month - 1, day));
     if (calendar.getUTCFullYear() !== year || calendar.getUTCMonth() !== month - 1 || calendar.getUTCDate() !== day) {
         throw fail(calcLabel, `${what}: data inválida (${String(value)}).`);
@@ -123,7 +131,7 @@ export function parseReferenceMonth(rawYear: unknown, rawMonth: unknown): { refe
     if (empty(rawYear) && empty(rawMonth)) return {};
     const year  = toInteger(rawYear);
     const month = toInteger(rawMonth);
-    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12 || year < 1900 || year > 2100) {
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12 || year < MIN_YEAR || year > MAX_YEAR) {
         throw new Error('Mês de referência inválido. Escolha um mês válido ou deixe vazio para usar o mês atual.');
     }
     return { referenceYear: year, referenceMonth: month };
@@ -191,6 +199,8 @@ export function validateCalculation(raw: any, calcLabel: string | null): ValidCa
     for (const [field, label] of Object.entries(NUMBERS)) {
         const value = raw[field] ?? (CALCULATION_DEFAULTS as Record<string, unknown>)[field];
         if (typeof value !== 'number' || !Number.isFinite(value)) throw fail(calcLabel, `${label}: valor inválido.`);
+        // Taxa, percentual ou honorário negativo reduziria o débito
+        if (value < 0) throw fail(calcLabel, `${label}: o valor não pode ser negativo.`);
         values[field] = value;
     }
     for (const [field, label] of Object.entries(FLAGS)) {
