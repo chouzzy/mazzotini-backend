@@ -8,6 +8,8 @@ jest.mock('@prisma/client', () => {
         processCalculationParams: { findUnique: jest.fn(), update: jest.fn() },
         calculationLog: { create: jest.fn() },
     };
+    // Forma de lista: as operações já vêm montadas e são executadas juntas
+    mPrisma.$transaction = jest.fn((operations: unknown[]) => Promise.all(operations));
     return { PrismaClient: jest.fn(() => mPrisma) };
 });
 
@@ -233,5 +235,53 @@ describe('RunCalculationUseCase com vários cálculos no mesmo processo', () => 
             .rejects.toThrow('Contrato 2: Nenhuma parcela informada.');
         expect(prisma.calculationLog.create).not.toHaveBeenCalled();
         expect(prisma.creditAsset.update).not.toHaveBeenCalled();
+    });
+});
+
+describe('RunCalculationUseCase: revisão de 23/10', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        (calculateJudicialDebt as jest.Mock).mockResolvedValue(fakeResult);
+        prisma.creditAsset.findUnique.mockResolvedValue({ id: 'asset-1', legalOneId: 123 });
+        prisma.processCalculationParams.findUnique.mockResolvedValue(savedParams);
+    });
+
+    it('grava o log, os parâmetros e o valor atual numa transação só', async () => {
+        await new RunCalculationUseCase().calculateAndSave(savedParams, 'cron', 2026, 11);
+
+        expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+        expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(3);
+    });
+
+    it('parâmetro gravado com valor desconhecido é recusado antes do motor, sem gravar nada', async () => {
+        await expect(new RunCalculationUseCase().calculateAndSave({ ...savedParams, moratoryType: 'COMPOSTOS' }, 'cron', 2026, 11))
+            .rejects.toThrow('Tipo dos juros moratórios: valor inválido (COMPOSTOS).');
+        expect(calculateJudicialDebt).not.toHaveBeenCalled();
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('num cálculo extra, a recusa diz qual cálculo', async () => {
+        const params = {
+            ...savedParams,
+            extraCalculations: [{
+                label: 'Contrato 2', correctionIndex: 'IPCA', multaPercentage: -5,
+                installments: [{ baseValue: 500, baseDate: '2025-11-15T00:00:00.000Z' }],
+            }],
+        };
+
+        await expect(new RunCalculationUseCase().calculateAndSave(params, 'cron', 2026, 11))
+            .rejects.toThrow('Contrato 2: Multa: o valor não pode ser negativo.');
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('sem o mês na tela, vale o mês de Brasília, e não o do relógio do servidor', async () => {
+        jest.useFakeTimers({ now: new Date('2026-11-01T01:00:00.000Z') });   // 22h de 31/10 em Brasília
+        try {
+            await new RunCalculationUseCase().execute({ legalOneId: 123, auth0UserId: 'auth0|admin-exemplo' });
+
+            expect(calculateJudicialDebt).toHaveBeenCalledWith(expect.anything(), 2026, 10);
+        } finally {
+            jest.useRealTimers();
+        }
     });
 });

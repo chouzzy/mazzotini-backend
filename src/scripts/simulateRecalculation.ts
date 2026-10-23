@@ -14,13 +14,15 @@
 
 import { prisma } from '../prisma';
 import { RunCalculationUseCase } from '../modules/calculator/useCases/runCalculation/RunCalculationUseCase';
+import { saoPauloDateParts } from '../utils/saoPauloDate';
 
 const money = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function referenceFrom(arg: string | undefined): { year: number; month: number } {
     if (!arg) {
-        const now = new Date();
-        return { year: now.getFullYear(), month: now.getMonth() + 1 };
+        // O mês de Brasília, como o cron, e não o do relógio do servidor
+        const { year, month } = saoPauloDateParts();
+        return { year, month };
     }
     const match = arg.match(/^(\d{1,2})\/(\d{4})$/);
     if (!match || +match[1] < 1 || +match[1] > 12) throw new Error(`Data de referência inválida (${arg}). Use MM/AAAA.`);

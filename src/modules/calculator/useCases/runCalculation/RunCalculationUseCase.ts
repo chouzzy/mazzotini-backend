@@ -3,7 +3,8 @@ import { prisma } from '../../../../prisma';
 import {
     calculateJudicialDebt, CalculationParams, CalculationResult, combineResults, Installment,
 } from '../../../../services/judicialCalculatorService';
-import { CALCULATION_DEFAULTS } from '../../calculationInput';
+import { CALCULATION_DEFAULTS, validateCalculation } from '../../calculationInput';
+import { saoPauloDateParts } from '../../../../utils/saoPauloDate';
 
 interface IRequest {
     legalOneId: number;
@@ -86,9 +87,10 @@ class RunCalculationUseCase {
         const params = await prisma.processCalculationParams.findUnique({ where: { assetId: asset.id } });
         if (!params) throw new Error('Parâmetros de cálculo não configurados para este processo.');
 
-        const now   = new Date();
-        const refY  = referenceYear  ?? now.getFullYear();
-        const refM  = referenceMonth ?? (now.getMonth() + 1);
+        // Sem o mês na tela, vale o mês atual de Brasília, e não o do relógio do servidor
+        const today = saoPauloDateParts();
+        const refY  = referenceYear  ?? today.year;
+        const refM  = referenceMonth ?? today.month;
 
         return this.calculateAndSave(params, auth0UserId, refY, refM);
     }
@@ -105,8 +107,10 @@ class RunCalculationUseCase {
     ): Promise<CalculationResult> {
         const { result, paramsSnapshot } = await this.calculate(params, refY, refM);
 
-        // Salva log de cálculo, com o snapshot de todos os parâmetros usados (para reabertura futura)
-        await prisma.calculationLog.create({
+        // As três gravações vão juntas: uma falha no meio deixava o log novo com o valor antigo
+        await prisma.$transaction([
+            // Log do cálculo, com o snapshot de todos os parâmetros usados (para reabertura futura)
+            prisma.calculationLog.create({
             data: {
                 assetId:              params.assetId,
                 calculatedBy,
@@ -122,21 +126,21 @@ class RunCalculationUseCase {
                 breakdown:            result.installmentResults as any,
                 paramsSnapshot:       paramsSnapshot as any,
             },
-        });
-
-        // Atualiza o valor atual do processo e timestamp do último cálculo
-        await prisma.processCalculationParams.update({
-            where: { assetId: params.assetId },
-            data: {
-                lastCalculatedValue: result.totalValue,
-                lastCalculatedAt:    new Date(),
-            },
-        });
-
-        await prisma.creditAsset.update({
-            where: { id: params.assetId },
-            data:  { currentValue: result.totalValue },
-        });
+            }),
+            // Valor e momento do último cálculo
+            prisma.processCalculationParams.update({
+                where: { assetId: params.assetId },
+                data: {
+                    lastCalculatedValue: result.totalValue,
+                    lastCalculatedAt:    new Date(),
+                },
+            }),
+            // Valor atual do processo, o que o cliente vê
+            prisma.creditAsset.update({
+                where: { id: params.assetId },
+                data:  { currentValue: result.totalValue },
+            }),
+        ]);
 
         return result;
     }
@@ -153,9 +157,13 @@ class RunCalculationUseCase {
         const calcParams = toCalculationParams(params);
         const extras     = toExtraCalculations(params);
 
+        // Os parâmetros gravados passam pelas mesmas regras do PUT /params antes do motor: um valor
+        // gravado antes da validação, ou por uma versão mais nova num rollback, vira recusa com a
+        // mensagem (e aviso no recálculo do dia 5), em vez de um cálculo diferente em silêncio
         let result: CalculationResult;
         let paramsSnapshot: object = calcParams;
         if (extras.length === 0) {
+            validateCalculation(calcParams, null);
             result = await calculateJudicialDebt(calcParams, refY, refM);
         } else {
             // Vários cálculos no mesmo processo: cada um é feito por inteiro e o valor é a soma
@@ -163,6 +171,7 @@ class RunCalculationUseCase {
             const results: { label: string; result: CalculationResult }[] = [];
             for (const part of parts) {
                 try {
+                    validateCalculation(part.params, null);
                     results.push({ label: part.label, result: await calculateJudicialDebt(part.params, refY, refM) });
                 } catch (e: any) {
                     throw new Error(`${part.label}: ${e.message}`);
