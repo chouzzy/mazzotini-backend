@@ -45,9 +45,26 @@ class UpdateUserInvestmentsUseCase {
             // A carteira é regravada inteira; a data de aquisição de cada processo continua a mesma
             const previous = await tx.investment.findMany({
                 where: { userId },
-                select: { creditAssetId: true, acquisitionDate: true },
+                select: { creditAssetId: true, acquisitionDate: true, associateId: true },
             });
             const acquisitionDates = new Map(previous.map(p => [p.creditAssetId, p.acquisitionDate]));
+
+            // Associado novo num processo: precisa ser um associado cadastrado (papel ASSOCIATE, o
+            // mesmo critério da lista da tela e da indicação) e não o próprio cliente. O que já
+            // estava gravado no processo passa como está, para uma carteira antiga continuar salvando
+            const previousAssociates = new Map(previous.map(p => [p.creditAssetId, p.associateId]));
+            const newAssociates = [...new Set(investments
+                .filter(inv => inv.associateId && inv.associateId !== previousAssociates.get(inv.assetId))
+                .map(inv => inv.associateId as string))];
+            if (newAssociates.includes(userId)) {
+                throw new Error("O cliente não pode ser o associado dos próprios processos.");
+            }
+            if (newAssociates.length > 0) {
+                const associates = await tx.user.count({ where: { id: { in: newAssociates }, role: 'ASSOCIATE' } });
+                if (associates !== newAssociates.length) {
+                    throw new Error("Um dos associados da carteira não é um associado cadastrado. Recarregue a página e confira antes de salvar.");
+                }
+            }
 
             // Nuke
             await tx.investment.deleteMany({ where: { userId: userId } });
