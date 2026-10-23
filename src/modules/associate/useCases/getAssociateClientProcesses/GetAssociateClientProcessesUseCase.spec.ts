@@ -26,8 +26,16 @@ beforeEach(() => {
         : where.id === OTHER_ID ? { id: OTHER_ID, name: 'Outro Cliente', email: 'outro@exemplo.com', profilePictureUrl: null }
         : null,
     ));
-    // Só o CLIENT_ID tem processo com o associado
-    prisma.investment.count.mockImplementation(({ where }: any) => Promise.resolve(where.userId === CLIENT_ID ? 1 : 0));
+    // O CLIENT_ID tem processo com o associado; o OTHER_ID também tem processo, mas com outro
+    // associado. O filtro que a consulta não mandar fica aberto, para um filtro esquecido no use
+    // case aparecer no teste
+    const investments = [
+        { userId: CLIENT_ID, associateId: 'associado-1' },
+        { userId: OTHER_ID,  associateId: 'associado-2' },
+    ];
+    prisma.investment.count.mockImplementation(({ where }: any) => Promise.resolve(investments.filter(inv =>
+        (where.userId === undefined || inv.userId === where.userId)
+        && (where.associateId === undefined || inv.associateId === where.associateId)).length));
     prisma.investment.findMany.mockResolvedValue([]);
 });
 
