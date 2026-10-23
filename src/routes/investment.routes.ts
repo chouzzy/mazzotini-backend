@@ -57,6 +57,8 @@ const updateInvestmentAssociateController = new UpdateInvestmentAssociateControl
  *                     $ref: '#/components/schemas/CreditAssetSummary'
  *       401:
  *         description: Token inválido ou expirado
+ *       403:
+ *         description: Conta ainda não aprovada (code ACCOUNT_NOT_APPROVED)
  */
 investmentRoutes.get(
     '/api/investments/me',
