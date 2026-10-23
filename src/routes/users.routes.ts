@@ -11,6 +11,8 @@
 import { Router } from 'express';
 import { checkJwt } from '../middleware/auth';
 import { checkActionSecret } from '../middleware/checkActionSecret';
+import { checkRole } from '../middleware/checkRole';
+import { ROLES } from '../types';
 import multer from 'multer';
 
 import { CreateUserController } from '../modules/users/useCases/createUser/CreateUserController';
@@ -123,8 +125,8 @@ userRoutes.post('/api/users/sync', checkJwt, syncAuth0UserController.handle);
  * @swagger
  * /api/users:
  *   get:
- *     summary: Lista todos os usuários (para selects)
- *     description: Retorna nome e ID de todos os usuários. Usado para preencher seletores de cliente no formulário de ativos.
+ *     summary: Lista todos os usuários (para selects; admin e operador)
+ *     description: Retorna nome e ID de todos os usuários. Usado para preencher seletores de cliente no formulário de ativos, que só admin e operador abrem.
  *     tags: [Usuários]
  *     security:
  *       - bearerAuth: []
@@ -132,14 +134,14 @@ userRoutes.post('/api/users/sync', checkJwt, syncAuth0UserController.handle);
  *       200:
  *         description: Lista de usuários
  */
-userRoutes.get('/api/users', checkJwt, listUsersController.handle);
+userRoutes.get('/api/users', checkJwt, checkRole([ROLES.ADMIN, ROLES.OPERATOR]), listUsersController.handle);
 
 /**
  * @swagger
  * /api/users/associates:
  *   get:
  *     summary: Lista usuários com role ASSOCIATE
- *     description: Usado no formulário de cadastro para o campo de indicação/associado vinculador.
+ *     description: Usado no formulário de cadastro para o campo de indicação/associado vinculador. Traz o id, o nome com o código e o código; sem e-mail.
  *     tags: [Usuários]
  *     security:
  *       - bearerAuth: []
