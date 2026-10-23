@@ -29,6 +29,7 @@ import { UploadInvestmentDocumentController } from '../modules/management/useCas
 import uploadConfig from '../config/upload';
 import multer from 'multer';
 import { AdminUploadUserDocumentController } from '../modules/management/useCases/adminUploadUserDocument/AdminUploadUserDocumentController';
+import { adminDocumentUpload } from '../modules/management/useCases/adminUploadUserDocument/adminDocumentUpload';
 import { RequestProfileChangeController } from '../modules/management/useCases/requestProfileChange/RequestProfileChangeController';
 import { ReviewProfileChangeController } from '../modules/management/useCases/reviewProfileChange/ReviewProfileChangeController';
 import { ListPendingProfileChangesController } from '../modules/management/useCases/listPendingProfileChanges/ListPendingProfileChangesController';
@@ -486,8 +487,16 @@ managementRoutes.delete(
  *                 type: string
  *                 format: binary
  *     responses:
- *       200:
+ *       201:
  *         description: Documento salvo
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 url: { type: string, format: uri }
+ *       400:
+ *         description: Sem arquivo, ou o arquivo veio em outro campo
  *       413:
  *         description: Arquivo maior que 10MB
  *       415:
@@ -497,7 +506,7 @@ managementRoutes.post(
     '/api/management/users/:id/documents',
     checkJwt,
     checkRole([ROLES.ADMIN]),
-    upload.single('document'),
+    adminDocumentUpload,
     adminUploadUserDocumentController.handle
 );
 
