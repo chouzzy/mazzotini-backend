@@ -178,11 +178,13 @@ export async function resumeMonthlyRecalculationIfPending(
  */
 async function noticeUnfinishedMonth(period: string, year: number, month: number, started: boolean): Promise<void> {
     if (!started) {
-        // Sem registro e com log do cron no mês: é um mês do cron antigo, que não gravava o andamento
+        // Sem registro do mês: com log do cron no mês, é um mês do cron antigo, que não gravava o
+        // andamento; sem nenhum processo com cálculo, não havia o que recalcular
         const legacyLogs = await prisma.calculationLog.count({
             where: { calculatedBy: 'cron', referenceYear: year, referenceMonth: month },
         });
         if (legacyLogs > 0) return;
+        if (await prisma.processCalculationParams.count() === 0) return;
     }
 
     const sent = await notifyAllAdmins({

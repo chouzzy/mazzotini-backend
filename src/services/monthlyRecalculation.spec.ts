@@ -8,7 +8,7 @@ import { notifyAllAdmins } from './notificationService';
 jest.mock('@prisma/client', () => {
     const mPrisma: any = {
         jobRun:                   { upsert: jest.fn(), update: jest.fn(), findUnique: jest.fn() },
-        processCalculationParams: { findMany: jest.fn() },
+        processCalculationParams: { findMany: jest.fn(), count: jest.fn() },
         calculationLog:           { findMany: jest.fn(), count: jest.fn() },
         creditAsset:              { findMany: jest.fn() },
         $runCommandRaw:           jest.fn(),
@@ -45,6 +45,7 @@ beforeEach(() => {
     (isFirstInstance as jest.Mock).mockReturnValue(true);
     (notifyAllAdmins as jest.Mock).mockResolvedValue(true);
     prisma.processCalculationParams.findMany.mockResolvedValue(params);
+    prisma.processCalculationParams.count.mockResolvedValue(params.length);
     prisma.calculationLog.findMany.mockResolvedValue([]);
     prisma.calculationLog.count.mockResolvedValue(0);
     prisma.creditAsset.findMany.mockResolvedValue([{ id: 'asset-2', legalOneId: 222, processNumber: '0000002-00.2020.8.26.0100' }]);
@@ -184,6 +185,14 @@ describe('resumeMonthlyRecalculationIfPending', () => {
         expect(prisma.jobRun.upsert).toHaveBeenCalledWith(expect.objectContaining({
             create: { job: 'MONTHLY_RECALCULATION', period: '2026-11', status: 'MISSED', notifiedAt: expect.any(Date) },
         }));
+    });
+
+    it('depois do dia 10, sem registro e sem nenhum processo com cálculo: não havia o que recalcular, e não avisa', async () => {
+        prisma.processCalculationParams.count.mockResolvedValue(0);
+
+        await expect(resumeMonthlyRecalculationIfPending(at(12, 10), runner)).resolves.toBeNull();
+        expect(notifyAllAdmins).not.toHaveBeenCalled();
+        expect(prisma.jobRun.upsert).not.toHaveBeenCalled();
     });
 
     it('depois do dia 10, mês do cron antigo (sem registro, com log): nem recalcula nem avisa', async () => {
