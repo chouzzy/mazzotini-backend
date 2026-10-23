@@ -270,7 +270,7 @@ describe('RunCalculationUseCase: revisão de 23/10', () => {
         };
 
         await expect(new RunCalculationUseCase().calculateAndSave(params, 'cron', 2026, 11))
-            .rejects.toThrow('Contrato 2: Multa: o valor não pode ser negativo.');
+            .rejects.toThrow('Contrato 2: multa: o valor não pode ser negativo.');
         expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
@@ -283,5 +283,20 @@ describe('RunCalculationUseCase: revisão de 23/10', () => {
         } finally {
             jest.useRealTimers();
         }
+    });
+});
+
+describe('RunCalculationUseCase: erro do banco num cálculo extra', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    it('sobe como está (sem o nome do cálculo), para o recálculo mensal reconhecer o banco fora do ar', async () => {
+        const offline = Object.assign(new Error('Raw query failed. Server selection timeout'), { name: 'PrismaClientKnownRequestError', code: 'P2010' });
+        (calculateJudicialDebt as jest.Mock).mockResolvedValueOnce(fakeResult).mockRejectedValueOnce(offline);
+        const params = {
+            ...savedParams,
+            extraCalculations: [{ label: 'Contrato 2', correctionIndex: 'IPCA', installments: [{ baseValue: 500, baseDate: '2025-11-15T00:00:00.000Z' }] }],
+        };
+
+        await expect(new RunCalculationUseCase().calculate(params, 2026, 11)).rejects.toBe(offline);
     });
 });

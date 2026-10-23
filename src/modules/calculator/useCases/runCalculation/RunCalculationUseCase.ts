@@ -170,10 +170,13 @@ class RunCalculationUseCase {
             const parts = [{ label: params.calculationLabel?.trim() || 'Cálculo 1', params: calcParams }, ...extras];
             const results: { label: string; result: CalculationResult }[] = [];
             for (const part of parts) {
+                // A validação já põe o nome do cálculo na frente, como no PUT /params
+                validateCalculation(part.params, part.label);
                 try {
-                    validateCalculation(part.params, null);
                     results.push({ label: part.label, result: await calculateJudicialDebt(part.params, refY, refM) });
                 } catch (e: any) {
+                    // Erro do banco sobe como está: o recálculo mensal precisa saber que não é recusa
+                    if (typeof e?.name === 'string' && e.name.startsWith('PrismaClient')) throw e;
                     throw new Error(`${part.label}: ${e.message}`);
                 }
             }
