@@ -2,8 +2,8 @@
  * Simula o recálculo mensal sem gravar nada.
  *
  * Para cada processo com parâmetros de cálculo, calcula pelo mesmo caminho do botão "Calcular" e
- * do cron do dia 5 e mostra o valor atual, o simulado, a diferença, os avisos (meses sem índice
- * no banco, contados como 0%) e os processos que o cálculo recusa (eles manteriam o valor atual).
+ * do cron do dia 5 e mostra o valor atual, o simulado, a diferença, os avisos (como meses sem
+ * índice no banco, contados como 0%) e os processos que o cálculo recusa (eles manteriam o valor atual).
  * Só lê o banco.
  *
  * Uso, no servidor e na pasta do backend:
@@ -14,13 +14,15 @@
 
 import { prisma } from '../prisma';
 import { RunCalculationUseCase } from '../modules/calculator/useCases/runCalculation/RunCalculationUseCase';
+import { saoPauloDateParts } from '../utils/saoPauloDate';
 
 const money = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function referenceFrom(arg: string | undefined): { year: number; month: number } {
     if (!arg) {
-        const now = new Date();
-        return { year: now.getFullYear(), month: now.getMonth() + 1 };
+        // O mês de Brasília, como o cron, e não o do relógio do servidor
+        const { year, month } = saoPauloDateParts();
+        return { year, month };
     }
     const match = arg.match(/^(\d{1,2})\/(\d{4})$/);
     if (!match || +match[1] < 1 || +match[1] > 12) throw new Error(`Data de referência inválida (${arg}). Use MM/AAAA.`);

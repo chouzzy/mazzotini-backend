@@ -77,8 +77,19 @@ describe('SetCalculationParamsUseCase', () => {
             multaPercentage: 0,
             feesMode: 'PERCENTUAL',
             feesFixedValue: 0,
+            feesOnMulta: false,
+            deflate: false,
             installments: [{ baseValue: 700, baseDate: '2025-11-15T00:00:00.000Z' }],
         })]);
+    });
+
+    it('grava o modo Tema 1368 e as opções do Dr. Calc; sem elas, as opções ficam desmarcadas', async () => {
+        await save({ moratoryMode: 'TAXA_LEGAL_TEMA1368', feesOnMulta: true, deflate: true });
+        expect(upsertArgs().update).toMatchObject({ moratoryMode: 'TAXA_LEGAL_TEMA1368', feesOnMulta: true, deflate: true });
+
+        jest.clearAllMocks();
+        await save({});
+        expect(upsertArgs().update).toMatchObject({ feesOnMulta: false, deflate: false });
     });
 
     it('cria o registro com os mesmos campos quando o processo ainda não tinha parâmetros', async () => {
@@ -103,6 +114,9 @@ describe('SetCalculationParamsUseCase', () => {
         ['data em outro formato', { compensatoryStartDate: '15/11/2025' }, 'Contrato B: início dos juros remuneratórios: data inválida (15/11/2025).'],
         ['número em texto', { feesMode: 'FIXO', feesFixedValue: '1000' }, 'Contrato B: honorários (R$): valor inválido.'],
         ['booleano em texto', { feesOnPenalty: 'false' }, 'Contrato B: honorários do Art. 523: valor inválido.'],
+        ['honorários sobre a multa em texto', { feesOnMulta: 'true' }, 'Contrato B: honorários sobre a multa: valor inválido.'],
+        ['deflacionar em número', { deflate: 1 }, 'Contrato B: deflacionar: valor inválido.'],
+        ['modo de juros desconhecido', { moratoryMode: 'TEMA_1368' }, 'Contrato B: modo dos juros moratórios: valor inválido (TEMA_1368).'],
         ['opção desconhecida', { moratoryRateUnit: 'AS' }, 'Contrato B: unidade dos juros moratórios: valor inválido (AS).'],
         ['valor de parcela em texto', { installments: [{ baseValue: '700', baseDate: '2025-11-15' }] }, 'Contrato B: parcela 1: valor inválido.'],
         ['sem parcela de débito', { installments: [{ baseValue: 100, baseDate: '2025-11-15', type: 'ABATIMENTO' }] }, 'Contrato B: informe ao menos uma parcela de débito.'],
@@ -110,12 +124,29 @@ describe('SetCalculationParamsUseCase', () => {
         ['tipo de parcela desconhecido', { installments: [{ baseValue: 700, baseDate: '2025-11-15', type: 'MULTA' }] }, 'Contrato B: parcela 1: tipo inválido (MULTA).'],
         ['custa negativa', { installments: [{ baseValue: 700, baseDate: '2025-11-15' }, { baseValue: -100, baseDate: '2025-11-15', type: 'CUSTA' }] }, 'Contrato B: parcela 2: o valor não pode ser negativo.'],
         ['abatimento negativo', { installments: [{ baseValue: 700, baseDate: '2025-11-15' }, { baseValue: -50, baseDate: '2025-11-15', type: 'ABATIMENTO' }] }, 'Contrato B: parcela 2: o valor não pode ser negativo.'],
+        ['multa negativa', { multaPercentage: -10 }, 'Contrato B: multa: o valor não pode ser negativo.'],
+        ['honorários negativos', { feesPercentage: -10 }, 'Contrato B: honorários (%): o valor não pode ser negativo.'],
+        ['honorário fixo negativo', { feesMode: 'FIXO', feesFixedValue: -1000 }, 'Contrato B: honorários (R$): o valor não pode ser negativo.'],
+        ['Art. 523 negativo', { penaltyPercentage: -10 }, 'Contrato B: multa do Art. 523: o valor não pode ser negativo.'],
+        ['taxa de juros negativa', { moratoryMode: 'PERSONALIZADO', moratoryRate: -1 }, 'Contrato B: taxa dos juros moratórios: o valor não pode ser negativo.'],
+        ['ano digitado errado no início dos juros', { moratoryStartDate: '1023-01-01' }, 'Contrato B: início dos juros moratórios: ano fora do intervalo aceito (1900 a 2100) em 1023-01-01.'],
+        ['ano digitado errado numa parcela', { installments: [{ baseValue: 700, baseDate: '2205-11-15' }] }, 'Contrato B: parcela 1: ano fora do intervalo aceito (1900 a 2100) em 2205-11-15.'],
         ['sem índice', { correctionIndex: '' }, 'Contrato B: escolha o índice de correção.'],
         ['índice que a tela antiga gravava', { correctionIndex: 'Outro' }, 'Contrato B: índice de correção desconhecido (Outro). Escolha um índice da lista.'],
         ['"fixo" com parcela anterior ao Real', { correctionIndex: 'NAO_ATUALIZAR', installments: [{ baseValue: 700, baseDate: '1990-01-15' }] }, 'Contrato B: "Não atualizar (fixo)" vale para datas a partir de 01/07/1994. Mude a data da parcela de 15/01/1990 ou escolha outro índice.'],
     ])('recusa cálculo extra (%s) sem gravar nada', async (_, overrides, message) => {
         await expect(save({ extraCalculations: [extraCalculation(overrides)] })).rejects.toThrow(message);
         expect(prisma.processCalculationParams.upsert).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['taxa de juros negativa na taxa legal (o campo some da tela)', { moratoryMode: 'TAXA_LEGAL', moratoryRate: -1 }],
+        ['percentual negativo com honorário fixo', { feesMode: 'FIXO', feesFixedValue: 1000, feesPercentage: -10 }],
+        ['honorário fixo negativo com honorário em percentual', { feesMode: 'PERCENTUAL', feesFixedValue: -1000 }],
+    ])('aceita negativo esquecido em campo que o modo não usa (%s)', async (_, overrides) => {
+        await save({ extraCalculations: [extraCalculation(overrides)] });
+
+        expect(prisma.processCalculationParams.upsert).toHaveBeenCalled();
     });
 
     it.each([

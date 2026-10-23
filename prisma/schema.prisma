@@ -373,7 +373,7 @@ model ProcessCalculationParams {
   correctionIndex     String   @default("TJSP_LEI14905")
 
   // Juros moratórios
-  moratoryMode        String   @default("TAXA_LEGAL") // "TAXA_LEGAL" | "PERSONALIZADO"
+  moratoryMode        String   @default("TAXA_LEGAL") // "TAXA_LEGAL" | "TAXA_LEGAL_TEMA1368" | "PERSONALIZADO"
   moratoryRate        Float    @default(1)
   moratoryRateUnit    String   @default("AM")         // "AM" | "AA"
   moratoryType        String   @default("SIMPLES")    // "SIMPLES" | "COMPOSTO"
@@ -394,6 +394,11 @@ model ProcessCalculationParams {
   feesPercentage      Float    @default(0)
   penaltyPercentage   Float    @default(0)
   feesOnPenalty       Boolean  @default(false)
+
+  // Opções do Dr. Calc, desmarcadas por padrão: honorários também sobre a multa e inflação
+  // negativa abaixo do valor nominal. Nulos nos processos salvos antes delas (valem como false)
+  feesOnMulta         Boolean? @default(false)
+  deflate             Boolean? @default(false)
 
   // Parcelas do valor base: [{baseValue, baseDate, description}]
   installments        Json     @default("[]")
@@ -470,4 +475,22 @@ model SystemNotification {
 
   createdAt DateTime? @default(now())
   updatedAt DateTime? @updatedAt
+}
+// ==========================================
+//  MODEL: EXECUÇÕES DE JOBS (JobRun)
+// ==========================================
+// Andamento dos jobs que precisam ser retomados ou avisados uma vez só: o recálculo mensal do
+// dia 5 (retomado se for pulado ou interrompido; ver services/monthlyRecalculation.ts) e o aviso
+// de índice que parou de ser atualizado. Um registro por job e período.
+model JobRun {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  job        String    // MONTHLY_RECALCULATION | INDEX_STALE
+  period     String    // ex.: "2026-11", ou "IPCA:2026-11" no aviso de índice
+  status     String?   // RUNNING | DONE | MISSED (não rodou na janela)
+  startedAt  DateTime? @default(now())
+  finishedAt DateTime?
+  notifiedAt DateTime? // aviso aos admins, para não repetir
+  summary    Json?
+
+  @@unique([job, period])
 }

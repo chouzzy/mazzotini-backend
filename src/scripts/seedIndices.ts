@@ -3,7 +3,7 @@
  *
  * Uso: npx ts-node src/scripts/seedIndices.ts
  *
- * Busca séries históricas da API do BCB a partir de jan/2000 e popula
+ * Busca séries históricas da API do BCB a partir de jan/2000 (a taxa legal + Tema 1368, de mar/1995) e popula
  * a collection IndexSeries no banco.
  *
  * Índices populados:
@@ -18,11 +18,13 @@
  *   TJMG_CORREGEDORIA     — TJMG: tabela da Corregedoria, pelo INPC do mês anterior
  *   SELIC         — Meta SELIC diária acumulada (jan/2024+)
  *   TAXA_LEGAL    — taxa legal da Lei 14.905 (Res. CMN 5.171: SELIC e IPCA-15 do mês anterior), ago/2024+
+ *   TAXA_LEGAL_TEMA1368 — taxa legal + Tema 1368 do STJ (SELIC e IPCA-E do mês anterior), mar/1995 a jul/2024
  */
 
 import { PrismaClient } from '@prisma/client';
 import {
-    fetchIndexSeries, fetchTJSPSeries, fetchTJPRSeries, fetchTJMGSeries, fetchSelicSeries, fetchTaxaLegalSeries, IBGEDataPoint,
+    fetchIndexSeries, fetchTJSPSeries, fetchTJPRSeries, fetchTJMGSeries, fetchSelicSeries, fetchTaxaLegalSeries,
+    fetchTaxaLegalTema1368Series, IBGEDataPoint,
 } from '../services/ibgeService';
 
 const prisma = new PrismaClient();
@@ -72,6 +74,8 @@ async function main() {
         { name: 'SELIC', label: 'Meta SELIC diária acumulada (jan/2024+)',                       fetcher: () => fetchSelicSeries(2024, 1) },
         // Taxa legal dos juros de mora desde 30/08/2024
         { name: 'TAXA_LEGAL', label: 'Taxa legal (SELIC e IPCA-15 do mês anterior, ago/2024+)', fetcher: () => fetchTaxaLegalSeries(2024, 8) },
+        // Taxa legal + Tema 1368 dos juros de mora antes de 08/2024 (série histórica)
+        { name: 'TAXA_LEGAL_TEMA1368', label: 'Taxa legal + Tema 1368 (SELIC e IPCA-E do mês anterior, mar/1995 a jul/2024)', fetcher: fetchTaxaLegalTema1368Series },
     ];
 
     for (const idx of indices) {

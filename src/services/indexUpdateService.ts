@@ -12,15 +12,20 @@
  * - TAXA_LEGAL: a série inteira, desde 08/2024, a cada execução (são poucos meses): acompanha uma
  *   revisão do BCB e completa um mês que tenha faltado. A taxa do mês M usa a SELIC e o IPCA-15
  *   de M-1, que saem no começo do mês.
+ * - TAXA_LEGAL_TEMA1368 não entra aqui: é histórica (03/1995 a 07/2024) e só é carregada quando está
+ *   vazia, por ensureIndexSeriesLoaded ou pelo seed.
  *
  * Um mês que ainda não saiu entra na próxima execução, e um índice com erro não impede os outros.
  */
 
 import { prisma } from '../prisma';
 import {
-    fetchIndexSeries, fetchSelicSeries, fetchTaxaLegalSeries, fetchTJMGSeries, fetchTJPRSeries, fetchTJSPSeries,
-    IBGEDataPoint, shiftMonth,
+    fetchIndexSeries, fetchSelicSeries, fetchTaxaLegalSeries, fetchTaxaLegalTema1368Series, fetchTJMGSeries,
+    fetchTJPRSeries, fetchTJSPSeries, IBGEDataPoint, shiftMonth, TAXA_LEGAL_TEMA1368_MONTHS,
 } from './ibgeService';
+import { indexLabel } from './judicialCalculatorService';
+import { notifyAllAdmins } from './notificationService';
+import { saoPauloDateParts } from '../utils/saoPauloDate';
 
 type YearMonth = { year: number; month: number };
 
@@ -43,6 +48,9 @@ const COURT_TABLES: { indexName: string; fetchTable: typeof fetchTJPRSeries }[] 
 
 // Taxa legal da Lei 14.905/2024, a partir de 30/08/2024 (o mês de agosto entra pelos dois últimos dias)
 const TAXA_LEGAL = 'TAXA_LEGAL';
+
+// Taxa legal + Tema 1368 do STJ, de 03/1995 a 07/2024 (o tamanho vem de TAXA_LEGAL_TEMA1368_MONTHS)
+const TAXA_LEGAL_TEMA1368 = 'TAXA_LEGAL_TEMA1368';
 
 // Início usado quando o índice ainda não tem nenhum mês gravado (o mesmo do seed)
 const DEFAULT_START: YearMonth       = { year: 2000, month: 1 };
@@ -111,9 +119,11 @@ async function updateAllSeries(now: Date): Promise<IndexUpdateResult[]> {
 
 /**
  * Carrega as séries que o cálculo exige e que podem estar vazias depois de um deploy: a taxa
- * legal (série nova) e as tabelas do TJPR e do TJMG (quando o seed não rodou). Só busca as que
- * não têm nenhum mês gravado; as outras seguem pelo cron do dia 5. Roda no início do servidor e
- * a cada hora, então um BCB fora do ar no deploy se resolve sozinho.
+ * legal e a taxa legal + Tema 1368 (séries novas) e as tabelas do TJPR e do TJMG (quando o seed
+ * não rodou). Só busca as que não têm nenhum mês gravado; as outras seguem pelo cron do dia 5. A do
+ * Tema 1368, que é histórica e tem tamanho fixo, também é completada quando está pela metade (uma
+ * carga interrompida), já que o cron não a busca. Roda no início do servidor e a cada hora, então
+ * um BCB fora do ar no deploy se resolve sozinho.
  *
  * Cada série entra de uma vez (um createMany), e não mês a mês: um cálculo que rode durante a
  * carga quase sempre vê a série vazia ou inteira. Não é uma transação, então sobra uma janela de
@@ -133,20 +143,30 @@ export function ensureIndexSeriesLoaded(now = new Date()): Promise<IndexUpdateRe
 
 async function loadEmptySeries(now: Date): Promise<IndexUpdateResult[]> {
     const current: YearMonth = { year: now.getFullYear(), month: now.getMonth() + 1 };
-    const series = [
-        { indexName: TAXA_LEGAL, start: TAXA_LEGAL_START, fetchSeries: fetchTaxaLegalSeries },
-        ...COURT_TABLES.map(t => ({ indexName: t.indexName, start: DEFAULT_START, fetchSeries: t.fetchTable })),
+    const series: { indexName: string; fetchSeries: () => Promise<IBGEDataPoint[]>; months?: number }[] = [
+        { indexName: TAXA_LEGAL, fetchSeries: () => fetchTaxaLegalSeries(TAXA_LEGAL_START.year, TAXA_LEGAL_START.month, current.year, current.month) },
+        { indexName: TAXA_LEGAL_TEMA1368, fetchSeries: fetchTaxaLegalTema1368Series, months: TAXA_LEGAL_TEMA1368_MONTHS },
+        ...COURT_TABLES.map(t => ({
+            indexName:   t.indexName,
+            fetchSeries: () => t.fetchTable(DEFAULT_START.year, DEFAULT_START.month, current.year, current.month),
+        })),
     ];
     const results: IndexUpdateResult[] = [];
 
-    for (const { indexName, start, fetchSeries } of series) {
-        if (await lastStoredMonth(indexName)) continue;
+    for (const { indexName, fetchSeries, months } of series) {
+        // Série de tamanho fixo: conta os meses; as outras só são carregadas quando vazias
+        const stored = months ? await prisma.indexSeries.count({ where: { indexName } }) : (await lastStoredMonth(indexName) ? 1 : 0);
+        if (stored >= (months ?? 1)) continue;
         results.push(await run(indexName, async () => {
-            const points = await fetchSeries(start.year, start.month, current.year, current.month);
-            if (points.length > 0) {
+            const points = await fetchSeries();
+            if (points.length === 0) return points;
+            if (stored === 0) {
                 await prisma.indexSeries.createMany({
                     data: points.map(p => ({ indexName, year: p.year, month: p.month, monthlyRate: p.monthlyRate })),
                 });
+            } else {
+                // Pela metade: completa sem apagar o que já está gravado
+                await upsertMonthlyRates(indexName, points);
             }
             return points;
         }));
@@ -250,4 +270,77 @@ async function run(indexName: string, job: () => Promise<IBGEDataPoint[]>): Prom
         console.error(`  Erro ao atualizar ${indexName}:`, message);
         return { indexName, months: 0, error: message };
     }
+}
+
+// ── índice parado ─────────────────────────────────────────────────────────────
+
+/**
+ * Atraso normal, em meses, entre o mês atual (Brasília) e o último mês gravado de cada índice, do
+ * dia 2 em diante. Mais que isso, a atualização diária parou (BCB fora do ar, mudança na API): os
+ * meses que faltam entram nos cálculos como 0%, com aviso na tela, e o recálculo do dia 5 grava o
+ * valor corrigido a menos. A série do Tema 1368 é histórica e fica de fora.
+ */
+export const EXPECTED_INDEX_LAG: Record<string, number> = {
+    // Saem por volta do dia 10 do mês seguinte (o IGP-M, no fim do próprio mês ou no começo do
+    // seguinte)
+    IPCA: 2, INPC: 2, IGP_M: 2,
+    // O IPCA-E (IPCA-15) sai por volta do dia 25 do próprio mês; SELIC e CDI entram com o mês
+    // fechado, no dia 1 do seguinte
+    IPCA_E: 1, CDI_MENSAL: 1, CDI_DIARIA: 1, SELIC: 1,
+    // A linha do mês M usa o IPCA-15 de M-1, que sai por volta do dia 25 de M-1: o job das 6h do
+    // dia 1 já grava a linha de M, que o recálculo do dia 5 usa
+    [TJSP]: 0,
+    // A linha do mês M usa o INPC (e o IGP-DI) de M-1, que saem por volta do dia 10 de M; a taxa
+    // legal de M sai no começo de M
+    TJPR_MEDIA_INPC_IGPDI: 1, TJMG_CORREGEDORIA: 1, [TAXA_LEGAL]: 1,
+};
+
+/** No dia 1, o mês que acabou de virar pode ainda não ter entrado: um mês a mais de folga. */
+const FIRST_DAY_GRACE = 1;
+
+export interface StaleIndex {
+    indexName: string;
+    last:      YearMonth | null;   // null: nenhum mês gravado
+}
+
+/** Os índices mais atrasados que o normal (ou sem nenhum mês gravado). */
+export async function findStaleIndexes(now = new Date()): Promise<StaleIndex[]> {
+    const { year, month, day } = saoPauloDateParts(now);
+    const current = year * 12 + month;
+    const grace   = day === 1 ? FIRST_DAY_GRACE : 0;
+    const stale: StaleIndex[] = [];
+    for (const [indexName, lag] of Object.entries(EXPECTED_INDEX_LAG)) {
+        const last = await lastStoredMonth(indexName);
+        if (!last || current - (last.year * 12 + last.month) > lag + grace) stale.push({ indexName, last });
+    }
+    return stale;
+}
+
+/**
+ * Avisa os admins dos índices parados, uma vez por índice e mês (JobRun INDEX_STALE). O job das 6h
+ * chama depois da atualização.
+ */
+export async function notifyStaleIndexes(now = new Date()): Promise<StaleIndex[]> {
+    const stale = await findStaleIndexes(now);
+    const { year, month } = saoPauloDateParts(now);
+    const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+
+    for (const s of stale) {
+        const period = `${s.indexName}:${monthKey}`;
+        if (await prisma.jobRun.findUnique({ where: { job_period: { job: 'INDEX_STALE', period } } })) continue;
+
+        const label = indexLabel(s.indexName);
+        console.error(`  Índice ${s.indexName} sem atualização: último mês gravado ${s.last ? formatMonth(s.last) : 'nenhum'}`);
+        const sent = await notifyAllAdmins({
+            title:            'Índice sem atualização',
+            message:          s.last
+                ? `O último mês de ${label} no banco de índices é ${formatMonth(s.last)}: a atualização diária não está conseguindo buscar os meses seguintes no BCB. Nos cálculos, esses meses entram como 0%, com aviso. Avise o suporte.`
+                : `Não há nenhum mês de ${label} no banco de índices, e os cálculos que precisam desse índice são recusados. Avise o suporte.`,
+            type:             'warning',
+            notificationType: 'CALCULATION',
+        });
+        // Só marca o mês como avisado se o aviso foi gravado: senão, tenta de novo no dia seguinte
+        if (sent) await prisma.jobRun.create({ data: { job: 'INDEX_STALE', period, notifiedAt: new Date() } });
+    }
+    return stale;
 }

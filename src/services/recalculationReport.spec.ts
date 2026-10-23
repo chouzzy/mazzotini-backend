@@ -1,4 +1,4 @@
-import { describeAsset, notifyRecalculationFailures } from './recalculationReport';
+import { describeAsset, failureReason, notifyRecalculationFailures } from './recalculationReport';
 import { notifyAllAdmins } from './notificationService';
 
 jest.mock('./notificationService', () => ({ notifyAllAdmins: jest.fn() }));
@@ -57,5 +57,25 @@ describe('describeAsset', () => {
         expect(describeAsset({ assetId: 'a1', legalOneId: 101, processNumber: 'PROC-FICTICIO-1' })).toBe('PROC-FICTICIO-1 (Legal One 101)');
         expect(describeAsset({ assetId: 'a1', legalOneId: 101, processNumber: null })).toBe('(Legal One 101)');
         expect(describeAsset({ assetId: 'a1' })).toBe('a1');
+    });
+});
+
+describe('failureReason', () => {
+    it('erro do banco: só o código, sem o texto técnico (que fica no log)', () => {
+        const e = Object.assign(new Error('Raw query failed. Message: Server selection timeout. Topology: { Address: servidor.exemplo:27017 }'), {
+            name: 'PrismaClientKnownRequestError', code: 'P2010',
+        });
+
+        expect(failureReason(e)).toBe('Erro do banco de dados (P2010) ao recalcular; o detalhe ficou no log do servidor.');
+    });
+
+    it('erro do banco sem código', () => {
+        expect(failureReason(Object.assign(new Error('Invalid invocation'), { name: 'PrismaClientUnknownRequestError' })))
+            .toBe('Erro do banco de dados ao recalcular; o detalhe ficou no log do servidor.');
+    });
+
+    it('recusa do cálculo vai como é', () => {
+        expect(failureReason(new Error('Falta IPCA de 02/2023 no banco de índices. Avise o suporte.')))
+            .toBe('Falta IPCA de 02/2023 no banco de índices. Avise o suporte.');
     });
 });

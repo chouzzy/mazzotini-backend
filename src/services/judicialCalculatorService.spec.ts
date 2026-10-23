@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
-import { calculateJudicialDebt, CalculationParams, combineResults, NAO_ATUALIZAR, TAXA_LEGAL } from './judicialCalculatorService';
+import {
+    calculateJudicialDebt, CalculationParams, combineResults, NAO_ATUALIZAR, TAXA_LEGAL, TAXA_LEGAL_TEMA1368,
+} from './judicialCalculatorService';
 
 jest.mock('@prisma/client', () => {
     const mPrisma: any = { indexSeries: { findMany: jest.fn(), findFirst: jest.fn() } };
@@ -68,8 +70,8 @@ describe('calculateJudicialDebt', () => {
         expect(result.installmentResults[0]).toMatchObject({ correctionFactor: 1, correctedValue: 1000, monthBreakdown: [] });
         expect(result.moratoryInterest).toBe(60);   // 1% a.m. por 6 meses
         expect(result.multaValue).toBe(20);         // 2% de 1.000
-        expect(result.feesValue).toBe(108);         // 10% de 1.000 + 60 + 20
-        expect(result.totalValue).toBe(1188);
+        expect(result.feesValue).toBe(106);         // 10% de 1.000 + 60, sem a multa (padrão do Dr. Calc)
+        expect(result.totalValue).toBe(1186);
     });
 
     it('"Não atualizar (fixo)" também não corrige os abatimentos', async () => {
@@ -82,7 +84,7 @@ describe('calculateJudicialDebt', () => {
         }, 2026, 7);
 
         expect(result.abatimentoResults[0]).toMatchObject({ correctionFactor: 1, correctedValue: 100 });
-        expect(result.totalValue).toBe(1088);
+        expect(result.totalValue).toBe(1086);
     });
 
     it('com um índice de preço, corrige do mês da parcela ao mês anterior ao de referência', async () => {
@@ -143,15 +145,19 @@ describe('fator de correção com a tabela oficial (acumulado)', () => {
         expect(inst.monthBreakdown.map(m => `${m.month}/${m.year}`)).toEqual(['1/2026']);
     });
 
-    it('parcela no mês de referência ou depois dele não pede o mês da parcela nem gera aviso', async () => {
+    it('parcela no mês de referência ou depois dele não pede o mês da parcela nem gera aviso de índice', async () => {
         mockSeries({ TJSP_LEI14905: official });   // tabela até 03/2026
 
-        for (const baseDate of ['2026-04-03', '2026-05-10']) {
-            const result = await calculateJudicialDebt(plain(baseDate, { correctionIndex: 'TJSP_LEI14905' }), 2026, 4);
+        const inReference = await calculateJudicialDebt(plain('2026-04-03', { correctionIndex: 'TJSP_LEI14905' }), 2026, 4);
+        expect(inReference.totalValue).toBe(1000);
+        expect(inReference.warnings).toBeUndefined();
 
-            expect(result.totalValue).toBe(1000);
-            expect(result.warnings).toBeUndefined();
-        }
+        // Depois da referência: nenhum aviso de índice, só o de que a referência vem antes das parcelas
+        const after = await calculateJudicialDebt(plain('2026-05-10', { correctionIndex: 'TJSP_LEI14905' }), 2026, 4);
+        expect(after.totalValue).toBe(1000);
+        expect(after.warnings).toEqual([
+            'O mês de referência (04/2026) é anterior a todas as parcelas de débito: elas ficaram sem correção nem juros. Confira o mês.',
+        ]);
     });
 
     it('com a série só de taxas (sem a tabela oficial), a parcela anterior ao primeiro mês usa as linhas seguintes', async () => {
@@ -272,6 +278,15 @@ describe('convenções do Dr. Calc', () => {
                 .rejects.toThrow('Não há dados de taxa legal no banco de índices. Avise o suporte.');
         });
 
+        it('a taxa somada da parcela fica com 6 casas: R$ 10 milhões de 15/06/2024 até 12/2024 dão R$ 476.429,80', async () => {
+            mockSeries({ [TAXA_LEGAL]: [row(2024, 8, 0.605306), row(2024, 9, 0.676227), row(2024, 10, 0.704241), row(2024, 11, 0.385874)] });
+
+            const result = await calculateJudicialDebt({ ...legal('2024-06-15'), installments: [{ baseValue: 10_000_000, baseDate: '2024-06-15T00:00:00.000Z' }] }, 2024, 12);
+
+            // 4,764298% (sem arredondar a taxa, seriam R$ 476.429,81)
+            expect(result.moratoryInterest).toBe(476429.8);
+        });
+
         it('mês depois do último publicado entra como 0% e vira um aviso', async () => {
             mockSeries({ [TAXA_LEGAL]: [row(2025, 1, 0.5894), row(2025, 2, 0.9022)] });
 
@@ -349,7 +364,7 @@ describe('convenções do Dr. Calc', () => {
 
             const result = await calculateJudicialDebt(comCusta('2023-01-15', { correctionIndex: 'TJSP_LEI14905', penaltyPercentage: 20 }), 2023, 3);
 
-            expect(result.penaltyValue).toBe(202.47);
+            expect(result.penaltyValue).toBe(202.46);   // multa e honorários de 10%: 101,23 cada, como no Dr. Calc
             expect(result.totalValue).toBe(1316.03);
         });
 
@@ -461,11 +476,314 @@ describe('convenções do Dr. Calc', () => {
                 '"Não atualizar (fixo)" vale para datas a partir de 01/07/1994. Mude a data da parcela de 15/01/1990 ou escolha outro índice.');
         });
     });
+
+    describe('arredondamento por linha', () => {
+        /** Parcelas fictícias com a mesma data. */
+        const parcels = (values: number[], baseDate = '2023-01-15') =>
+            values.map((baseValue, i) => ({ baseValue, baseDate: `${baseDate}T00:00:00.000Z`, description: `Parcela ${i + 1}` }));
+        // Acumulados da tabela do TJSP
+        const tjsp2023 = [
+            row(2023, 1, 0, 89.838289), row(2023, 2, 0, 90.251545), row(2023, 3, 0, 90.946481), row(2023, 4, 0, 91.528538),
+            row(2023, 5, 0, 92.013639), row(2023, 6, 0, 92.344888), row(2023, 7, 0, 92.252543), row(2023, 8, 0, 92.169515),
+        ];
+
+        it('os juros correm sobre o valor corrigido já arredondado: R$ 1.135,85', async () => {
+            mockSeries({ TJSP_LEI14905: tjsp2023 });
+
+            const result = await calculateJudicialDebt(
+                plain('2023-01-15', { correctionIndex: 'TJSP_LEI14905', moratoryRate: 1, feesPercentage: 10 }), 2023, 3);
+
+            expect(result.correctedValue).toBe(1012.34);
+            expect(result.moratoryInterest).toBe(20.25);
+            expect(result.feesValue).toBe(103.26);
+            expect(result.totalValue).toBe(1135.85);
+        });
+
+        it('meio centavo arredonda para cima, e os juros do total somam as linhas: R$ 1.436,28', async () => {
+            const result = await calculateJudicialDebt({
+                ...plain('2023-01-15', { moratoryRate: 1, multaPercentage: 1 }),
+                installments: parcels([100.5, 102.5, 104.5, 100.1, 1000.5]),
+            }, 2023, 2);
+
+            expect(result.installmentResults.map(i => i.moratoryInterest)).toEqual([1.01, 1.03, 1.05, 1, 10.01]);
+            expect(result.moratoryInterest).toBe(14.1);
+            // A multa sai do total corrigido (1% de 1.408,10), e não da soma da multa de cada linha (14,10)
+            expect(result.multaValue).toBe(14.08);
+            expect(result.totalValue).toBe(1436.28);
+        });
+
+        it('a multa sai do total corrigido e os honorários, das linhas arredondadas: R$ 1.135,48', async () => {
+            const result = await calculateJudicialDebt({
+                ...plain('2023-01-15', { moratoryRate: 1, multaPercentage: 2, feesPercentage: 10 }),
+                installments: parcels(Array(10).fill(100.4)),
+            }, 2023, 2);
+
+            expect(result.moratoryInterest).toBe(10);   // R$ 1,00 por linha (1,004)
+            expect(result.multaValue).toBe(20.08);
+            expect(result.feesValue).toBe(101.4);
+            expect(result.totalValue).toBe(1135.48);
+        });
+
+        it('o total corrigido soma as linhas, e cada 10% do Art. 523 é arredondado: R$ 1.368,45', async () => {
+            mockSeries({ TJSP_LEI14905: tjsp2023 });
+
+            const result = await calculateJudicialDebt({
+                ...plain('2023-01-15', { correctionIndex: 'TJSP_LEI14905', moratoryRate: 1, feesPercentage: 10, penaltyPercentage: 20 }),
+                installments: parcels(Array(10).fill(100.4)),
+            }, 2023, 3);
+
+            expect(result.correctedValue).toBe(1016.4);   // R$ 101,64 por linha
+            expect(result.moratoryInterest).toBe(20.3);
+            expect(result.feesValue).toBe(103.67);
+            expect(result.penaltyValue).toBe(228.08);     // R$ 114,04 de multa e R$ 114,04 de honorários
+            expect(result.totalValue).toBe(1368.45);
+        });
+
+        it('três parcelas com juros remuneratórios e moratórios, multa, honorários e Art. 523: R$ 1.559,16', async () => {
+            mockSeries({ TJSP_LEI14905: tjsp2023 });
+
+            const result = await calculateJudicialDebt({
+                ...plain('2023-01-15', {
+                    correctionIndex: 'TJSP_LEI14905', moratoryRate: 1, compensatoryRate: 0.5, multaPercentage: 2,
+                    feesPercentage: 15, penaltyPercentage: 20,
+                }),
+                installments: [...parcels([333.33], '2023-01-15'), ...parcels([333.33], '2023-02-15'), ...parcels([333.34], '2023-03-15')],
+            }, 2023, 8);
+
+            expect(result.installmentResults.map(i => [i.correctedValue, i.compensatoryInterest, i.moratoryInterest])).toEqual([
+                [341.98, 11.97, 23.94], [340.41, 10.21, 20.42], [337.82, 8.45, 16.89],
+            ]);
+            expect(result.multaValue).toBe(20.4);
+            expect(result.subtotalA).toBe(1132.49);
+            expect(result.feesValue).toBe(166.81);
+            expect(result.totalValue).toBe(1559.16);
+        });
+    });
+
+    describe('multa sobre parcelas a vencer', () => {
+        const parcela = (baseDate: string) => ({ baseValue: 1000, baseDate: `${baseDate}T00:00:00.000Z`, description: 'Parcela' });
+
+        it('a parcela depois do mês de referência fica sem multa: R$ 3.511,00, como no Dr. Calc', async () => {
+            const result = await calculateJudicialDebt({
+                ...plain('2023-01-15', { moratoryRate: 1, multaPercentage: 10, feesPercentage: 10 }),
+                installments: [parcela('2023-01-15'), parcela('2023-02-15'), parcela('2023-04-15')],
+            }, 2023, 2);
+
+            expect(result.correctedValue).toBe(3000);
+            expect(result.multaValue).toBe(200);
+            expect(result.feesValue).toBe(301);   // 10% de 3.000 + 10 de juros, sem a multa
+            expect(result.totalValue).toBe(3511);
+        });
+
+        it('a data da correção é o último dia do mês de referência: a parcela desse dia já fica sem multa', async () => {
+            const result = await calculateJudicialDebt({
+                ...plain('2023-02-27', { multaPercentage: 10 }),
+                installments: [parcela('2023-02-27'), parcela('2023-02-28')],
+            }, 2023, 2);
+
+            expect(result.multaValue).toBe(100);
+            expect(result.totalValue).toBe(2100);
+        });
+    });
+
+    describe('opções "honorários sobre a multa" e "deflacionar"', () => {
+        it('sem a opção, os honorários não incidem sobre a multa, mas o Art. 523 incide sobre ela: R$ 1.440,00', async () => {
+            const result = await calculateJudicialDebt(
+                plain('2023-01-15', { multaPercentage: 10, feesPercentage: 10, penaltyPercentage: 20 }), 2023, 3);
+
+            expect(result.feesValue).toBe(100);
+            expect(result.penaltyValue).toBe(240);
+            expect(result.totalValue).toBe(1440);
+        });
+
+        it('com a opção, os honorários incidem também sobre a multa: R$ 1.452,00', async () => {
+            const result = await calculateJudicialDebt(
+                plain('2023-01-15', { multaPercentage: 10, feesPercentage: 10, penaltyPercentage: 20, feesOnMulta: true }), 2023, 3);
+
+            expect(result.feesValue).toBe(110);
+            expect(result.totalValue).toBe(1452);
+        });
+
+        // TJPR de 06/2023 e 07/2023: médias do INPC e do IGP-DI de maio e de junho, negativas
+        const tjprDeflacao = [row(2023, 6, -0.985), row(2023, 7, -0.775)];
+        const comCreditoECusta = (extra: Partial<CalculationParams> = {}): CalculationParams => {
+            const base = plain('2023-05-15', { correctionIndex: 'TJPR_MEDIA_INPC_IGPDI', ...extra });
+            return {
+                ...base,
+                installments: [
+                    ...base.installments,
+                    { baseValue: -100, baseDate: '2023-05-15T00:00:00.000Z', description: 'Crédito' },
+                    { baseValue: 100, baseDate: '2023-05-15T00:00:00.000Z', description: 'Custa', type: 'CUSTA' },
+                ],
+            };
+        };
+
+        it('sem deflacionar, a inflação negativa não reduz o débito, o crédito nem a custa abaixo do nominal', async () => {
+            mockSeries({ TJPR_MEDIA_INPC_IGPDI: tjprDeflacao });
+
+            const result = await calculateJudicialDebt(comCreditoECusta(), 2023, 7);
+
+            expect(result.installmentResults.map(i => i.correctedValue)).toEqual([1000, -100]);
+            expect(result.installmentResults.map(i => i.nominalFloor)).toEqual([true, true]);
+            expect(result.custaResults[0].correctedValue).toBe(100);
+            expect(result.totalValue).toBe(1000);
+        });
+
+        it('com deflacionar, o débito vai a R$ 982,48 e o crédito a R$ 98,25, como no Dr. Calc, e a custa também cai', async () => {
+            mockSeries({ TJPR_MEDIA_INPC_IGPDI: tjprDeflacao });
+
+            const result = await calculateJudicialDebt(comCreditoECusta({ deflate: true }), 2023, 7);
+
+            expect(result.installmentResults.map(i => i.correctedValue)).toEqual([982.48, -98.25]);
+            expect(result.installmentResults[0].nominalFloor).toBeUndefined();
+            expect(result.custaResults[0].correctedValue).toBe(98.25);
+            expect(result.totalValue).toBe(982.48);
+        });
+
+        it('vale o fator da parcela, não o de cada mês: IPCA de 06/2017 até 09/2017 dá R$ 1.001,99 com ou sem a opção', async () => {
+            mockSeries({ IPCA: [row(2017, 6, -0.23), row(2017, 7, 0.24), row(2017, 8, 0.19)] });
+
+            for (const deflate of [false, true]) {
+                const result = await calculateJudicialDebt(plain('2017-06-15', { correctionIndex: 'IPCA', deflate }), 2017, 9);
+                expect(result.totalValue).toBe(1001.99);
+            }
+        });
+
+        it('o mínimo também vale para o abatimento, como no Dr. Calc', async () => {
+            mockSeries({ TJPR_MEDIA_INPC_IGPDI: tjprDeflacao });
+            const comAbatimento = (deflate: boolean): CalculationParams => {
+                const base = plain('2023-05-15', { correctionIndex: 'TJPR_MEDIA_INPC_IGPDI', deflate });
+                return {
+                    ...base,
+                    installments: [...base.installments, { baseValue: 100, baseDate: '2023-05-15T00:00:00.000Z', type: 'ABATIMENTO', deductionPoint: 'APOS_TUDO' }],
+                };
+            };
+
+            expect((await calculateJudicialDebt(comAbatimento(false), 2023, 7)).abatimentoResults[0]).toMatchObject({ correctionFactor: 1, correctedValue: 100 });
+            expect((await calculateJudicialDebt(comAbatimento(true), 2023, 7)).abatimentoResults[0].correctedValue).toBe(98.25);
+        });
+
+        it('antes do Real, o fator do TJSP também converte a moeda e fica abaixo de 1 sem ser deflação', async () => {
+            // Acumulados fictícios, com a troca de cruzeiro real para real (÷ 2.750) dentro do acumulado
+            mockSeries({ TJSP_LEI14905: [row(1994, 6, 0, 2750), row(1994, 7, 0, 1.1), row(1994, 8, 0, 1.2)] });
+
+            const result = await calculateJudicialDebt(plain('1994-06-15', { correctionIndex: 'TJSP_LEI14905' }), 1994, 8);
+
+            expect(result.installmentResults[0].correctedValue).toBe(0.44);   // 1.000 × 1,2 / 2.750
+        });
+    });
+
+    describe('taxa legal + Tema 1368 nos juros de mora', () => {
+        const tema1368 = (baseDate: string, extra: Partial<CalculationParams> = {}) =>
+            plain(baseDate, { moratoryMode: TAXA_LEGAL_TEMA1368, ...extra });
+        // Taxas da série, calculadas com a SELIC e o IPCA-E publicados pelo BCB
+        const serie = [
+            row(1995, 3, 2.0055325), row(1995, 4, 2.94233807), row(1995, 5, 2.26581658),
+            row(2002, 1, 0.83540527), row(2006, 1, 1.08587368), row(2006, 4, 1.04842284), row(2010, 1, 0.3455539),
+            row(2020, 12, 0), row(2023, 1, 0.60019399), row(2024, 6, 0.39072282), row(2024, 7, 0.39678952),
+        ];
+
+        it.each([
+            ['01/2002', '2002-01-15', 2002, 2, 8.35],
+            ['01/2006, com a SELIC de 12/2005 de 2 casas', '2006-01-15', 2006, 2, 10.86],
+            ['04/2006, com a SELIC de 03/2006 acumulada das taxas diárias', '2006-04-15', 2006, 5, 10.48],
+            ['01/2010', '2010-01-15', 2010, 2, 3.46],
+            ['12/2020, em que a taxa seria negativa', '2020-12-15', 2021, 1, 0],
+            ['01/2023', '2023-01-15', 2023, 2, 6],
+        ])('um mês de juros em %s dá o mesmo que o Dr. Calc', async (_, baseDate, refYear, refMonth, interest) => {
+            mockSeries({ [TAXA_LEGAL_TEMA1368]: serie });
+
+            const result = await calculateJudicialDebt(tema1368(baseDate), refYear, refMonth);
+
+            expect(result.moratoryInterest).toBe(interest);
+            expect(result.warnings).toBeUndefined();
+        });
+
+        it('a partir de 08/2024, vale a taxa legal oficial do mês inteiro: de 15/06/2024 até 10/2024 são R$ 20,69', async () => {
+            mockSeries({ [TAXA_LEGAL_TEMA1368]: serie, [TAXA_LEGAL]: [row(2024, 8, 0.605306), row(2024, 9, 0.676227)] });
+
+            const result = await calculateJudicialDebt(tema1368('2024-06-15'), 2024, 10);
+
+            expect(result.moratoryInterest).toBe(20.69);
+            expect(result.installmentResults[0].moratoryMonths).toBe(4);
+        });
+
+        it('com correção: TJSP de 20/11/2004 até 02/2006 dá R$ 1.068,21 corrigidos e R$ 148,72 de juros, como no Dr. Calc', async () => {
+            mockSeries({
+                TJSP_LEI14905: [
+                    row(2004, 11, 0, 32.533108), row(2004, 12, 0, 32.676253), row(2005, 1, 0, 32.957268), row(2005, 2, 0, 33.145124),
+                    row(2005, 3, 0, 33.290962), row(2005, 4, 0, 33.533986), row(2005, 5, 0, 33.839145), row(2005, 6, 0, 34.076019),
+                    row(2005, 7, 0, 34.038535), row(2005, 8, 0, 34.048746), row(2005, 9, 0, 34.048746), row(2005, 10, 0, 34.099819),
+                    row(2005, 11, 0, 34.297597), row(2005, 12, 0, 34.482804), row(2006, 1, 0, 34.620735), row(2006, 2, 0, 34.752293),
+                ],
+                [TAXA_LEGAL_TEMA1368]: [
+                    row(2004, 11, 0.88716108), row(2004, 12, 0.61611845), row(2005, 1, 0.63466878), row(2005, 2, 0.69527215),
+                    row(2005, 3, 0.47647409), row(2005, 4, 1.1758844), row(2005, 5, 0.66507842), row(2005, 6, 0.66448478),
+                    row(2005, 7, 1.46823811), row(2005, 8, 1.39846169), row(2005, 9, 1.37614679), row(2005, 10, 1.33785942),
+                    row(2005, 11, 0.84526651), row(2005, 12, 0.59535622), row(2006, 1, 1.08587368),
+                ],
+            });
+
+            const result = await calculateJudicialDebt(tema1368('2004-11-20', { correctionIndex: 'TJSP_LEI14905' }), 2006, 2);
+
+            expect(result.correctedValue).toBe(1068.21);
+            expect(result.moratoryInterest).toBe(148.72);
+        });
+
+        it('com data de início dos juros, conta dela para todas as parcelas', async () => {
+            mockSeries({ [TAXA_LEGAL_TEMA1368]: [row(2009, 12, 0.21963759), row(2010, 1, 0.3455539)] });
+
+            const result = await calculateJudicialDebt({
+                ...tema1368('2010-01-15', { moratoryStartDate: '2009-12-01T00:00:00.000Z' }),
+                installments: [
+                    { baseValue: 1000, baseDate: '2010-01-15T00:00:00.000Z' },
+                    { baseValue: 1000, baseDate: '2010-01-20T00:00:00.000Z' },
+                ],
+            }, 2010, 2);
+
+            // 12/2009 e 01/2010 para cada parcela (sem a data de início, só 01/2010: R$ 3,46 cada)
+            expect(result.installmentResults.map(i => i.moratoryInterest)).toEqual([5.65, 5.65]);
+            expect(result.installmentResults[0].moratoryMonths).toBe(2);
+        });
+
+        it('antes de 03/1995 não há taxa: os meses ficam sem juros e o cálculo avisa', async () => {
+            mockSeries({ [TAXA_LEGAL_TEMA1368]: serie });
+
+            const result = await calculateJudicialDebt(tema1368('1995-01-15'), 1995, 6);
+
+            // Março a maio. O Dr. Calc dá R$ 59,50: a base dele tem outra SELIC em 02/1995 e 03/1995
+            expect(result.moratoryInterest).toBe(72.14);
+            expect(result.warnings).toEqual(['A taxa legal do Tema 1368 começa em 03/1995: os meses anteriores ficaram sem juros de mora, como no Dr. Calc.']);
+        });
+
+        it('a taxa somada da parcela fica com 6 casas: R$ 10 milhões em 01/2006 dão R$ 108.587,40, como no Dr. Calc', async () => {
+            mockSeries({ [TAXA_LEGAL_TEMA1368]: serie });
+
+            const result = await calculateJudicialDebt({ ...tema1368('2006-01-15'), installments: [{ baseValue: 10_000_000, baseDate: '2006-01-15T00:00:00.000Z' }] }, 2006, 2);
+
+            // 1,085874% (sem arredondar a taxa, seriam R$ 108.587,37)
+            expect(result.moratoryInterest).toBe(108587.4);
+        });
+
+        it('recusa quando a série ainda não foi carregada', async () => {
+            await expect(calculateJudicialDebt(tema1368('2010-01-15'), 2010, 2))
+                .rejects.toThrow('Não há dados de taxa legal do Tema 1368 no banco de índices. Avise o suporte.');
+        });
+
+        it('recusa um mês faltando, também depois do último gravado: a série é histórica', async () => {
+            mockSeries({ [TAXA_LEGAL_TEMA1368]: [row(1995, 3, 2.0055325), row(2010, 1, 0.3455539)] });
+
+            await expect(calculateJudicialDebt(tema1368('2009-12-15'), 2010, 2))
+                .rejects.toThrow('Falta taxa legal do Tema 1368 de 12/2009 no banco de índices. Avise o suporte.');
+            await expect(calculateJudicialDebt(tema1368('2010-01-15'), 2010, 3))
+                .rejects.toThrow('Falta taxa legal do Tema 1368 de 02/2010 no banco de índices. Avise o suporte.');
+        });
+    });
 });
 
 describe('combineResults (vários cálculos no mesmo processo)', () => {
     // Dois contratos fictícios, sem correção, para os valores ficarem fáceis de conferir
-    const contrato1 = () => calculateJudicialDebt(params, 2026, 7);   // total 1.188 (ver o primeiro teste)
+    const contrato1 = () => calculateJudicialDebt(params, 2026, 7);   // total 1.186 (ver o primeiro teste)
     const contrato2 = () => calculateJudicialDebt({
         ...params,
         multaPercentage: 0,
@@ -485,7 +803,7 @@ describe('combineResults (vários cálculos no mesmo processo)', () => {
             { label: 'Contrato 2', result: await contrato2() },
         ]);
 
-        expect(combined.totalValue).toBe(1708);
+        expect(combined.totalValue).toBe(1706);
         expect(combined.baseTotal).toBe(1500);
         expect(combined.moratoryInterest).toBe(80);
         expect(combined.installmentResults.map(i => [i.installmentIndex, i.description])).toEqual([
@@ -493,7 +811,7 @@ describe('combineResults (vários cálculos no mesmo processo)', () => {
             [2, 'Contrato 2 · Parcela B'],
         ]);
         expect(combined.calculations).toEqual([
-            { label: 'Contrato 1', baseTotal: 1000, correctedValue: 1000, totalValue: 1188 },
+            { label: 'Contrato 1', baseTotal: 1000, correctedValue: 1000, totalValue: 1186 },
             { label: 'Contrato 2', baseTotal: 500,  correctedValue: 500,  totalValue: 520 },
         ]);
         expect(combined.warnings).toBeUndefined();
@@ -515,7 +833,7 @@ describe('combineResults (vários cálculos no mesmo processo)', () => {
 
         expect(combined.abatimentoResults.map(a => a.description)).toEqual(['Contrato 1 · Depósito']);
         expect(combined.abatimentoTotal).toBe(100);
-        expect(combined.totalValue).toBe(1088 + 520);
+        expect(combined.totalValue).toBe(1086 + 520);
     });
 
     it('junta as custas de cada cálculo', async () => {
@@ -535,7 +853,7 @@ describe('combineResults (vários cálculos no mesmo processo)', () => {
         expect(combined.custaResults.map(c => c.description)).toEqual(['Contrato 1 · Perícia']);
         expect(combined.custaTotal).toBe(150);
         // A custa não leva juros, multa nem honorários: soma 150 ao total do contrato 1
-        expect(combined.totalValue).toBe(1188 + 150 + 520);
+        expect(combined.totalValue).toBe(1186 + 150 + 520);
     });
 
     it('junta os avisos de cada cálculo, com o nome dele', async () => {
@@ -548,5 +866,108 @@ describe('combineResults (vários cálculos no mesmo processo)', () => {
         ]);
 
         expect(combined.warnings).toEqual(['Contrato 2: IPCA de 10/2026 ainda sem valor no banco: o mês entrou como 0%.']);
+    });
+});
+
+describe('revisão de 23/10', () => {
+    describe('base dos honorários e do Art. 523 nunca negativa', () => {
+        // Débito de R$ 1.000 sem correção, multa de 10% e honorários de 10%, e um pagamento de
+        // R$ 1.050 abatido do valor corrigido: cobre o principal, mas não a multa
+        const pagamento = (extra: Partial<CalculationParams> = {}): CalculationParams => {
+            const base = plain('2026-01-15', { multaPercentage: 10, feesPercentage: 10, ...extra });
+            return {
+                ...base,
+                installments: [...base.installments,
+                    { baseValue: 1050, baseDate: '2026-01-15T00:00:00.000Z', description: 'Pagamento', type: 'ABATIMENTO', deductionPoint: 'DO_VALOR_CORRIGIDO' }],
+            };
+        };
+
+        it('sem honorários sobre a multa, sobra só a multa, sem honorários negativos', async () => {
+            const result = await calculateJudicialDebt(pagamento(), 2026, 3);
+
+            expect(result.feesValue).toBe(0);
+            expect(result.totalValue).toBe(50);
+        });
+
+        it('com honorários sobre a multa, eles incidem sobre o saldo de R$ 50', async () => {
+            const result = await calculateJudicialDebt(pagamento({ feesOnMulta: true }), 2026, 3);
+
+            expect(result.feesValue).toBe(5);
+            expect(result.totalValue).toBe(55);
+        });
+
+        it('abatimento maior que o débito: honorários e Art. 523 não incidem sobre o saldo negativo', async () => {
+            const base = plain('2026-01-15', { feesPercentage: 10, penaltyPercentage: 20 });
+            const result = await calculateJudicialDebt({
+                ...base,
+                installments: [...base.installments,
+                    { baseValue: 1500, baseDate: '2026-01-15T00:00:00.000Z', description: 'Pagamento', type: 'ABATIMENTO', deductionPoint: 'DO_VALOR_CORRIGIDO' }],
+            }, 2026, 3);
+
+            expect(result.feesValue).toBe(0);
+            expect(result.penaltyValue).toBe(0);
+            expect(result.totalValue).toBe(-500);
+        });
+    });
+
+    it('o abatimento e a custa que ficaram no valor nominal vêm marcados, como as parcelas', async () => {
+        mockSeries({ TJPR_MEDIA_INPC_IGPDI: [row(2023, 6, -0.985), row(2023, 7, -0.775)] });
+        const base = plain('2023-05-15', { correctionIndex: 'TJPR_MEDIA_INPC_IGPDI' });
+
+        const result = await calculateJudicialDebt({
+            ...base,
+            installments: [...base.installments,
+                { baseValue: 100, baseDate: '2023-05-15T00:00:00.000Z', description: 'Pagamento', type: 'ABATIMENTO' },
+                { baseValue: 100, baseDate: '2023-05-15T00:00:00.000Z', description: 'Custa', type: 'CUSTA' }],
+        }, 2023, 7);
+
+        expect(result.abatimentoResults[0]).toMatchObject({ correctedValue: 100, nominalFloor: true });
+        expect(result.custaResults[0]).toMatchObject({ correctedValue: 100, nominalFloor: true });
+    });
+
+    it('uma série que parou de ser atualizada dá um aviso só, com o intervalo dos meses', async () => {
+        // IPCA gravado até 06/2026: de 07 a 10/2026 os meses entram como 0%
+        mockSeries({ IPCA: [1, 2, 3, 4, 5, 6].map(m => row(2026, m, 0.5)) });
+
+        const result = await calculateJudicialDebt(plain('2026-01-15', { correctionIndex: 'IPCA' }), 2026, 11);
+
+        expect(result.warnings).toEqual(['IPCA de 07/2026 a 10/2026 ainda sem valor no banco: os meses entraram como 0%.']);
+    });
+
+    it('mês de referência antes de todas as parcelas (1926 no lugar de 2026): calcula, com aviso', async () => {
+        const result = await calculateJudicialDebt(plain('2020-03-10'), 1926, 2);
+
+        expect(result.totalValue).toBe(1000);
+        expect(result.warnings).toEqual([
+            'O mês de referência (02/1926) é anterior a todas as parcelas de débito: elas ficaram sem correção nem juros. Confira o mês.',
+        ]);
+    });
+});
+
+describe('revisão de 23/10: créditos maiores que os débitos, como no Dr. Calc', () => {
+    // Caso fictício conferido no Dr. Calc: R$ 1.000 e crédito de −R$ 1.500 em 15/01/2023, índice fixo,
+    // referência 03/2023, juros de 1% a.m., multa de 10%, honorários de 10% e Art. 523 de 20%
+    it('honorários e Art. 523 incidem sobre o saldo negativo, de forma linear: −733,20', async () => {
+        const base = plain('2023-01-15', { moratoryRate: 1, multaPercentage: 10, feesPercentage: 10, penaltyPercentage: 20 });
+        const result = await calculateJudicialDebt({
+            ...base,
+            installments: [...base.installments, { baseValue: -1500, baseDate: '2023-01-15T00:00:00.000Z', description: 'Crédito' }],
+        }, 2023, 3);
+
+        expect(result.feesValue).toBe(-51);
+        expect(result.penaltyValue).toBe(-122.2);
+        expect(result.totalValue).toBe(-733.2);
+    });
+
+    // Outro caso fictício conferido lá: só o crédito de −R$ 1.000, sem o Art. 523
+    it('só o crédito: honorários sobre o saldo negativo, −1.222,00', async () => {
+        const base = plain('2023-01-15', { moratoryRate: 1, multaPercentage: 10, feesPercentage: 10, penaltyPercentage: 0 });
+        const result = await calculateJudicialDebt({
+            ...base,
+            installments: [{ baseValue: -1000, baseDate: '2023-01-15T00:00:00.000Z', description: 'Crédito' }],
+        }, 2023, 3);
+
+        expect(result.feesValue).toBe(-102);
+        expect(result.totalValue).toBe(-1222);
     });
 });

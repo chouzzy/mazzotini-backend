@@ -1,10 +1,12 @@
 import { PrismaClient } from '@prisma/client';
 import { ensureIndexSeriesLoaded, updateIndexSeries } from './indexUpdateService';
-import { fetchIndexSeries, fetchSelicSeries, fetchTaxaLegalSeries, fetchTJMGSeries, fetchTJPRSeries, fetchTJSPSeries } from './ibgeService';
+import {
+    fetchIndexSeries, fetchSelicSeries, fetchTaxaLegalSeries, fetchTaxaLegalTema1368Series, fetchTJMGSeries, fetchTJPRSeries, fetchTJSPSeries,
+} from './ibgeService';
 
 jest.mock('@prisma/client', () => {
     const mPrisma: any = {
-        indexSeries: { findFirst: jest.fn(), upsert: jest.fn(), createMany: jest.fn() },
+        indexSeries: { findFirst: jest.fn(), upsert: jest.fn(), createMany: jest.fn(), count: jest.fn() },
     };
     return { PrismaClient: jest.fn(() => mPrisma) };
 });
@@ -17,6 +19,7 @@ jest.mock('./ibgeService', () => ({
     fetchTJPRSeries:  jest.fn(),
     fetchTJMGSeries:  jest.fn(),
     fetchTaxaLegalSeries: jest.fn(),
+    fetchTaxaLegalTema1368Series: jest.fn(),
 }));
 
 const prisma = new PrismaClient() as any;
@@ -27,6 +30,8 @@ const NOV_5 = new Date(2026, 10, 5, 4, 0);
 /** Banco simulado: último mês gravado por índice e último mês do TJSP com acumulado. */
 let lastStored: Record<string, { year: number; month: number }>;
 let lastOfficialTJSP: { year: number; month: number; accumulatedValue: number } | null;
+/** Meses gravados por série; só a do Tema 1368, que tem tamanho fixo, é contada. */
+let storedCounts: Record<string, number>;
 
 /** Upserts gravados de um índice. */
 const saved = (indexName: string) => prisma.indexSeries.upsert.mock.calls
@@ -50,7 +55,9 @@ describe('updateIndexSeries', () => {
         jest.spyOn(console, 'log').mockImplementation(() => {});
         jest.spyOn(console, 'error').mockImplementation(() => {});
         lastStored = {};
+        storedCounts = {};
         lastOfficialTJSP = null;
+        prisma.indexSeries.count.mockImplementation(({ where }: any) => Promise.resolve(storedCounts[where.indexName] ?? 0));
         prisma.indexSeries.findFirst.mockImplementation(({ where }: any) =>
             Promise.resolve(where.accumulatedValue ? lastOfficialTJSP : (lastStored[where.indexName] ?? null)));
         (fetchIndexSeries as jest.Mock).mockResolvedValue([]);
@@ -59,6 +66,7 @@ describe('updateIndexSeries', () => {
         (fetchTJPRSeries as jest.Mock).mockResolvedValue([]);
         (fetchTJMGSeries as jest.Mock).mockResolvedValue([]);
         (fetchTaxaLegalSeries as jest.Mock).mockResolvedValue([]);
+        (fetchTaxaLegalTema1368Series as jest.Mock).mockResolvedValue([]);
     });
 
     it('as tabelas do TJPR e do TJMG vão do último mês gravado até o mês atual', async () => {
@@ -204,6 +212,8 @@ describe('updateIndexSeries', () => {
         // Assim acompanha uma revisão do BCB e completa um mês que tenha faltado
         expect(fetchTaxaLegalSeries).toHaveBeenCalledWith(2024, 8, 2026, 11);
         expect(savedMonths('TAXA_LEGAL')).toEqual(['8/2024', '11/2026']);
+        // A do Tema 1368 é histórica (03/1995 a 07/2024): não entra na atualização
+        expect(fetchTaxaLegalTema1368Series).not.toHaveBeenCalled();
     });
 
     it('duas atualizações ao mesmo tempo compartilham a mesma execução', async () => {
@@ -244,10 +254,13 @@ describe('ensureIndexSeriesLoaded', () => {
         jest.spyOn(console, 'log').mockImplementation(() => {});
         jest.spyOn(console, 'error').mockImplementation(() => {});
         lastStored = {};
+        storedCounts = {};
         prisma.indexSeries.findFirst.mockImplementation(({ where }: any) => Promise.resolve(lastStored[where.indexName] ?? null));
+        prisma.indexSeries.count.mockImplementation(({ where }: any) => Promise.resolve(storedCounts[where.indexName] ?? 0));
         (fetchTaxaLegalSeries as jest.Mock).mockResolvedValue([{ year: 2024, month: 8, monthlyRate: 0.6 }]);
         (fetchTJPRSeries as jest.Mock).mockResolvedValue([]);
         (fetchTJMGSeries as jest.Mock).mockResolvedValue([{ year: 2000, month: 1, monthlyRate: 0.6 }]);
+        (fetchTaxaLegalTema1368Series as jest.Mock).mockResolvedValue([{ year: 1995, month: 3, monthlyRate: 2.71 }]);
     });
 
     it('carrega só as séries que ainda não têm nenhum mês, desde o início de cada uma', async () => {
@@ -258,18 +271,28 @@ describe('ensureIndexSeriesLoaded', () => {
         expect(fetchTaxaLegalSeries).toHaveBeenCalledWith(2024, 8, 2026, 11);
         expect(fetchTJMGSeries).toHaveBeenCalledWith(2000, 1, 2026, 11);
         expect(fetchTJPRSeries).not.toHaveBeenCalled();
-        expect(results).toEqual([{ indexName: 'TAXA_LEGAL', months: 1 }, { indexName: 'TJMG_CORREGEDORIA', months: 1 }]);
+        expect(fetchTaxaLegalTema1368Series).toHaveBeenCalledTimes(1);
+        expect(results).toEqual([
+            { indexName: 'TAXA_LEGAL', months: 1 },
+            { indexName: 'TAXA_LEGAL_TEMA1368', months: 1 },
+            { indexName: 'TJMG_CORREGEDORIA', months: 1 },
+        ]);
         expect(fetchIndexSeries).not.toHaveBeenCalled();
         // Cada série entra numa gravação só, para nenhum cálculo ver a série pela metade
         expect(prisma.indexSeries.createMany.mock.calls.map((c: any) => c[0].data)).toEqual([
             [{ indexName: 'TAXA_LEGAL', year: 2024, month: 8, monthlyRate: 0.6 }],
+            [{ indexName: 'TAXA_LEGAL_TEMA1368', year: 1995, month: 3, monthlyRate: 2.71 }],
             [{ indexName: 'TJMG_CORREGEDORIA', year: 2000, month: 1, monthlyRate: 0.6 }],
         ]);
         expect(prisma.indexSeries.upsert).not.toHaveBeenCalled();
     });
 
     it('duas chamadas ao mesmo tempo compartilham a mesma carga, sem gravar a série duas vezes', async () => {
-        lastStored = { TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 }, TJMG_CORREGEDORIA: { year: 2026, month: 11 } };
+        storedCounts = { TAXA_LEGAL_TEMA1368: 353 };
+        lastStored = {
+            TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 },
+            TJMG_CORREGEDORIA:     { year: 2026, month: 11 },
+        };
 
         const [a, b] = await Promise.all([ensureIndexSeriesLoaded(NOV_5), ensureIndexSeriesLoaded(NOV_5)]);
 
@@ -290,12 +313,27 @@ describe('ensureIndexSeriesLoaded', () => {
 
     it('um erro do BCB fica no resultado, para o log mostrar', async () => {
         (fetchTaxaLegalSeries as jest.Mock).mockRejectedValue(new Error('BCB indisponível'));
-        lastStored = { TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 }, TJMG_CORREGEDORIA: { year: 2026, month: 11 } };
+        storedCounts = { TAXA_LEGAL_TEMA1368: 353 };
+        lastStored = {
+            TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 },
+            TJMG_CORREGEDORIA:     { year: 2026, month: 11 },
+        };
 
         expect(await ensureIndexSeriesLoaded(NOV_5)).toEqual([{ indexName: 'TAXA_LEGAL', months: 0, error: 'BCB indisponível' }]);
     });
 
+    it('completa a série do Tema 1368 que ficou pela metade, sem apagar o que já está gravado', async () => {
+        storedCounts = { TAXA_LEGAL_TEMA1368: 200 };
+        lastStored = { TAXA_LEGAL: { year: 2026, month: 11 }, TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 }, TJMG_CORREGEDORIA: { year: 2026, month: 11 } };
+        (fetchTaxaLegalTema1368Series as jest.Mock).mockResolvedValue([{ year: 1995, month: 3, monthlyRate: 2.71 }, { year: 1995, month: 4, monthlyRate: 2.94 }]);
+
+        expect(await ensureIndexSeriesLoaded(NOV_5)).toEqual([{ indexName: 'TAXA_LEGAL_TEMA1368', months: 2 }]);
+        expect(prisma.indexSeries.createMany).not.toHaveBeenCalled();
+        expect(savedMonths('TAXA_LEGAL_TEMA1368')).toEqual(['3/1995', '4/1995']);
+    });
+
     it('com tudo carregado, não busca nada', async () => {
+        storedCounts = { TAXA_LEGAL_TEMA1368: 353 };
         lastStored = {
             TAXA_LEGAL:            { year: 2026, month: 11 },
             TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 },
@@ -304,5 +342,6 @@ describe('ensureIndexSeriesLoaded', () => {
 
         expect(await ensureIndexSeriesLoaded(NOV_5)).toEqual([]);
         expect(fetchTaxaLegalSeries).not.toHaveBeenCalled();
+        expect(fetchTaxaLegalTema1368Series).not.toHaveBeenCalled();
     });
 });
