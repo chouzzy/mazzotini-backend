@@ -61,7 +61,7 @@ class UpdateMyProfileUseCase {
         console.log(`[PROFILE] A atualizar perfil para o utilizador: ${auth0UserId}`);
 
         // O 'address' antigo é depreciado e não será usado.
-        const { address, useCommercialAddress, consentedToTermsAt, consentedToPrivacyAt, ...validData } = data as any;
+        const { address, useCommercialAddress, consentedToTermsAt, consentedToPrivacyAt, termsVersion, ...validData } = data as any;
 
         const existingUser = await prisma.user.findUnique({
             where: { auth0UserId },
@@ -80,11 +80,8 @@ class UpdateMyProfileUseCase {
             if (!/^[a-f0-9]{24}$/i.test(validData.referredById)) {
                 throw new AppError('O usuário indicado não é um associado.', 400);
             }
-            try {
-                await assertReferralAssociate(prisma, existingUser.id, validData.referredById);
-            } catch (err: any) {
-                throw new AppError(err.message, 400);
-            }
+            // A recusa vem como AppError (400, com a mensagem na tela); uma falha do banco sobe como 500
+            await assertReferralAssociate(prisma, existingUser.id, validData.referredById);
         }
 
         // Campos ObjectId: string vazia deve virar null para o Prisma não rejeitar com Malformed ObjectID
@@ -103,6 +100,9 @@ class UpdateMyProfileUseCase {
         const now = new Date();
         if (consentedToTermsAt) updateData.consentedToTermsAt = now;
         if (consentedToPrivacyAt) updateData.consentedToPrivacyAt = now;
+        // A versão do termo vai só junto com um aceite: sozinha, mudaria (ou, com null, apagaria) a
+        // versão que o cliente aceitou
+        if ((consentedToTermsAt || consentedToPrivacyAt) && termsVersion) updateData.termsVersion = termsVersion;
 
         const isMovingToPendingReview = !existingUser || existingUser.status !== "ACTIVE";
         if (isMovingToPendingReview) {

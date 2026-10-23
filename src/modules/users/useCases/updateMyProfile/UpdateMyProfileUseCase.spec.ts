@@ -105,6 +105,15 @@ describe('UpdateMyProfileUseCase', () => {
         expect(data.consentedToPrivacyAt.getTime()).toBeGreaterThanOrEqual(before);
         expect(data.termsVersion).toBe('1.0');
     });
+
+    it.each([
+        ['outra versão', '2.0'],
+        ['null', null],
+    ])('sem o aceite, a versão do termo não é gravada (%s)', async (_, termsVersion) => {
+        await run({ name: 'Cliente Exemplo', termsVersion });
+
+        expect(savedData()).not.toHaveProperty('termsVersion');
+    });
 });
 
 describe('UpdateMyProfileController', () => {
@@ -136,6 +145,16 @@ describe('UpdateMyProfileController', () => {
         expect(savedData()).toMatchObject({ termsVersion: '1.0' });
         expect(savedData().consentedToTermsAt).toBeInstanceOf(Date);
         expect(savedData().consentedToPrivacyAt).toBeInstanceOf(Date);
+    });
+
+    it('falha do banco ao conferir a indicação responde 500, sem a mensagem técnica', async () => {
+        prisma.user.findUnique.mockImplementation(({ where }: any) =>
+            where.auth0UserId ? Promise.resolve(me) : Promise.reject(new Error('Server selection timeout')));
+
+        const res = await handle({ referredById: ASSOCIATE_ID });
+
+        expect(res.status).toHaveBeenCalledWith(500);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Erro interno ao atualizar o perfil.' });
     });
 
     it('a recusa do CPF responde 400 com a mensagem', async () => {
