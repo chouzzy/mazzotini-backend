@@ -132,7 +132,11 @@ describe('runMonthlyRecalculation', () => {
         expect(runner.calculateAndSave).toHaveBeenCalledTimes(4);
         expect(runner.calculateAndSave).toHaveBeenLastCalledWith(params[2], 'cron', 2026, 11);
         expect(summary).toMatchObject({ recalculated: 2, failures: 1 });
-        expect(notifyAllAdmins).toHaveBeenCalledWith(expect.objectContaining({ title: 'Recálculo mensal recusado' }));
+        // O aviso leva só o código do erro do banco; o texto técnico (com os servidores) fica no log
+        expect(notifyAllAdmins).toHaveBeenCalledWith(expect.objectContaining({
+            title:   'Recálculo mensal recusado',
+            message: 'Processo 0000002-00.2020.8.26.0100 (Legal One 222): Erro do banco de dados (P2010) ao recalcular; o detalhe ficou no log do servidor. O valor atualizado continua o anterior.',
+        }));
         expect(finalUpdate()).toBeDefined();
     });
 

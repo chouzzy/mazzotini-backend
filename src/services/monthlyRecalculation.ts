@@ -21,7 +21,7 @@ import { prisma } from '../prisma';
 import { RunCalculationUseCase } from '../modules/calculator/useCases/runCalculation/RunCalculationUseCase';
 import { isFirstInstance, updateIndexSeries } from './indexUpdateService';
 import { notifyAllAdmins } from './notificationService';
-import { describeAsset, notifyRecalculationFailures, RecalculationFailure } from './recalculationReport';
+import { describeAsset, failureReason, notifyRecalculationFailures, RecalculationFailure } from './recalculationReport';
 import { saoPauloDateParts } from '../utils/saoPauloDate';
 
 const JOB = 'MONTHLY_RECALCULATION';
@@ -128,7 +128,7 @@ async function recalculate(now: Date, runner: Pick<RunCalculationUseCase, 'calcu
             // processo: vira aviso, e os outros processos seguem
             if (!(await databaseIsUp())) throw e;
             const asset   = assetOf.get(params.assetId);
-            const failure = { assetId: params.assetId, legalOneId: asset?.legalOneId, processNumber: asset?.processNumber, error: e.message };
+            const failure = { assetId: params.assetId, legalOneId: asset?.legalOneId, processNumber: asset?.processNumber, error: failureReason(e) };
             console.error(`  Erro ao recalcular o processo ${describeAsset(failure)}:`, e.message);
             failures.push(failure);
         }

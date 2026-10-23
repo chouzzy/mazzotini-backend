@@ -17,6 +17,20 @@ export function describeAsset(f: Pick<RecalculationFailure, 'assetId' | 'legalOn
 }
 
 /**
+ * Motivo da recusa para a notificação. O erro do Prisma (do banco) traz texto técnico, com o
+ * endereço dos servidores do banco ou o caminho do arquivo no servidor: na notificação vai só o
+ * código, e o texto inteiro fica no log do servidor. Os outros erros (recusa do cálculo) vão como são.
+ */
+export function failureReason(e: any): string {
+    const name = typeof e?.name === 'string' ? e.name : '';
+    if (name.startsWith('PrismaClient')) {
+        const code = typeof e?.code === 'string' ? ` (${e.code})` : '';
+        return `Erro do banco de dados${code} ao recalcular; o detalhe ficou no log do servidor.`;
+    }
+    return e?.message ?? String(e);
+}
+
+/**
  * Avisa os admins dos processos que o recálculo mensal recusou e que ficaram com o valor anterior.
  * É uma notificação por processo, como as de falha no Legal One: o processo aparece na coluna
  * "Cliente / Entidade" e na mensagem, junto com o motivo.
