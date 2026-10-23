@@ -128,7 +128,7 @@ describe('SetCalculationParamsUseCase', () => {
         ['honorários negativos', { feesPercentage: -10 }, 'Contrato B: honorários (%): o valor não pode ser negativo.'],
         ['honorário fixo negativo', { feesMode: 'FIXO', feesFixedValue: -1000 }, 'Contrato B: honorários (R$): o valor não pode ser negativo.'],
         ['Art. 523 negativo', { penaltyPercentage: -10 }, 'Contrato B: multa do Art. 523: o valor não pode ser negativo.'],
-        ['taxa de juros negativa', { moratoryRate: -1 }, 'Contrato B: taxa dos juros moratórios: o valor não pode ser negativo.'],
+        ['taxa de juros negativa', { moratoryMode: 'PERSONALIZADO', moratoryRate: -1 }, 'Contrato B: taxa dos juros moratórios: o valor não pode ser negativo.'],
         ['ano digitado errado no início dos juros', { moratoryStartDate: '1023-01-01' }, 'Contrato B: início dos juros moratórios: ano fora do intervalo aceito (1900 a 2100) em 1023-01-01.'],
         ['ano digitado errado numa parcela', { installments: [{ baseValue: 700, baseDate: '2205-11-15' }] }, 'Contrato B: parcela 1: ano fora do intervalo aceito (1900 a 2100) em 2205-11-15.'],
         ['sem índice', { correctionIndex: '' }, 'Contrato B: escolha o índice de correção.'],
@@ -137,6 +137,16 @@ describe('SetCalculationParamsUseCase', () => {
     ])('recusa cálculo extra (%s) sem gravar nada', async (_, overrides, message) => {
         await expect(save({ extraCalculations: [extraCalculation(overrides)] })).rejects.toThrow(message);
         expect(prisma.processCalculationParams.upsert).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['taxa de juros negativa na taxa legal (o campo some da tela)', { moratoryMode: 'TAXA_LEGAL', moratoryRate: -1 }],
+        ['percentual negativo com honorário fixo', { feesMode: 'FIXO', feesFixedValue: 1000, feesPercentage: -10 }],
+        ['honorário fixo negativo com honorário em percentual', { feesMode: 'PERCENTUAL', feesFixedValue: -1000 }],
+    ])('aceita negativo esquecido em campo que o modo não usa (%s)', async (_, overrides) => {
+        await save({ extraCalculations: [extraCalculation(overrides)] });
+
+        expect(prisma.processCalculationParams.upsert).toHaveBeenCalled();
     });
 
     it.each([

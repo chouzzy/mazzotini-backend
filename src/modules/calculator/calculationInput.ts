@@ -196,11 +196,17 @@ export function validateCalculation(raw: any, calcLabel: string | null): ValidCa
         if (typeof value !== 'string' || !allowed.includes(value)) throw fail(calcLabel, `${label}: valor inválido (${String(value)}).`);
         values[field] = value;
     }
+    // Campo que o modo escolhido não usa fica escondido na tela (a taxa dos juros na taxa legal, o
+    // percentual dos honorários no valor fixo e vice-versa): um negativo esquecido nele não recusa
+    const unused = new Set<string>([
+        ...(values.moratoryMode !== 'PERSONALIZADO' ? ['moratoryRate'] : []),
+        ...(values.feesMode === 'FIXO' ? ['feesPercentage'] : ['feesFixedValue']),
+    ]);
     for (const [field, label] of Object.entries(NUMBERS)) {
         const value = raw[field] ?? (CALCULATION_DEFAULTS as Record<string, unknown>)[field];
         if (typeof value !== 'number' || !Number.isFinite(value)) throw fail(calcLabel, `${label}: valor inválido.`);
         // Taxa, percentual ou honorário negativo reduziria o débito
-        if (value < 0) throw fail(calcLabel, `${label}: o valor não pode ser negativo.`);
+        if (value < 0 && !unused.has(field)) throw fail(calcLabel, `${label}: o valor não pode ser negativo.`);
         values[field] = value;
     }
     for (const [field, label] of Object.entries(FLAGS)) {
