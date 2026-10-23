@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { AdminUploadUserDocumentUseCase } from './AdminUploadUserDocumentUseCase';
+import { AppError } from '../../../../errors/AppError';
 
 class AdminUploadUserDocumentController {
     async handle(request: Request, response: Response): Promise<Response> {
@@ -15,7 +16,10 @@ class AdminUploadUserDocumentController {
             const url = await useCase.execute({ userId: id, file });
             return response.status(201).json({ url });
         } catch (err: any) {
-            return response.status(500).json({ error: err.message });
+            // Tipo ou tamanho do arquivo recusado (415/413) não é erro do servidor
+            const status = err instanceof AppError ? err.statusCode : 500;
+            if (status >= 500) console.error('[ADMIN UPLOAD] Erro ao enviar documento:', err.message);
+            return response.status(status).json({ error: err.message });
         }
     }
 }
