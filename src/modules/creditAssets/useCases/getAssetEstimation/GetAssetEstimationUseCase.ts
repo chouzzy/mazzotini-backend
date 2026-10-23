@@ -139,7 +139,8 @@ class GetAssetEstimationUseCase {
             where: { auth0UserId: viewer.auth0UserId },
             select: { id: true, role: true },
         });
-        if (user?.role && INTERNAL_ROLES.includes(user.role)) return;
+        // O papel do banco só vale quando o token vem sem papéis
+        if (viewer.roles.length === 0 && user?.role && INTERNAL_ROLES.includes(user.role)) return;
 
         const notFound = new AppError("Ativo de crédito não encontrado.", 404);
         if (!user || (asset.status && UNSYNCED_STATUSES.includes(asset.status))) throw notFound;

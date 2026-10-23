@@ -12,8 +12,9 @@ jest.mock('@prisma/client', () => {
 
 const prisma = new PrismaClient() as any;
 
-// Processo e usuários fictícios
-const ASSET_ID = '64b7f0c2a1b2c3d4e5f60801';
+// Processos e usuários fictícios
+const ASSET_ID       = '64b7f0c2a1b2c3d4e5f60801';
+const OTHER_ASSET_ID = '64b7f0c2a1b2c3d4e5f60802';
 const users: Record<string, { id: string; role: string }> = {
     'auth0|cliente':   { id: 'cliente-1',   role: 'INVESTOR' },
     'auth0|associado': { id: 'associado-1', role: 'ASSOCIATE' },
@@ -28,9 +29,13 @@ beforeEach(() => {
         id: ASSET_ID, status: 'Ativo', currentValue: 1000, updateIndexType: 'IPCA', contractualIndexRate: 0, updates: [],
     });
     prisma.user.findUnique.mockImplementation(({ where }: any) => Promise.resolve(users[where.auth0UserId] ?? null));
-    // O cliente investe no processo e o associado o acompanha
-    prisma.investment.count.mockImplementation(({ where }: any) => Promise.resolve(
-        where.OR.some((c: any) => c.userId === 'cliente-1' || c.associateId === 'associado-1') ? 1 : 0));
+    // Um investimento só: o cliente investe no ASSET_ID e o associado o acompanha. O filtro que a
+    // consulta não mandar fica aberto, para um filtro esquecido no use case aparecer no teste
+    const investments = [{ creditAssetId: ASSET_ID, userId: 'cliente-1', associateId: 'associado-1' }];
+    prisma.investment.count.mockImplementation(({ where }: any) => Promise.resolve(investments.filter(inv =>
+        (where.creditAssetId === undefined || inv.creditAssetId === where.creditAssetId)
+        && where.OR.some((c: any) => (c.userId !== undefined && c.userId === inv.userId)
+            || (c.associateId !== undefined && c.associateId === inv.associateId))).length));
 });
 
 const estimate = (auth0UserId: string, roles: string[] = []) =>
@@ -48,6 +53,22 @@ describe('GetAssetEstimationUseCase', () => {
 
     it('quem não acompanha o processo recebe 404', async () => {
         await expect(estimate('auth0|outro')).rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    it.each([
+        ['o cliente', 'auth0|cliente'],
+        ['o associado', 'auth0|associado'],
+    ])('%s de outro processo recebe 404 neste', async (_, auth0UserId) => {
+        prisma.creditAsset.findUnique.mockResolvedValue({
+            id: OTHER_ASSET_ID, status: 'Ativo', currentValue: 500, updateIndexType: 'IPCA', contractualIndexRate: 0, updates: [],
+        });
+
+        await expect(new GetAssetEstimationUseCase().execute(OTHER_ASSET_ID, { auth0UserId, roles: [] }))
+            .rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    it('com papéis no token, o papel de admin do banco não vale (como no checkRole)', async () => {
+        await expect(estimate('auth0|admin', ['INVESTOR'])).rejects.toMatchObject({ statusCode: 404 });
     });
 
     it('processo ainda sem os dados do Legal One fica oculto para o cliente', async () => {
