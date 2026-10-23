@@ -275,18 +275,28 @@ async function run(indexName: string, job: () => Promise<IBGEDataPoint[]>): Prom
 // ── índice parado ─────────────────────────────────────────────────────────────
 
 /**
- * Atraso normal, em meses, entre o mês atual (Brasília) e o último mês gravado de cada índice.
- * Mais que isso, a atualização diária parou (BCB fora do ar, mudança na API): os meses que faltam
- * entram nos cálculos como 0%, com aviso na tela, e o recálculo do dia 5 grava o valor corrigido a
- * menos. A série do Tema 1368 é histórica e fica de fora.
+ * Atraso normal, em meses, entre o mês atual (Brasília) e o último mês gravado de cada índice, do
+ * dia 2 em diante. Mais que isso, a atualização diária parou (BCB fora do ar, mudança na API): os
+ * meses que faltam entram nos cálculos como 0%, com aviso na tela, e o recálculo do dia 5 grava o
+ * valor corrigido a menos. A série do Tema 1368 é histórica e fica de fora.
  */
 export const EXPECTED_INDEX_LAG: Record<string, number> = {
-    // Saem no mês seguinte (o IPCA por volta do dia 10; o IPCA-E, que é o IPCA-15, no fim do próprio
-    // mês) ou só com o mês fechado (SELIC e CDI)
-    IPCA: 2, INPC: 2, IPCA_E: 2, IGP_M: 2, CDI_MENSAL: 2, CDI_DIARIA: 2, SELIC: 2,
-    // A linha do mês usa o índice do mês anterior, que sai até o começo do mês
-    [TJSP]: 1, TJPR_MEDIA_INPC_IGPDI: 1, TJMG_CORREGEDORIA: 1, [TAXA_LEGAL]: 1,
+    // Saem por volta do dia 10 do mês seguinte (o IGP-M, no fim do próprio mês ou no começo do
+    // seguinte)
+    IPCA: 2, INPC: 2, IGP_M: 2,
+    // O IPCA-E (IPCA-15) sai por volta do dia 25 do próprio mês; SELIC e CDI entram com o mês
+    // fechado, no dia 1 do seguinte
+    IPCA_E: 1, CDI_MENSAL: 1, CDI_DIARIA: 1, SELIC: 1,
+    // A linha do mês M usa o IPCA-15 de M-1, que sai por volta do dia 25 de M-1: o job das 6h do
+    // dia 1 já grava a linha de M, que o recálculo do dia 5 usa
+    [TJSP]: 0,
+    // A linha do mês M usa o INPC (e o IGP-DI) de M-1, que saem por volta do dia 10 de M; a taxa
+    // legal de M sai no começo de M
+    TJPR_MEDIA_INPC_IGPDI: 1, TJMG_CORREGEDORIA: 1, [TAXA_LEGAL]: 1,
 };
+
+/** No dia 1, o mês que acabou de virar pode ainda não ter entrado: um mês a mais de folga. */
+const FIRST_DAY_GRACE = 1;
 
 export interface StaleIndex {
     indexName: string;
@@ -295,12 +305,13 @@ export interface StaleIndex {
 
 /** Os índices mais atrasados que o normal (ou sem nenhum mês gravado). */
 export async function findStaleIndexes(now = new Date()): Promise<StaleIndex[]> {
-    const { year, month } = saoPauloDateParts(now);
+    const { year, month, day } = saoPauloDateParts(now);
     const current = year * 12 + month;
+    const grace   = day === 1 ? FIRST_DAY_GRACE : 0;
     const stale: StaleIndex[] = [];
     for (const [indexName, lag] of Object.entries(EXPECTED_INDEX_LAG)) {
         const last = await lastStoredMonth(indexName);
-        if (!last || current - (last.year * 12 + last.month) > lag) stale.push({ indexName, last });
+        if (!last || current - (last.year * 12 + last.month) > lag + grace) stale.push({ indexName, last });
     }
     return stale;
 }
@@ -317,11 +328,10 @@ export async function notifyStaleIndexes(now = new Date()): Promise<StaleIndex[]
     for (const s of stale) {
         const period = `${s.indexName}:${monthKey}`;
         if (await prisma.jobRun.findUnique({ where: { job_period: { job: 'INDEX_STALE', period } } })) continue;
-        await prisma.jobRun.create({ data: { job: 'INDEX_STALE', period, notifiedAt: new Date() } });
 
         const label = indexLabel(s.indexName);
         console.error(`  Índice ${s.indexName} sem atualização: último mês gravado ${s.last ? formatMonth(s.last) : 'nenhum'}`);
-        await notifyAllAdmins({
+        const sent = await notifyAllAdmins({
             title:            'Índice sem atualização',
             message:          s.last
                 ? `O último mês de ${label} no banco de índices é ${formatMonth(s.last)}: a atualização diária não está conseguindo buscar os meses seguintes no BCB. Nos cálculos, esses meses entram como 0%, com aviso. Avise o suporte.`
@@ -329,6 +339,8 @@ export async function notifyStaleIndexes(now = new Date()): Promise<StaleIndex[]
             type:             'warning',
             notificationType: 'CALCULATION',
         });
+        // Só marca o mês como avisado se o aviso foi gravado: senão, tenta de novo no dia seguinte
+        if (sent) await prisma.jobRun.create({ data: { job: 'INDEX_STALE', period, notifiedAt: new Date() } });
     }
     return stale;
 }

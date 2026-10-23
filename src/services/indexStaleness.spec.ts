@@ -27,6 +27,7 @@ beforeEach(() => {
     lastMonth.TJSP_LEI14905 = { year: 2026, month: 10 };
     prisma.indexSeries.findFirst.mockImplementation(({ where }: any) => Promise.resolve(lastMonth[where.indexName] ?? null));
     prisma.jobRun.findUnique.mockResolvedValue(null);
+    (notifyAllAdmins as jest.Mock).mockResolvedValue(true);
 });
 
 describe('findStaleIndexes', () => {
@@ -50,6 +51,35 @@ describe('findStaleIndexes', () => {
             { indexName: 'SELIC', last: null },
         ]));
         expect(stale).toHaveLength(3);
+    });
+
+    it('acusa já com um mês a mais o IPCA-E, a SELIC e o CDI, e o TJSP sem a linha do mês (a do recálculo do dia 5)', async () => {
+        lastMonth.IPCA_E        = { year: 2026, month: 8 };
+        lastMonth.SELIC         = { year: 2026, month: 8 };
+        lastMonth.CDI_MENSAL    = { year: 2026, month: 8 };
+        lastMonth.TJSP_LEI14905 = { year: 2026, month: 9 };
+
+        const stale = await findStaleIndexes(OCT_23);
+
+        expect(stale.map(s => s.indexName).sort()).toEqual(['CDI_MENSAL', 'IPCA_E', 'SELIC', 'TJSP_LEI14905']);
+    });
+
+    it('no dia 1, o mês que acabou de virar tem um dia de folga', async () => {
+        // Como ficam os índices no fim de outubro, antes de o job das 6h do dia 1 gravar novembro
+        lastMonth = {
+            ...lastMonth,
+            IPCA: { year: 2026, month: 9 }, INPC: { year: 2026, month: 9 }, IGP_M: { year: 2026, month: 9 },
+            IPCA_E: { year: 2026, month: 10 }, TJPR_MEDIA_INPC_IGPDI: { year: 2026, month: 10 },
+            TJMG_CORREGEDORIA: { year: 2026, month: 10 }, TAXA_LEGAL: { year: 2026, month: 10 },
+            CDI_MENSAL: { year: 2026, month: 9 }, CDI_DIARIA: { year: 2026, month: 9 }, SELIC: { year: 2026, month: 9 },
+            TJSP_LEI14905: { year: 2026, month: 10 },
+        };
+
+        // 01/11 e 02/11/2026, 6h em Brasília
+        await expect(findStaleIndexes(new Date('2026-11-01T09:00:00.000Z'))).resolves.toEqual([]);
+        const stale = await findStaleIndexes(new Date('2026-11-02T09:00:00.000Z'));
+
+        expect(stale.map(s => s.indexName).sort()).toEqual(['CDI_DIARIA', 'CDI_MENSAL', 'SELIC', 'TJSP_LEI14905']);
     });
 });
 
@@ -80,5 +110,15 @@ describe('notifyStaleIndexes', () => {
         expect(notifyAllAdmins).toHaveBeenCalledWith(expect.objectContaining({
             message: 'Não há nenhum mês de taxa legal no banco de índices, e os cálculos que precisam desse índice são recusados. Avise o suporte.',
         }));
+    });
+
+    it('se o aviso não foi gravado, não marca o índice como avisado (tenta de novo no dia seguinte)', async () => {
+        lastMonth.IPCA = { year: 2026, month: 3 };
+        (notifyAllAdmins as jest.Mock).mockResolvedValue(false);
+
+        await notifyStaleIndexes(OCT_23);
+
+        expect(notifyAllAdmins).toHaveBeenCalled();
+        expect(prisma.jobRun.create).not.toHaveBeenCalled();
     });
 });
