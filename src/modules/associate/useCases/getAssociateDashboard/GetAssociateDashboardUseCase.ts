@@ -5,7 +5,6 @@ export interface AssociateClient {
     name: string;
     email: string;
     picture: string;
-    cpfOrCnpj: string | null;
     processCount: number;
 }
 
@@ -27,7 +26,6 @@ class GetAssociateDashboardUseCase {
                         name: true,
                         email: true,
                         profilePictureUrl: true,
-                        cpfOrCnpj: true,
                     },
                 },
             },
@@ -45,7 +43,6 @@ class GetAssociateDashboardUseCase {
                     name: displayName,
                     email: u.email,
                     picture: u.profilePictureUrl || fallback,
-                    cpfOrCnpj: u.cpfOrCnpj,
                     processCount: 0,
                 });
             }
