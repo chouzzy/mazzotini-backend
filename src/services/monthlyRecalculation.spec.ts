@@ -11,6 +11,7 @@ jest.mock('@prisma/client', () => {
         processCalculationParams: { findMany: jest.fn() },
         calculationLog:           { findMany: jest.fn(), count: jest.fn() },
         creditAsset:              { findMany: jest.fn() },
+        $runCommandRaw:           jest.fn(),
     };
     return { PrismaClient: jest.fn(() => mPrisma) };
 });
@@ -32,15 +33,23 @@ const at = (day: number, hour: number) => new Date(Date.UTC(2026, 10, day, hour 
 const runKey = { job_period: { job: 'MONTHLY_RECALCULATION', period: '2026-11' } };
 const finalUpdate = () => prisma.jobRun.update.mock.calls.find((c: any[]) => c[0].data.status === 'DONE')?.[0];
 
+/** O erro que o Prisma 5 lança no MongoDB com o Atlas fora do ar. */
+const atlasOffline = () => Object.assign(
+    new Error('Raw query failed. Code: `unknown`. Message: `Kind: Server selection timeout: No available servers`'),
+    { name: 'PrismaClientKnownRequestError', code: 'P2010' },
+);
+
 beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(console, 'error').mockImplementation(() => {});
     (isFirstInstance as jest.Mock).mockReturnValue(true);
+    (notifyAllAdmins as jest.Mock).mockResolvedValue(true);
     prisma.processCalculationParams.findMany.mockResolvedValue(params);
     prisma.calculationLog.findMany.mockResolvedValue([]);
     prisma.calculationLog.count.mockResolvedValue(0);
     prisma.creditAsset.findMany.mockResolvedValue([{ id: 'asset-2', legalOneId: 222, processNumber: '0000002-00.2020.8.26.0100' }]);
     prisma.jobRun.findUnique.mockResolvedValue(null);
+    prisma.$runCommandRaw.mockResolvedValue({ ok: 1 });   // banco no ar
     runner.calculateAndSave.mockResolvedValue({ totalValue: 1000 });
 });
 
@@ -67,7 +76,7 @@ describe('runMonthlyRecalculation', () => {
         expect(summary).toMatchObject({ recalculated: 2, skipped: 1 });
     });
 
-    it('a recusa de um cálculo vira aviso aos admins, e o mês fecha', async () => {
+    it('a recusa de um cálculo (banco no ar) vira aviso aos admins, e o mês fecha', async () => {
         runner.calculateAndSave.mockImplementation((p: any) => p.assetId === 'asset-2'
             ? Promise.reject(new Error('Falta IPCA de 01/2026 no banco de índices. Avise o suporte.'))
             : Promise.resolve({ totalValue: 1000, warnings: ['aviso'] }));
@@ -81,13 +90,20 @@ describe('runMonthlyRecalculation', () => {
         expect(finalUpdate()).toBeDefined();
     });
 
-    it('banco fora do ar no meio: para sem fechar o mês, para ser retomado', async () => {
-        const offline = Object.assign(new Error('Server selection timeout'), { name: 'PrismaClientUnknownRequestError' });
-        runner.calculateAndSave.mockResolvedValueOnce({ totalValue: 1000 }).mockRejectedValueOnce(offline);
+    it('Atlas fora do ar no meio (o P2010 do MongoDB): para sem fechar o mês, para ser retomado', async () => {
+        runner.calculateAndSave.mockResolvedValueOnce({ totalValue: 1000 }).mockRejectedValueOnce(atlasOffline());
 
         await expect(runMonthlyRecalculation(at(5, 4), runner)).rejects.toThrow('Server selection timeout');
         expect(finalUpdate()).toBeUndefined();
         expect(notifyAllAdmins).not.toHaveBeenCalled();
+    });
+
+    it('erro sem formato do Prisma (ex.: embrulhado) com o banco sem responder ao ping: também para', async () => {
+        prisma.$runCommandRaw.mockRejectedValue(atlasOffline());
+        runner.calculateAndSave.mockRejectedValueOnce(new Error('Contrato 2: falha inesperada'));
+
+        await expect(runMonthlyRecalculation(at(5, 4), runner)).rejects.toThrow('Contrato 2: falha inesperada');
+        expect(finalUpdate()).toBeUndefined();
     });
 
     it('com o PM2 em cluster, só a primeira instância recalcula', async () => {
@@ -119,6 +135,21 @@ describe('resumeMonthlyRecalculationIfPending', () => {
         await expect(resumeMonthlyRecalculationIfPending(at(10, 23), runner)).resolves.toMatchObject({ recalculated: 3 });
     });
 
+    it('com a execução do mês ainda rodando nesta instância, não começa outra nem avisa', async () => {
+        let finish: (v: unknown) => void = () => {};
+        runner.calculateAndSave.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        const first = runMonthlyRecalculation(at(10, 23), runner);
+        await new Promise(resolve => setImmediate(resolve));
+
+        // Já é dia 11, e o mês ainda não fechou: a execução em andamento não vira aviso
+        await expect(resumeMonthlyRecalculationIfPending(at(11, 0), runner)).resolves.toBeNull();
+        expect(prisma.jobRun.findUnique).not.toHaveBeenCalled();
+        expect(notifyAllAdmins).not.toHaveBeenCalled();
+
+        finish({ totalValue: 1000 });
+        await first;
+    });
+
     it('mês já fechado: não recalcula de novo', async () => {
         prisma.jobRun.findUnique.mockResolvedValue({ status: 'DONE' });
 
@@ -126,11 +157,10 @@ describe('resumeMonthlyRecalculationIfPending', () => {
         expect(runner.calculateAndSave).not.toHaveBeenCalled();
     });
 
-    it('mês recalculado pelo cron antigo, sem registro (deploy no meio do mês): não recalcula', async () => {
-        prisma.calculationLog.count.mockResolvedValue(12);
+    it('mês sem registro e com log do cron antigo (que pode ter parado no meio): retoma, pulando os que já têm log', async () => {
+        prisma.calculationLog.findMany.mockResolvedValue([{ assetId: 'asset-1' }, { assetId: 'asset-2' }]);
 
-        await expect(resumeMonthlyRecalculationIfPending(at(7, 10), runner)).resolves.toBeNull();
-        expect(prisma.jobRun.upsert).not.toHaveBeenCalled();
+        await expect(resumeMonthlyRecalculationIfPending(at(7, 10), runner)).resolves.toMatchObject({ recalculated: 1, skipped: 2 });
     });
 
     it('depois do dia 10, um mês que não terminou vira aviso aos admins, uma vez', async () => {
@@ -139,7 +169,7 @@ describe('resumeMonthlyRecalculationIfPending', () => {
         await expect(resumeMonthlyRecalculationIfPending(at(11, 10), runner)).resolves.toBeNull();
         expect(runner.calculateAndSave).not.toHaveBeenCalled();
         expect(notifyAllAdmins).toHaveBeenCalledWith(expect.objectContaining({ title: 'Recálculo mensal não terminou' }));
-        expect(prisma.jobRun.update).toHaveBeenCalledWith({ where: runKey, data: { notifiedAt: expect.any(Date) } });
+        expect(prisma.jobRun.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: runKey, update: { notifiedAt: expect.any(Date) } }));
 
         jest.clearAllMocks();
         prisma.jobRun.findUnique.mockResolvedValue({ status: 'RUNNING', notifiedAt: new Date() });
@@ -147,10 +177,30 @@ describe('resumeMonthlyRecalculationIfPending', () => {
         expect(notifyAllAdmins).not.toHaveBeenCalled();
     });
 
-    it('depois do dia 10, sem registro do mês (deploy no fim do mês): nem recalcula nem avisa', async () => {
+    it('depois do dia 10, mês que nem rodou (sem registro e sem log do cron): avisa, uma vez', async () => {
+        await expect(resumeMonthlyRecalculationIfPending(at(12, 10), runner)).resolves.toBeNull();
+
+        expect(notifyAllAdmins).toHaveBeenCalledWith(expect.objectContaining({ title: 'Recálculo mensal não rodou' }));
+        expect(prisma.jobRun.upsert).toHaveBeenCalledWith(expect.objectContaining({
+            create: { job: 'MONTHLY_RECALCULATION', period: '2026-11', status: 'MISSED', notifiedAt: expect.any(Date) },
+        }));
+    });
+
+    it('depois do dia 10, mês do cron antigo (sem registro, com log): nem recalcula nem avisa', async () => {
+        prisma.calculationLog.count.mockResolvedValue(12);
+
         await expect(resumeMonthlyRecalculationIfPending(at(24, 10), runner)).resolves.toBeNull();
         expect(prisma.jobRun.upsert).not.toHaveBeenCalled();
         expect(notifyAllAdmins).not.toHaveBeenCalled();
+    });
+
+    it('se o aviso não foi gravado, não marca o mês como avisado (tenta de novo na próxima hora)', async () => {
+        prisma.jobRun.findUnique.mockResolvedValue({ status: 'RUNNING', notifiedAt: null });
+        (notifyAllAdmins as jest.Mock).mockResolvedValue(false);
+
+        await resumeMonthlyRecalculationIfPending(at(11, 10), runner);
+
+        expect(prisma.jobRun.upsert).not.toHaveBeenCalled();
     });
 });
 
@@ -158,6 +208,7 @@ describe('isInfrastructureError', () => {
     it.each([
         ['banco que não respondeu', { name: 'PrismaClientUnknownRequestError' }, true],
         ['conexão recusada', { name: 'PrismaClientKnownRequestError', code: 'P1001' }, true],
+        ['Atlas fora do ar no MongoDB (P2010)', { name: 'PrismaClientKnownRequestError', code: 'P2010' }, true],
         ['tempo esgotado no pool', { name: 'PrismaClientKnownRequestError', code: 'P2024' }, true],
         ['registro que não existe mais', { name: 'PrismaClientKnownRequestError', code: 'P2025' }, false],
         ['recusa do cálculo', new Error('Falta IPCA de 01/2026 no banco de índices.'), false],

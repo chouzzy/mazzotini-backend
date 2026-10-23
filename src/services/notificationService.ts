@@ -11,7 +11,11 @@ interface CreateNotificationOptions {
     link?: string;
 }
 
-export async function notifyAllAdmins(opts: CreateNotificationOptions): Promise<void> {
+/**
+ * Cria a notificação para os admins. Não lança: devolve false se não conseguiu gravar, para quem
+ * precisa marcar que avisou (e não marcar quando o aviso não saiu).
+ */
+export async function notifyAllAdmins(opts: CreateNotificationOptions): Promise<boolean> {
     try {
         await prisma.systemNotification.create({
             data: {
@@ -26,7 +30,9 @@ export async function notifyAllAdmins(opts: CreateNotificationOptions): Promise<
                 readBy: [],
             },
         });
+        return true;
     } catch (err) {
         console.error('[NotificationService] Falha ao criar notificação:', err);
+        return false;
     }
 }

@@ -486,7 +486,7 @@ model JobRun {
   id         String    @id @default(auto()) @map("_id") @db.ObjectId
   job        String    // MONTHLY_RECALCULATION | INDEX_STALE
   period     String    // ex.: "2026-11", ou "IPCA:2026-11" no aviso de índice
-  status     String?   // RUNNING | DONE
+  status     String?   // RUNNING | DONE | MISSED (não rodou na janela)
   startedAt  DateTime? @default(now())
   finishedAt DateTime?
   notifiedAt DateTime? // aviso aos admins, para não repetir

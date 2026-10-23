@@ -47,14 +47,28 @@ export function describeRecalculation(s: MonthlyRecalculationSummary): string {
 }
 
 /**
- * Banco fora do ar ou conexão perdida: não é recusa do cálculo. A execução para e é retomada depois.
+ * Erro que já se sabe ser do banco fora do ar ou da conexão perdida: não é recusa do cálculo, e a
+ * execução para para ser retomada depois. No MongoDB, o "Server selection timeout" chega como P2010.
  * Os erros do Prisma de dado (registro que não existe mais, por exemplo) contam como recusa.
  */
 export function isInfrastructureError(e: any): boolean {
     const name = typeof e?.name === 'string' ? e.name : '';
     if (['PrismaClientInitializationError', 'PrismaClientRustPanicError', 'PrismaClientUnknownRequestError'].includes(name)) return true;
-    if (name === 'PrismaClientKnownRequestError') return /^P1/.test(e.code ?? '') || ['P2024', 'P2034'].includes(e.code);
+    if (name === 'PrismaClientKnownRequestError') return /^P1/.test(e.code ?? '') || ['P2010', 'P2024', 'P2034'].includes(e.code);
     return false;
+}
+
+/**
+ * O banco responde? O formato do erro do Prisma muda com o conector e a versão, então, depois de um
+ * erro que não se reconhece, quem decide entre "banco fora do ar" e "recusa do cálculo" é um ping.
+ */
+async function databaseIsUp(): Promise<boolean> {
+    try {
+        await prisma.$runCommandRaw({ ping: 1 });
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 let running: Promise<MonthlyRecalculationSummary | null> | null = null;
@@ -107,7 +121,8 @@ async function recalculate(now: Date, runner: Pick<RunCalculationUseCase, 'calcu
             if (result.warnings?.length) withWarnings++;
             recalculated++;
         } catch (e: any) {
-            if (isInfrastructureError(e)) throw e;
+            // Banco fora do ar: para aqui, sem fechar o mês, e a retomada continua deste processo
+            if (isInfrastructureError(e) || !(await databaseIsUp())) throw e;
             const asset   = assetOf.get(params.assetId);
             const failure = { assetId: params.assetId, legalOneId: asset?.legalOneId, processNumber: asset?.processNumber, error: e.message };
             console.error(`  Erro ao recalcular o processo ${describeAsset(failure)}:`, e.message);
@@ -135,6 +150,9 @@ export async function resumeMonthlyRecalculationIfPending(
     runner?: Pick<RunCalculationUseCase, 'calculateAndSave'>,
 ): Promise<MonthlyRecalculationSummary | null> {
     if (!isFirstInstance()) return null;
+    // A execução do mês já está rodando nesta instância (a das 4h ou outra retomada): ela registra o
+    // próprio resumo, e o mês ainda não terminou de verdade (não é caso de aviso)
+    if (running) return null;
 
     const { year, month, day, hour } = saoPauloDateParts(now);
     if (day < RECALCULATION_DAY || (day === RECALCULATION_DAY && hour < RECALCULATION_HOUR)) return null;
@@ -142,31 +160,44 @@ export async function resumeMonthlyRecalculationIfPending(
     const period = periodOf(year, month);
     const key    = { job_period: { job: JOB, period } };
     const run    = await prisma.jobRun.findUnique({ where: key });
-    if (run?.status === 'DONE') return null;
+    if (run?.status === 'DONE' || run?.notifiedAt) return null;
 
     if (day > LAST_RESUME_DAY) {
-        // Começou e não terminou: os processos que faltaram ficam com o valor anterior
-        if (run && !run.notifiedAt) {
-            await notifyAllAdmins({
-                title:            'Recálculo mensal não terminou',
-                message:          `O recálculo de ${formatPeriod(period)} começou e não terminou até o dia ${LAST_RESUME_DAY}. Os processos que faltaram continuam com o valor anterior até o próximo recálculo. Avise o suporte.`,
-                type:             'warning',
-                notificationType: 'CALCULATION',
-                link:             '/processos',
-            });
-            await prisma.jobRun.update({ where: key, data: { notifiedAt: new Date() } });
-        }
+        await noticeUnfinishedMonth(period, year, month, run !== null);
         return null;
     }
 
-    // Sem registro, o mês pode ter sido recalculado antes desta retomada existir (o cron antigo não
-    // gravava o andamento): com log do cron no mês, não recalcula de novo
-    if (!run) {
+    // Retoma também um mês sem registro e com log do cron: o cron antigo, de antes desta retomada,
+    // pode ter parado no meio. A execução pula os processos que já têm o log do mês
+    return runMonthlyRecalculation(now, runner);
+}
+
+/**
+ * Depois do último dia de retomada: avisa os admins, uma vez, do mês que começou e não terminou ou
+ * que nem rodou (servidor ou banco fora do ar a janela toda). O registro só é marcado se o aviso saiu.
+ */
+async function noticeUnfinishedMonth(period: string, year: number, month: number, started: boolean): Promise<void> {
+    if (!started) {
+        // Sem registro e com log do cron no mês: é um mês do cron antigo, que não gravava o andamento
         const legacyLogs = await prisma.calculationLog.count({
             where: { calculatedBy: 'cron', referenceYear: year, referenceMonth: month },
         });
-        if (legacyLogs > 0) return null;
+        if (legacyLogs > 0) return;
     }
 
-    return runMonthlyRecalculation(now, runner);
+    const sent = await notifyAllAdmins({
+        title:            started ? 'Recálculo mensal não terminou' : 'Recálculo mensal não rodou',
+        message:          started
+            ? `O recálculo de ${formatPeriod(period)} começou e não terminou até o dia ${LAST_RESUME_DAY}. Os processos que faltaram continuam com o valor anterior até o próximo recálculo. Avise o suporte.`
+            : `O recálculo de ${formatPeriod(period)} não rodou do dia ${RECALCULATION_DAY} ao dia ${LAST_RESUME_DAY} (servidor ou banco fora do ar). Os valores atualizados continuam os do mês anterior até o próximo recálculo. Avise o suporte.`,
+        type:             'warning',
+        notificationType: 'CALCULATION',
+        link:             '/processos',
+    });
+    if (!sent) return;
+    await prisma.jobRun.upsert({
+        where:  { job_period: { job: JOB, period } },
+        create: { job: JOB, period, status: 'MISSED', notifiedAt: new Date() },
+        update: { notifiedAt: new Date() },
+    });
 }
