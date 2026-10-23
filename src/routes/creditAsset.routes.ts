@@ -182,7 +182,7 @@ creditAssetRoutes.post(
  *                 meta:
  *                   $ref: '#/components/schemas/PaginatedMeta'
  *       403:
- *         description: Conta ainda não aprovada (code ACCOUNT_NOT_APPROVED)
+ *         description: Papel sem acesso, ou conta ainda não aprovada (code ACCOUNT_NOT_APPROVED)
  */
 creditAssetRoutes.get(
     '/api/assets',
@@ -287,7 +287,7 @@ creditAssetRoutes.get(
  *             schema:
  *               $ref: '#/components/schemas/CreditAssetSummary'
  *       403:
- *         description: Conta ainda não aprovada (code ACCOUNT_NOT_APPROVED)
+ *         description: Papel sem acesso, ou conta ainda não aprovada (code ACCOUNT_NOT_APPROVED)
  *       404:
  *         description: Ativo não encontrado
  */
@@ -366,7 +366,7 @@ creditAssetRoutes.post(
  *                       date:  { type: string, example: '2026-11-23' }
  *                       value: { type: number, example: 97786.99 }
  *       403:
- *         description: Conta ainda não aprovada (code ACCOUNT_NOT_APPROVED)
+ *         description: Papel sem acesso, ou conta ainda não aprovada (code ACCOUNT_NOT_APPROVED)
  *       404:
  *         description: Ativo não encontrado, ou que o usuário não acompanha
  */
