@@ -168,10 +168,11 @@ class RunCalculationUseCase {
         } else {
             // Vários cálculos no mesmo processo: cada um é feito por inteiro e o valor é a soma
             const parts = [{ label: params.calculationLabel?.trim() || 'Cálculo 1', params: calcParams }, ...extras];
+            // Todos são validados antes de calcular qualquer um: a recusa de um extra sai igual com o
+            // banco no ar ou fora. A validação já põe o nome do cálculo na frente, como no PUT /params
+            for (const part of parts) validateCalculation(part.params, part.label);
             const results: { label: string; result: CalculationResult }[] = [];
             for (const part of parts) {
-                // A validação já põe o nome do cálculo na frente, como no PUT /params
-                validateCalculation(part.params, part.label);
                 try {
                     results.push({ label: part.label, result: await calculateJudicialDebt(part.params, refY, refM) });
                 } catch (e: any) {

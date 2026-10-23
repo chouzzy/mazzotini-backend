@@ -271,6 +271,8 @@ describe('RunCalculationUseCase: revisão de 23/10', () => {
 
         await expect(new RunCalculationUseCase().calculateAndSave(params, 'cron', 2026, 11))
             .rejects.toThrow('Contrato 2: multa: o valor não pode ser negativo.');
+        // Todos são validados antes de calcular: o cálculo 1 nem roda
+        expect(calculateJudicialDebt).not.toHaveBeenCalled();
         expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
