@@ -1,5 +1,7 @@
 import { prisma } from '../../../../prisma';
+import { AppError } from '../../../../errors/AppError';
 import { notifyAllAdmins } from '../../../../services/notificationService';
+import { assertReferralAssociate } from '../../../management/referralInvestments';
 // /src/modules/users/useCases/updateMyProfile/UpdateMyProfileUseCase.ts
 
 
@@ -51,16 +53,39 @@ interface IRequest {
     data: IRequestData;
 }
 
+/** Só os dígitos: o CPF/CNPJ é gravado ora com máscara, ora sem. */
+const digits = (value: string | null | undefined) => (value ?? '').replace(/\D/g, '');
+
 class UpdateMyProfileUseCase {
     async execute({ auth0UserId, data }: IRequest): Promise<void> {
         console.log(`[PROFILE] A atualizar perfil para o utilizador: ${auth0UserId}`);
 
         // O 'address' antigo é depreciado e não será usado.
-        const { address, useCommercialAddress, ...validData } = data as any;
+        const { address, useCommercialAddress, consentedToTermsAt, consentedToPrivacyAt, ...validData } = data as any;
 
         const existingUser = await prisma.user.findUnique({
             where: { auth0UserId },
         });
+
+        // Com o cadastro aprovado, o CPF/CNPJ só muda pelo escritório (Editar Usuário): é por ele
+        // que os documentos do Legal One chegam ao cliente. Preencher pela primeira vez continua livre
+        const savedDocument = digits(existingUser?.cpfOrCnpj);
+        if (existingUser?.status === 'ACTIVE' && savedDocument && 'cpfOrCnpj' in validData && digits(validData.cpfOrCnpj) !== savedDocument) {
+            throw new AppError('O CPF/CNPJ só pode ser alterado pelo escritório. Fale com o suporte.', 400);
+        }
+
+        // Indicação nova: precisa ser um associado, como na tela, e não o próprio cliente
+        if (existingUser && typeof validData.referredById === 'string' && validData.referredById
+            && validData.referredById !== existingUser.referredById) {
+            if (!/^[a-f0-9]{24}$/i.test(validData.referredById)) {
+                throw new AppError('O usuário indicado não é um associado.', 400);
+            }
+            try {
+                await assertReferralAssociate(prisma, existingUser.id, validData.referredById);
+            } catch (err: any) {
+                throw new AppError(err.message, 400);
+            }
+        }
 
         // Campos ObjectId: string vazia deve virar null para o Prisma não rejeitar com Malformed ObjectID
         const OBJECT_ID_FIELDS = ['referredById', 'associateId', 'folderId'];
@@ -73,6 +98,11 @@ class UpdateMyProfileUseCase {
         const updateData: any = {
             ...validData,
         };
+
+        // Consentimento LGPD: vale a hora do servidor; da tela vem só o aceite
+        const now = new Date();
+        if (consentedToTermsAt) updateData.consentedToTermsAt = now;
+        if (consentedToPrivacyAt) updateData.consentedToPrivacyAt = now;
 
         const isMovingToPendingReview = !existingUser || existingUser.status !== "ACTIVE";
         if (isMovingToPendingReview) {

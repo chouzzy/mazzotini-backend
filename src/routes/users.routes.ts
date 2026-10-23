@@ -187,8 +187,10 @@ userRoutes.get('/api/users/me', checkJwt, getMyProfileController.handle);
  *     summary: Atualiza o perfil do usuário autenticado
  *     description: |
  *       Permite editar dados pessoais, endereços e preferências de contato.
- *       Se o usuário já for ACTIVE, a alteração é enviada para aprovação (PENDING_REVIEW).
- *       Se ainda estiver em onboarding, os dados são salvos diretamente.
+ *       No onboarding, salvar leva o cadastro para PENDING_REVIEW e avisa os admins.
+ *       Com o cadastro aprovado (ACTIVE), as alterações valem na hora, menos o CPF/CNPJ,
+ *       que só o escritório altera (400). A indicação precisa ser um associado (400).
+ *       O consentimento dos termos e da privacidade é gravado com a hora do servidor.
  *     tags: [Usuários]
  *     security:
  *       - bearerAuth: []
@@ -199,8 +201,10 @@ userRoutes.get('/api/users/me', checkJwt, getMyProfileController.handle);
  *           schema:
  *             $ref: '#/components/schemas/UserProfile'
  *     responses:
- *       200:
+ *       204:
  *         description: Perfil atualizado
+ *       400:
+ *         description: Erro de validação, CPF/CNPJ alterado com o cadastro aprovado ou indicação que não é associado
  */
 userRoutes.patch('/api/users/me/profile', checkJwt, updateMyProfileController.handle);
 
