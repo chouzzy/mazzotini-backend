@@ -91,8 +91,9 @@ describe('runMonthlyRecalculation', () => {
         expect(finalUpdate()).toBeDefined();
     });
 
-    it('Atlas fora do ar no meio (o P2010 do MongoDB): para sem fechar o mês, para ser retomado', async () => {
-        runner.calculateAndSave.mockResolvedValueOnce({ totalValue: 1000 }).mockRejectedValueOnce(atlasOffline());
+    it('Atlas fora do ar no meio (o P2010 do MongoDB, e o ping também falha): para sem fechar o mês, para ser retomado', async () => {
+        runner.calculateAndSave.mockResolvedValueOnce({ totalValue: 1000 }).mockRejectedValue(atlasOffline());
+        prisma.$runCommandRaw.mockRejectedValue(atlasOffline());
 
         await expect(runMonthlyRecalculation(at(5, 4), runner)).rejects.toThrow('Server selection timeout');
         expect(finalUpdate()).toBeUndefined();
@@ -105,6 +106,34 @@ describe('runMonthlyRecalculation', () => {
 
         await expect(runMonthlyRecalculation(at(5, 4), runner)).rejects.toThrow('Contrato 2: falha inesperada');
         expect(finalUpdate()).toBeUndefined();
+    });
+
+    it('queda breve do banco num processo (o ping responde): a segunda tentativa recalcula o processo', async () => {
+        let failedOnce = false;
+        runner.calculateAndSave.mockImplementation((p: any) => {
+            if (p.assetId === 'asset-2' && !failedOnce) { failedOnce = true; return Promise.reject(atlasOffline()); }
+            return Promise.resolve({ totalValue: 1000 });
+        });
+
+        const summary = await runMonthlyRecalculation(at(5, 4), runner);
+
+        expect(summary).toMatchObject({ recalculated: 3, failures: 0 });
+        expect(runner.calculateAndSave).toHaveBeenCalledTimes(4);
+    });
+
+    it('erro do banco que se repete só num processo (o ping responde): vira aviso, e os outros seguem', async () => {
+        runner.calculateAndSave.mockImplementation((p: any) => p.assetId === 'asset-2'
+            ? Promise.reject(atlasOffline())
+            : Promise.resolve({ totalValue: 1000 }));
+
+        const summary = await runMonthlyRecalculation(at(5, 4), runner);
+
+        // Duas tentativas no asset-2; o asset-3, depois dele, também é recalculado
+        expect(runner.calculateAndSave).toHaveBeenCalledTimes(4);
+        expect(runner.calculateAndSave).toHaveBeenLastCalledWith(params[2], 'cron', 2026, 11);
+        expect(summary).toMatchObject({ recalculated: 2, failures: 1 });
+        expect(notifyAllAdmins).toHaveBeenCalledWith(expect.objectContaining({ title: 'Recálculo mensal recusado' }));
+        expect(finalUpdate()).toBeDefined();
     });
 
     it('com o PM2 em cluster, só a primeira instância recalcula', async () => {

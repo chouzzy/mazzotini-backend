@@ -10,11 +10,13 @@
  * - no início do servidor e de hora em hora (aos :15), um mês que não terminou é retomado, do dia 5
  *   às 4h até o dia 10, pulando os processos que já têm o log do cron daquele mês;
  * - o banco fora do ar no meio interrompe a execução (para ser retomada); a recusa de um cálculo
- *   não, e vira aviso aos admins, como antes;
+ *   não, e vira aviso aos admins, como antes. Depois de qualquer erro, um ping ao banco decide;
+ *   um erro do banco com o banco no ar ganha mais uma tentativa antes de virar aviso;
  * - passado o dia 10 sem terminar, os admins recebem um aviso, uma vez.
  * Com o PM2 em cluster, só a primeira instância recalcula.
  */
 
+import type { ProcessCalculationParams } from '@prisma/client';
 import { prisma } from '../prisma';
 import { RunCalculationUseCase } from '../modules/calculator/useCases/runCalculation/RunCalculationUseCase';
 import { isFirstInstance, updateIndexSeries } from './indexUpdateService';
@@ -117,12 +119,14 @@ async function recalculate(now: Date, runner: Pick<RunCalculationUseCase, 'calcu
     for (const params of allParams) {
         if (done.has(params.assetId)) { skipped++; continue; }
         try {
-            const result = await runner.calculateAndSave(params, 'cron', year, month);
+            const result = await recalculateOne(runner, params, year, month);
             if (result.warnings?.length) withWarnings++;
             recalculated++;
         } catch (e: any) {
-            // Banco fora do ar: para aqui, sem fechar o mês, e a retomada continua deste processo
-            if (isInfrastructureError(e) || !(await databaseIsUp())) throw e;
+            // Banco fora do ar: para aqui, sem fechar o mês, e a retomada continua deste processo.
+            // Com o banco no ar, é recusa do cálculo, ou um erro do banco que se repete só neste
+            // processo: vira aviso, e os outros processos seguem
+            if (!(await databaseIsUp())) throw e;
             const asset   = assetOf.get(params.assetId);
             const failure = { assetId: params.assetId, legalOneId: asset?.legalOneId, processNumber: asset?.processNumber, error: e.message };
             console.error(`  Erro ao recalcular o processo ${describeAsset(failure)}:`, e.message);
@@ -139,6 +143,24 @@ async function recalculate(now: Date, runner: Pick<RunCalculationUseCase, 'calcu
         data:  { status: 'DONE', finishedAt: new Date(), summary: summary as any },
     });
     return summary;
+}
+
+/**
+ * Recalcula um processo. Um erro do banco com o banco no ar (uma queda breve) ganha mais uma
+ * tentativa; se repetir, sobe e vira aviso, como a recusa.
+ */
+async function recalculateOne(
+    runner: Pick<RunCalculationUseCase, 'calculateAndSave'>,
+    params: ProcessCalculationParams,
+    year: number,
+    month: number,
+) {
+    try {
+        return await runner.calculateAndSave(params, 'cron', year, month);
+    } catch (e) {
+        if (!isInfrastructureError(e) || !(await databaseIsUp())) throw e;
+        return runner.calculateAndSave(params, 'cron', year, month);
+    }
 }
 
 /**
