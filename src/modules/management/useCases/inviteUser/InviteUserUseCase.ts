@@ -24,7 +24,6 @@ class InviteUserUseCase {
         await auth0ManagementService.updateUserRoles(newUser.user_id, [initialRole]);
         
         console.log(`[INVITE USER] Link de criação de senha para ${email} gerado com sucesso.`);
-        console.log(`ticketUrl: ${ticketUrl}`);
         
         // Passo 3: Retorna o link para o Controller.
         return { ticketUrl };
