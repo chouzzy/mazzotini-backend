@@ -1,9 +1,21 @@
 import { prisma } from '../../../../prisma';
+import { AppError } from '../../../../errors/AppError';
+import { ROLES } from '../../../../types';
+import { UNSYNCED_STATUSES } from '../listAllAssets/ListAllAssetsUseCase';
 // src/modules/creditAssets/useCases/getAssetEstimation/GetAssetEstimationUseCase.ts
 
 // NÂO PRECISAMOS MAIS DO economicIndexService AQUI
 
 
+
+/** Quem pede a estimativa: o usuário do token e os papéis que vieram nele. */
+export interface EstimateViewer {
+    auth0UserId: string;
+    roles: string[];
+}
+
+const INTERNAL_ROLES = [ROLES.ADMIN, ROLES.OPERATOR];
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
 
 interface IResponse {
     currentEstimatedValue: number; // O valor de "hoje"
@@ -44,9 +56,10 @@ const PROJECTED_MONTHLY_RATES = {
 
 class GetAssetEstimationUseCase {
 
-    async execute(assetId: string): Promise<IResponse> {
+    async execute(assetId: string, viewer: EstimateViewer): Promise<IResponse> {
         console.log(`[Estimate V3] Iniciando PROJEÇÃO FUTURA para o Ativo ID: ${assetId}`);
 
+        if (!OBJECT_ID.test(assetId)) throw new AppError("Ativo de crédito não encontrado.", 404);
         const asset = await prisma.creditAsset.findUnique({
             where: { id: assetId },
             include: {
@@ -58,8 +71,9 @@ class GetAssetEstimationUseCase {
         });
 
         if (!asset) {
-            throw new Error("Ativo de crédito não encontrado.");
+            throw new AppError("Ativo de crédito não encontrado.", 404);
         }
+        await this.assertCanView(asset, viewer);
 
         const indexType = asset.updateIndexType as any || 'Outro';
         const contractualRatePercent = asset.contractualIndexRate || 0; // Ex: 1%
@@ -111,6 +125,28 @@ class GetAssetEstimationUseCase {
             currentEstimatedValue: startValue, // O valor de "hoje"
             timeline: timeline // O gráfico para o futuro
         };
+    }
+
+    /**
+     * Admin e operador veem qualquer processo; cliente e associado, só os que acompanham, e já
+     * com os dados do Legal One (como no detalhe do processo). O papel vem do token ou, sem ele,
+     * do banco, como no checkRole.
+     */
+    private async assertCanView(asset: { id: string; status: string | null }, viewer: EstimateViewer) {
+        if (viewer.roles.some(role => INTERNAL_ROLES.includes(role))) return;
+
+        const user = await prisma.user.findUnique({
+            where: { auth0UserId: viewer.auth0UserId },
+            select: { id: true, role: true },
+        });
+        if (user?.role && INTERNAL_ROLES.includes(user.role)) return;
+
+        const notFound = new AppError("Ativo de crédito não encontrado.", 404);
+        if (!user || (asset.status && UNSYNCED_STATUSES.includes(asset.status))) throw notFound;
+        const linked = await prisma.investment.count({
+            where: { creditAssetId: asset.id, OR: [{ userId: user.id }, { associateId: user.id }] },
+        });
+        if (!linked) throw notFound;
     }
 }
 
