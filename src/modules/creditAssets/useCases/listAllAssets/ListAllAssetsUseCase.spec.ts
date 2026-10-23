@@ -86,3 +86,33 @@ describe('ListAllAssetsUseCase', () => {
         expect(where.AND).toEqual([searchClause]);
     });
 });
+
+describe('ListAllAssetsUseCase: investidor principal', () => {
+    // Processo fictício com dois clientes; o primeiro investimento é do outro cliente
+    const asset = {
+        id: 'asset-1', legalOneId: 1, processNumber: '0000001-00.2020.8.26.0100', status: 'Ativo', acquisitionValue: 100,
+        investors: [
+            { user: { id: 'outro-cliente', name: 'Outro Cliente' } },
+            { user: { id: 'user-1', name: 'Cliente Exemplo' } },
+        ],
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+        (prisma.creditAsset.findMany as jest.Mock).mockResolvedValue([asset]);
+        (prisma.creditAsset.count as jest.Mock).mockResolvedValue(1);
+    });
+
+    it('para o cliente, é ele mesmo, e não o primeiro investimento do processo', async () => {
+        const { items } = await new ListAllAssetsUseCase().execute({ auth0UserId: 'auth0|cliente', roles: ['INVESTOR'] });
+
+        expect(items[0]).toMatchObject({ mainInvestorName: 'Cliente Exemplo', investorId: 'user-1' });
+    });
+
+    it('para o admin, continua o primeiro investimento', async () => {
+        const { items } = await new ListAllAssetsUseCase().execute({ auth0UserId: 'auth0|admin', roles: ['ADMIN'] });
+
+        expect(items[0]).toMatchObject({ mainInvestorName: 'Outro Cliente', investorId: 'outro-cliente' });
+    });
+});
